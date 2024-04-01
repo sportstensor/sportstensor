@@ -1,7 +1,5 @@
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
+# Copyright © 2024 sportstensor
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -17,144 +15,235 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import asyncio
+from collections import defaultdict
+import copy
+import sys
+import threading
 import time
+import traceback
 import typing
 import bittensor as bt
+import datetime as dt
+from common import constants, utils
+from common.data import MatchPrediction
+from common.protocol import (
+    GetMatchPrediction,
+    REQUEST_LIMIT_BY_TYPE_PER_PERIOD,
+)
+from common.predictions import make_match_prediction
+from neurons.config import NeuronType
+from neurons.config import NeuronType, check_config, create_config
 
-# Bittensor Miner Template:
-import template
 
-# import base miner class which takes care of most of the boilerplate
-from template.base.miner import BaseMinerNeuron
-
-
-class Miner(BaseMinerNeuron):
-    """
-    Your miner neuron class. You should use this class to define your miner's behavior. In particular, you should replace the forward function with your own logic. You may also want to override the blacklist and priority functions according to your needs.
-
-    This class inherits from the BaseMinerNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
-
-    This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom
-    """
+class Miner:
+    """The Sports Tensor Miner."""
 
     def __init__(self, config=None):
-        super(Miner, self).__init__(config=config)
+        self.config = copy.deepcopy(config or create_config(NeuronType.MINER))
+        check_config(self.config)
 
-        # TODO(developer): Anything specific to your use case you can do here
+        bt.logging(config=self.config, logging_dir=self.config.full_path)
+        bt.logging.info(self.config)
 
-    async def forward(
-        self, synapse: template.protocol.Dummy
-    ) -> template.protocol.Dummy:
+        
+        # The wallet holds the cryptographic key pairs for the miner.
+        self.wallet = bt.wallet(config=self.config)
+        bt.logging.info(f"Wallet: {self.wallet}.")
+
+        # The subtensor is our connection to the Bittensor blockchain.
+        self.subtensor = bt.subtensor(config=self.config)
+        bt.logging.info(f"Subtensor: {self.subtensor}.")
+
+        # The metagraph holds the state of the network, letting us know about other validators and miners.
+        self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        bt.logging.info(f"Metagraph: {self.metagraph}.")
+
+        # Each miner gets a unique identity (UID) in the network for differentiation.
+        # TODO: Stop doing meaningful work in the constructor to make neurons more testable.
+        if self.wallet.hotkey.ss58_address in self.metagraph.hotkeys:
+            self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+            bt.logging.info(
+                f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}."
+            )
+        else:
+            self.uid = 0
+            bt.logging.warning(
+                f"Hotkey {self.wallet.hotkey.ss58_address} not found in metagraph. Assuming this is a test."
+            )
+
+        self.last_sync_timestamp = dt.datetime.min
+        self.step = 0
+
+        # The axon handles request processing, allowing validators to send this miner requests.
+        self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
+
+        # Attach determiners which functions are called when servicing a request.
+        bt.logging.info("Attaching forward function to miner axon.")
+        self.axon.attach(
+            forward_fn=self.get_index,
+            blacklist_fn=self.get_index_blacklist,
+            priority_fn=self.get_index_priority,
+        )
+        bt.logging.success(f"Axon created: {self.axon}.")
+
+        # Instantiate runners.
+        self.should_exit: bool = False
+        self.is_running: bool = False
+        self.thread: threading.Thread = None
+        self.lock = threading.RLock()
+
+        # TODO: Instantiate base level LLM?
+
+        # Configure per hotkey per request limits.
+        self.request_lock = threading.RLock()
+        self.last_cleared_request_limits = dt.datetime.now()
+        self.requests_by_type_by_hotkey = defaultdict(lambda: defaultdict(lambda: 0))
+    
+
+    def run(self):
         """
-        Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
-        This method should be replaced with actual logic relevant to the miner's purpose.
-
-        Args:
-            synapse (template.protocol.Dummy): The synapse object containing the 'dummy_input' data.
-
-        Returns:
-            template.protocol.Dummy: The synapse object with the 'dummy_output' field set to twice the 'dummy_input' value.
-
-        The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
-        the miner's intended operation. This method demonstrates a basic transformation of input data.
+        Initiates and manages the main loop for the miner.
         """
-        # TODO(developer): Replace with actual implementation logic.
-        synapse.dummy_output = synapse.dummy_input * 2
+
+        # Check that miner is registered on the network.
+        self.sync()
+
+        # Serve passes the axon information to the network + netuid we are hosting on.
+        # This will auto-update if the axon port of external ip have changed.
+        bt.logging.info(
+            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}."
+        )
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+
+        # Start  starts the miner's axon, making it active on the network.
+        self.axon.start()
+
+        self.last_sync_timestamp = dt.datetime.now()
+        bt.logging.success(f"Miner starting at {self.last_sync_timestamp}.")
+
+        while not self.should_exit:
+            # This loop maintains the miner's operations until intentionally stopped.
+            try:
+                
+                # Epoch length defaults to 100 blocks at 12 seconds each for 20 minutes.
+                while dt.datetime.now() - self.last_sync_timestamp < (
+                    dt.timedelta(seconds=12 * self.config.neuron.epoch_length)
+                ):
+                    # Wait before checking again.
+                    time.sleep(12)
+
+                    # Check if we should exit.
+                    if self.should_exit:
+                        break
+
+                # Sync metagraph.
+                self.sync()
+
+                self._log_status(self.step)
+
+                self.last_sync_timestamp = dt.datetime.now()
+                self.step += 1
+
+            # If someone intentionally stops the miner, it'll safely terminate operations.
+            except KeyboardInterrupt:
+                if not self.config.offline:
+                    self.axon.stop()
+                bt.logging.success("Miner killed by keyboard interrupt.")
+                sys.exit()
+
+            # In case of unforeseen errors, the miner will log the error and continue operations.
+            except Exception as e:
+                bt.logging.error(traceback.format_exc())
+    
+
+    def resync_metagraph(self):
+        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+        bt.logging.info("Attempting to resync the metagraph.")
+
+        # Sync the metagraph.
+        new_metagraph = self.subtensor.metagraph(netuid=self.config.netuid)
+        with self.lock:
+            self.metagraph = new_metagraph
+
+        bt.logging.success("Successfuly resynced the metagraph.")
+
+    def _log_status(self, step: int):
+        """Logs a summary of the miner status in the subnet."""
+        relative_incentive = self.metagraph.I[self.uid].item() / max(self.metagraph.I)
+        incentive_and_hk = zip(self.metagraph.I, self.metagraph.hotkeys)
+        incentive_and_hk = sorted(incentive_and_hk, key=lambda x: x[0], reverse=True)
+        position = -1
+        for i, (_, hk) in enumerate(incentive_and_hk):
+            if hk == self.wallet.hotkey.ss58_address:
+                position = i
+                break
+        log = (
+            f"Step:{step} | "
+            f"Block:{self.metagraph.block.item()} | "
+            f"Stake:{self.metagraph.S[self.uid]} | "
+            f"Incentive:{self.metagraph.I[self.uid]} | "
+            f"Relative Incentive:{relative_incentive} | "
+            f"Position:{position} | "
+            f"Emission:{self.metagraph.E[self.uid]}"
+        )
+        bt.logging.info(log)
+    
+
+    async def get_match_prediction(
+        self, synapse: GetMatchPrediction
+    ) -> GetMatchPrediction:
+        """Runs after the GetMatchPrediction synapse has been deserialized (i.e. after synapse.data is available)."""
+        bt.logging.info(
+            f"Received GetMatchPrediction request from {synapse.dendrite.hotkey}."
+        )
+
+        # Make the match prediction based on the requested MatchPrediction object
+        # TODO: does this need to by async?
+        synapse.match_prediction = make_match_prediction(synapse.match_prediction)
+        synapse.version = constants.PROTOCOL_VERSION
+
+        bt.logging.success(
+            f"Returning MatchPrediction ID: {str(synapse.match_prediction.matchID)} to {synapse.dendrite.hotkey}."
+        )
+
         return synapse
 
-    async def blacklist(
-        self, synapse: template.protocol.Dummy
-    ) -> typing.Tuple[bool, str]:
+    def default_priority(self, synapse: bt.Synapse) -> float:
+        """The default priority that prioritizes by validator stake."""
+        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        priority = float(self.metagraph.S[caller_uid])
+        bt.logging.trace(
+            f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}.",
+        )
+        return priority
+
+    def get_config_for_test(self) -> bt.config:
+        return self.config
+
+    def sync(self):
         """
-        Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
-        define the logic for blacklisting requests based on your needs and desired security parameters.
-
-        Blacklist runs before the synapse data has been deserialized (i.e. before synapse.data is available).
-        The synapse is instead contructed via the headers of the request. It is important to blacklist
-        requests before they are deserialized to avoid wasting resources on requests that will be ignored.
-
-        Args:
-            synapse (template.protocol.Dummy): A synapse object constructed from the headers of the incoming request.
-
-        Returns:
-            Tuple[bool, str]: A tuple containing a boolean indicating whether the synapse's hotkey is blacklisted,
-                            and a string providing the reason for the decision.
-
-        This function is a security measure to prevent resource wastage on undesired requests. It should be enhanced
-        to include checks against the metagraph for entity registration, validator status, and sufficient stake
-        before deserialization of synapse data to minimize processing overhead.
-
-        Example blacklist logic:
-        - Reject if the hotkey is not a registered entity within the metagraph.
-        - Consider blacklisting entities that are not validators or have insufficient stake.
-
-        In practice it would be wise to blacklist requests from entities that are not validators, or do not have
-        enough stake. This can be checked via metagraph.S and metagraph.validator_permit. You can always attain
-        the uid of the sender via a metagraph.hotkeys.index( synapse.dendrite.hotkey ) call.
-
-        Otherwise, allow the request to be processed further.
+        Wrapper for synchronizing the state of the network for the given miner.
         """
-        # TODO(developer): Define how miners should blacklist requests.
-        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        if (
-            not self.config.blacklist.allow_non_registered
-            and synapse.dendrite.hotkey not in self.metagraph.hotkeys
+        # Ensure miner hotkey is still registered on the network.
+        self.check_registered()
+        self.resync_metagraph()
+
+    def check_registered(self):
+        # --- Check for registration.
+        if not self.subtensor.is_hotkey_registered(
+            netuid=self.config.netuid,
+            hotkey_ss58=self.wallet.hotkey.ss58_address,
         ):
-            # Ignore requests from un-registered entities.
-            bt.logging.trace(
-                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
+            bt.logging.error(
+                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+                f" Please register the hotkey using `btcli subnets register` before trying again."
             )
-            return True, "Unrecognized hotkey"
-
-        if self.config.blacklist.force_validator_permit:
-            # If the config is set to force validator permit, then we should only allow requests from validators.
-            if not self.metagraph.validator_permit[uid]:
-                bt.logging.warning(
-                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
-                )
-                return True, "Non-validator hotkey"
-
-        bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
-        )
-        return False, "Hotkey recognized!"
-
-    async def priority(self, synapse: template.protocol.Dummy) -> float:
-        """
-        The priority function determines the order in which requests are handled. More valuable or higher-priority
-        requests are processed before others. You should design your own priority mechanism with care.
-
-        This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
-
-        Args:
-            synapse (template.protocol.Dummy): The synapse object that contains metadata about the incoming request.
-
-        Returns:
-            float: A priority score derived from the stake of the calling entity.
-
-        Miners may recieve messages from multiple entities at once. This function determines which request should be
-        processed first. Higher values indicate that the request should be processed first. Lower values indicate
-        that the request should be processed later.
-
-        Example priority logic:
-        - A higher stake results in a higher priority value.
-        """
-        # TODO(developer): Define how miners should prioritize requests.
-        caller_uid = self.metagraph.hotkeys.index(
-            synapse.dendrite.hotkey
-        )  # Get the caller index.
-        prirority = float(
-            self.metagraph.S[caller_uid]
-        )  # Return the stake as the priority.
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
-        )
-        return prirority
+            sys.exit(1)
 
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
-            bt.logging.info("Miner running...", time.time())
-            time.sleep(5)
+            time.sleep(60)
