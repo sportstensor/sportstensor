@@ -1,12 +1,13 @@
 import datetime as dt
-from common.data import MatchPrediction
+from common.data import Sport, MatchPrediction
 from common.predictions import make_match_prediction
 
 def test():
   match_datetime = "2024-04-01 17:00"
   match_prediction = MatchPrediction(
-    matchID = 1234,
-    datetime = dt.datetime.strptime(match_datetime, "%Y-%m-%d %H:%M"),
+    matchId = 1234,
+    matchDatetime = dt.datetime.strptime(match_datetime, "%Y-%m-%d %H:%M"),
+    sport = Sport.SOCCER,
     homeTeamName = "Arsenal",
     awayTeamName = "Chelsea",
   )
