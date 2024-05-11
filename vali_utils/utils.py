@@ -1,3 +1,4 @@
+from aiohttp import ClientSession, BasicAuth
 import asyncio
 import bittensor as bt
 import torch
@@ -13,13 +14,33 @@ from common.data import (
 from common.protocol import Prediction, MatchPrediction, GetMatchPrediction
 import storage.validator_storage as storage
 
+async def sync_match_data(match_data_endpoint):
+    try:
+        async with ClientSession() as session:
+            async with session.get(match_data_endpoint) as response:
+                response.raise_for_status()
+                match_data = await response.json()
+    except Exception as e:
+        bt.logging.error(f"Error getting match data: {e}")
+        return
+
+def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:
+    matches = storage.get_matches_to_predict(batchsize)
+    match_predictions = [MatchPrediction(
+        matchId = match.matchId,
+        matchDatetime = dt.datetime.strptime(match.matchDate, "%Y-%m-%d %H:%M"),
+        sport = match.sport,
+        homeTeamName = match.homeTeamName,
+        awayTeamName = match.awayTeamName
+    ) for match in matches]
+    return match_predictions
 
 async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph, input_synapse: GetMatchPrediction, miner_uids: List[int]):
     try:
       responses: List[MatchPrediction] = None
       async with bt.dendrite(wallet=wallet) as dendrite:
           responses = await dendrite.forward(
-              axons=[metagraph.axons[uid] for uid in miner_uids],
+              axons=[metagraph.axons[uid] for uid in random.shuffle(miner_uids)],
               synapse=input_synapse,
               timeout=120,
           )

@@ -35,10 +35,22 @@ class Sport(IntEnum):
     UNKNOWN_6 = 6
     UNKNOWN_7 = 7
 
+class League(StrictBaseModel):
+    """Represents a sports league, mainly used for mapping and indicating active status to run predictiosn on."""
+
+    leagueId: PositiveInt = Field(
+        description="Unique ID that represents a league."
+    )
+    leagueName: str = Field(
+        description="Name of the league. i.e. English Premiere League, NFL, MLB"
+    )
+    sport: Sport
+    isActive: bool = False
+
 class Match(StrictBaseModel):
     """Represents a match/game, sport agnostic."""
 
-    matchId: PositiveInt = Field(
+    matchId: str = Field(
         description="Unique ID that represents a match."
     )
 
