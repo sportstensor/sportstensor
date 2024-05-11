@@ -2,11 +2,21 @@ from abc import ABC, abstractmethod
 from typing import Optional, List
 import datetime as dt
 
-from common.data import Match, Prediction, MatchPrediction
+from common.data import League, Match, Prediction, MatchPrediction
 
 
 class ValidatorStorage(ABC):
     """An abstract class which defines the contract that all implementations of ValidatorStorage must fulfill."""
+
+    @abstractmethod
+    def insert_leagues(self, leagues: List[League]):
+        """Stores leagues associated with sports. Indicates which leagues are active to run predictions on."""
+        raise NotImplemented
+    
+    @abstractmethod
+    def update_leagues(self, leagues: List[League]):
+        """Updates leagues."""
+        raise NotImplemented
 
     @abstractmethod
     def insert_matches(self, predictions: List[Match]):
@@ -16,6 +26,11 @@ class ValidatorStorage(ABC):
     @abstractmethod
     def update_matches(self, matches: List[Match]):
         """Updates matches. Typically only used when updating final score."""
+        raise NotImplemented
+    
+    @abstractmethod
+    def get_matches_to_predict(self, batchsize: int) -> List[Match]:
+        """Gets batchsize number of matches ready to be predicted."""
         raise NotImplemented
 
     @abstractmethod
