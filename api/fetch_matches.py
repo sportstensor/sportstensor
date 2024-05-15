@@ -16,6 +16,14 @@ sport_mapping = {
     'BASKETBALL': 4
 }
 
+def create_sportstensor_id(home_team, away_team, match_date):
+    # Extract the first 3 letters of home and away team names
+    home_prefix = home_team[:3]
+    away_prefix = away_team[:3]
+    # Format the match date to remove special characters and time
+    formatted_date = datetime.strptime(match_date.split('T')[0], '%Y-%m-%d').strftime('%Y%m%d')
+    return f"{home_prefix}{away_prefix}{formatted_date}"
+
 def fetch_and_store_events():
     logging.info("Fetching data from APIs")
     urls = [
@@ -57,20 +65,19 @@ def fetch_and_store_events():
             awayTeamScore INTEGER,
             matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
-            lastUpdated TIMESTAMP NOT NULL
-        )
-        ''')
-        logging.info("Database table ensured")
+            lastUpdated TIMESTAMP NOT NULL,
+            sportstensorId VARCHAR(50)
+        )''')
         
-        # Insert or update data into the database
         for event in all_events:
+            sportstensor_id = create_sportstensor_id(event.get('strHomeTeam'), event.get('strAwayTeam'), event.get('strTimestamp'))
             status = event.get('strStatus')
             is_complete = 0 if status in ('Not Started', 'NS') else 1 if status in ('Match Finished', 'FT') else 0
             sport_type = sport_mapping.get(event.get('strSport').upper(), 0)  # Default to 0 if sport is unknown
 
             c.execute('''
-            INSERT INTO matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, matchLeague, isComplete, lastUpdated) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, matchLeague, isComplete, lastUpdated, sportstensorId) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE 
                 matchDate=VALUES(matchDate),
                 sport=VALUES(sport),
@@ -80,7 +87,8 @@ def fetch_and_store_events():
                 awayTeamScore=VALUES(awayTeamScore),
                 matchLeague=VALUES(matchLeague),
                 isComplete=VALUES(isComplete),
-                lastUpdated=VALUES(lastUpdated)
+                lastUpdated=VALUES(lastUpdated),
+                sportstensorId=VALUES(sportstensorId)
             ''',
             (
                 event.get('idEvent'),
@@ -92,7 +100,8 @@ def fetch_and_store_events():
                 event.get('intAwayScore'),
                 event.get('strLeague'), 
                 is_complete,
-                current_utc_time
+                current_utc_time,
+                sportstensor_id
             ))
         conn.commit()
         logging.info("Data inserted or updated in database")
