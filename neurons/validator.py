@@ -67,17 +67,6 @@ class Validator(BaseValidatorNeuron):
         self.next_scoring_datetime = dt.datetime.now(dt.UTC)
         self.storage = SqliteValidatorStorage()  # Create an instance of the storage handler
 
-
-    async def sync_and_store_matches(self):
-        """ Sync and store match data. """
-        if self.next_match_syncing_datetime <= dt.datetime.now(dt.UTC):
-            bt.logging.info("Syncing the latest match data to local validator storage.")
-            match_data = await utils.sync_match_data(self.match_data_endpoint)  # Await the fetching function
-            if match_data:
-                self.storage.insert_matches(match_data)  # Store the data
-            self.next_match_syncing_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
-
-
     async def forward(self):
         """
         Validator forward pass. Consists of:
@@ -98,13 +87,14 @@ class Validator(BaseValidatorNeuron):
         """
 
         """ START MATCH SYNCING """
-        # Check if we're ready to sync another batch of matches
         if self.next_match_syncing_datetime <= dt.datetime.now(dt.UTC):
-            bt.logging.info(f"Syncing the latest match data to local validator storage.")
-            utils.sync_match_data(self.match_data_endpoint)
-            # Update next sync time
+            bt.logging.info("Syncing the latest match data to local validator storage.")
+            match_data = await utils.sync_match_data(self.match_data_endpoint)
+            if match_data:
+                self.storage.insert_matches(match_data)
             self.next_match_syncing_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END MATCH SYNCING """
+
 
         """ START MATCH PREDICTION REQUESTS """
         # Get miner uids to send prediction requests to
