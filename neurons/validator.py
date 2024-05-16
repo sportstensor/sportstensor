@@ -29,6 +29,9 @@ import torch
 from common.protocol import GetMatchPrediction
 from common.constants import DATA_SYNC_INTERVAL_IN_MINUTES, VALIDATOR_TIMEOUT, NUM_MINERS_TO_SEND_TO, BASE_MINER_PREDICTION_SCORE, MAX_BATCHSIZE_FOR_SCORING, SCORING_INTERVAL_IN_MINUTES
 import vali_utils as utils
+from storage.sqlite_validator_storage import SqliteValidatorStorage
+
+
 
 # import base validator class which takes care of most of the boilerplate
 from base.validator import BaseValidatorNeuron
@@ -56,12 +59,23 @@ class Validator(BaseValidatorNeuron):
             "https://api.sportstensor.ai/validator"
         )
         """
-        api_root = "https://www.thesportsdb.com/api/v1/json/3/"
-        self.match_data_endpoint = f"{api_root}/match_data"
+        api_root = "http://95.179.153.99:8000"
+        self.match_data_endpoint = f"{api_root}/matches"
 
         self.client_timeout_seconds = VALIDATOR_TIMEOUT
         self.next_match_syncing_datetime = dt.datetime.now(dt.UTC)
         self.next_scoring_datetime = dt.datetime.now(dt.UTC)
+        self.storage = SqliteValidatorStorage()  # Create an instance of the storage handler
+
+
+    async def sync_and_store_matches(self):
+        """ Sync and store match data. """
+        if self.next_match_syncing_datetime <= dt.datetime.now(dt.UTC):
+            bt.logging.info("Syncing the latest match data to local validator storage.")
+            match_data = await utils.sync_match_data(self.match_data_endpoint)  # Await the fetching function
+            if match_data:
+                self.storage.insert_matches(match_data)  # Store the data
+            self.next_match_syncing_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
 
 
     async def forward(self):

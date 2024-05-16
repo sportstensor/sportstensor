@@ -3,7 +3,7 @@ import mysql.connector
 import schedule
 import time
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 # Setup basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,12 +16,23 @@ sport_mapping = {
     'BASKETBALL': 4
 }
 
-def create_sportstensor_id(home_team, away_team, match_date):
-    # Extract the first 3 letters of home and away team names
-    home_prefix = home_team[:3]
-    away_prefix = away_team[:3]
-    # Format the match date to remove special characters and time
-    formatted_date = datetime.strptime(match_date.split('T')[0], '%Y-%m-%d').strftime('%Y%m%d')
+def parse_datetime_with_optional_timezone(timestamp):
+    try:
+        # First, try parsing with timezone
+        return datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S%z')
+    except ValueError:
+        # If that fails, parse without the timezone and assume UTC
+        dt_naive = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
+        return dt_naive.replace(tzinfo=timezone.utc)
+
+
+def create_match_id(home_team, away_team, match_date):
+    # Extract the first 10 letters of home and away team names
+    home_prefix = home_team.replace(' ', '')[:10]
+    away_prefix = away_team.replace(' ', '')[:10]
+    
+    formatted_date = parse_datetime_with_optional_timezone(match_date).strftime('%Y%m%d%H%M')
+    
     return f"{home_prefix}{away_prefix}{formatted_date}"
 
 def fetch_and_store_events():
@@ -34,26 +45,32 @@ def fetch_and_store_events():
     
     all_events = []
     
+    current_utc_time = datetime.now(timezone.utc)
+    start_period = current_utc_time - timedelta(days=10)
+    end_period = current_utc_time + timedelta(hours=48)
+
     for url in urls:
         try:
             response = requests.get(url)
             data = response.json()
             if 'events' in data:
-                all_events.extend(data['events'])
+                filtered_events = [
+                    event for event in data['events']
+                    if start_period <= parse_datetime_with_optional_timezone(event['strTimestamp']) <= end_period
+                ]
+                all_events.extend(filtered_events)
         except Exception as e:
             logging.error(f"Failed to fetch or parse API data from {url}", exc_info=True)
-    
+
     if not all_events:
         logging.info("No events data found in the API responses")
         return
 
-    current_utc_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    current_utc_time = current_utc_time.strftime('%Y-%m-%d %H:%M:%S')
 
     try:
         conn = mysql.connector.connect(host='localhost', database='sports_events', user='root', password='Cunnaredu1996@')
         c = conn.cursor()
-        
-        # Create table if it does not exist
         c.execute('''
         CREATE TABLE IF NOT EXISTS matches (
             matchId VARCHAR(50) PRIMARY KEY,
@@ -68,16 +85,16 @@ def fetch_and_store_events():
             lastUpdated TIMESTAMP NOT NULL,
             sportstensorId VARCHAR(50)
         )''')
-        
+
         for event in all_events:
-            sportstensor_id = create_sportstensor_id(event.get('strHomeTeam'), event.get('strAwayTeam'), event.get('strTimestamp'))
+            match_id = create_match_id(event.get('strHomeTeam'), event.get('strAwayTeam'), event.get('strTimestamp'))
             status = event.get('strStatus')
             is_complete = 0 if status in ('Not Started', 'NS') else 1 if status in ('Match Finished', 'FT') else 0
             sport_type = sport_mapping.get(event.get('strSport').upper(), 0)  # Default to 0 if sport is unknown
 
             c.execute('''
-            INSERT INTO matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, matchLeague, isComplete, lastUpdated, sportstensorId) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, matchLeague, isComplete, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE 
                 matchDate=VALUES(matchDate),
                 sport=VALUES(sport),
@@ -87,11 +104,10 @@ def fetch_and_store_events():
                 awayTeamScore=VALUES(awayTeamScore),
                 matchLeague=VALUES(matchLeague),
                 isComplete=VALUES(isComplete),
-                lastUpdated=VALUES(lastUpdated),
-                sportstensorId=VALUES(sportstensorId)
+                lastUpdated=VALUES(lastUpdated)
             ''',
             (
-                event.get('idEvent'),
+                match_id,
                 event.get('strTimestamp'),
                 sport_type,
                 event.get('strHomeTeam'),
@@ -100,8 +116,7 @@ def fetch_and_store_events():
                 event.get('intAwayScore'),
                 event.get('strLeague'), 
                 is_complete,
-                current_utc_time,
-                sportstensor_id
+                current_utc_time
             ))
         conn.commit()
         logging.info("Data inserted or updated in database")
