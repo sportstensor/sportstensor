@@ -14,15 +14,35 @@ from common.data import (
 from common.protocol import Prediction, MatchPrediction, GetMatchPrediction
 import storage.validator_storage as storage
 
-async def sync_match_data(match_data_endpoint):
+async def sync_match_data(match_data_endpoint) -> bool:
+    match_data = None
     try:
         async with ClientSession() as session:
             async with session.get(match_data_endpoint) as response:
                 response.raise_for_status()
                 match_data = await response.json()
+        
+        if match_data is not None and len(match_data) > 0:
+            # We need to create UPSERT logic here. Our storage class has an insert_matches and update_matches, and we'll need to handle both.
+            matches_to_insert = []
+            matches_to_update = []
+            for match in match_data:
+                print(match)
+                # if matchId in check_match(matchId)
+                    # matches_to_update.append(match)
+                # else
+                    # matches_to_insert.append(match)
+            
+            storage.insert_matches(matches_to_insert)
+            storage.update_matches(matches_to_update)
+
+            return True
+        else:
+            bt.logging.info("No match data returned from API")
+
     except Exception as e:
         bt.logging.error(f"Error getting match data: {e}")
-        return
+        return False
 
 def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:
     matches = storage.get_matches_to_predict(batchsize)

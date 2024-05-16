@@ -123,8 +123,8 @@ class SqliteValidatorStorage(ValidatorStorage):
           values.append(
             [
                 league.leagueName,
-                league.isActive,                
-                now_str
+                league.isActive,
+                now_str,
                 league.leagueId
             ]
           )

@@ -89,9 +89,11 @@ class Validator(BaseValidatorNeuron):
         """ START MATCH SYNCING """
         if self.next_match_syncing_datetime <= dt.datetime.now(dt.UTC):
             bt.logging.info("Syncing the latest match data to local validator storage.")
-            match_data = await utils.sync_match_data(self.match_data_endpoint)
-            if match_data:
-                self.storage.insert_matches(match_data)
+            sync_result = await utils.sync_match_data(self.match_data_endpoint)
+            if sync_result:
+                bt.logging.info("Successfully synced match data.")
+            else:
+                bt.logging.warning("Issue syncing match data")
             self.next_match_syncing_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END MATCH SYNCING """
 
