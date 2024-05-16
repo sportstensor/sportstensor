@@ -8,41 +8,46 @@ import traceback
 from typing import List, Optional, Tuple, Type, Union
 import datetime as dt
 from common import constants
-from common.data import (
-    MatchPrediction
-)
+from common.data import Sport, Match, Prediction, MatchPrediction
 from common.protocol import Prediction, MatchPrediction, GetMatchPrediction
 import storage.validator_storage as storage
+from storage.sqlite_validator_storage import SqliteValidatorStorage
+
+
+from aiohttp import ClientSession
+import bittensor as bt
+from storage.sqlite_validator_storage import SqliteValidatorStorage
+
 
 async def sync_match_data(match_data_endpoint) -> bool:
-    match_data = None
+    storage = SqliteValidatorStorage()  
     try:
         async with ClientSession() as session:
             async with session.get(match_data_endpoint) as response:
                 response.raise_for_status()
                 match_data = await response.json()
         
-        if match_data is not None and len(match_data) > 0:
-            # We need to create UPSERT logic here. Our storage class has an insert_matches and update_matches, and we'll need to handle both.
-            matches_to_insert = []
-            matches_to_update = []
-            for match in match_data:
-                print(match)
-                # if matchId in check_match(matchId)
-                    # matches_to_update.append(match)
-                # else
-                    # matches_to_insert.append(match)
-            
-            storage.insert_matches(matches_to_insert)
-            storage.update_matches(matches_to_update)
-
-            return True
-        else:
+        if not match_data:
             bt.logging.info("No match data returned from API")
+            return False
+        
+        # UPSERT logic
+        matches_to_insert = [match for match in match_data if not storage.check_match(match['matchId'])]
+        matches_to_update = [match for match in match_data if storage.check_match(match['matchId'])]
+
+        if matches_to_insert:
+            storage.insert_matches(matches_to_insert)
+            bt.logging.info(f"Inserted {len(matches_to_insert)} new matches.")
+        if matches_to_update:
+            storage.update_matches(matches_to_update)
+            bt.logging.info(f"Updated {len(matches_to_update)} existing matches.")
+
+        return True
 
     except Exception as e:
         bt.logging.error(f"Error getting match data: {e}")
         return False
+
 
 def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:
     matches = storage.get_matches_to_predict(batchsize)

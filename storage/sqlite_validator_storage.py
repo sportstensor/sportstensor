@@ -5,9 +5,9 @@ import bittensor as bt
 import sqlite3
 import threading
 from typing import Any, Dict, Optional, Set, Tuple, List
-from common.data import Sport, Match, Prediction, MatchPrediction
+from common.data import Sport, Match, Prediction, MatchPrediction, League
 from common.constants import MIN_PREDICTION_TIME_THRESHOLD, MAX_PREDICTION_DAYS_THRESHOLD
-from storage.validator.validator_storage import ValidatorStorage
+from storage.validator_storage import ValidatorStorage
 
 
 class SqliteValidatorStorage(ValidatorStorage):
@@ -345,6 +345,14 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.execute("DELETE FROM MatchPredictions WHERE hotkey = ?", [hotkey])
+
+
+    def check_match(self, match_id):
+        """Check if a match with the given ID exists in the database."""
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT EXISTS(SELECT 1 FROM matches WHERE matchId = %s)", (match_id,))
+        return cursor.fetchone()[0]
+
 
 
 # Use a timezone aware adapter for timestamp columns.
