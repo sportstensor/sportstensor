@@ -1,4 +1,1 @@
-bittensor
-torch
-pydantic
-asyncio
+bittensor==6.9.3

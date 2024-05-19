@@ -29,6 +29,11 @@ class ValidatorStorage(ABC):
         raise NotImplemented
     
     @abstractmethod
+    def check_match(self, matchId: str) -> Match:
+        """Check if a match with the given ID exists in the database."""
+        return NotImplemented
+    
+    @abstractmethod
     def get_matches_to_predict(self, batchsize: int) -> List[Match]:
         """Gets batchsize number of matches ready to be predicted."""
         raise NotImplemented
@@ -40,7 +45,7 @@ class ValidatorStorage(ABC):
     
     @abstractmethod
     def get_predictions_to_score(self, batchsize: int) -> Optional[List[MatchPrediction]]:
-        """Gets batchsize number of predictions that need to be scored."""
+        """Gets batchsize number of predictions that need to be scored and are eligible to be scored (the match is complete)"""
         raise NotImplemented
     
     @abstractmethod

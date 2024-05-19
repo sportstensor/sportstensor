@@ -7,17 +7,16 @@ import random
 import traceback
 from typing import List, Optional, Tuple, Type, Union
 import datetime as dt
-from common import constants
 from common.data import Sport, Match, Prediction, MatchPrediction
 from common.protocol import Prediction, MatchPrediction, GetMatchPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
 
 
-from aiohttp import ClientSession
-import bittensor as bt
-from storage.sqlite_validator_storage import SqliteValidatorStorage
-
+from common.constants import (
+    CORRECT_MATCH_WINNER_SCORE,
+    MAX_SCORE_DIFFERENCE
+)
 
 async def sync_match_data(match_data_endpoint) -> bool:
     storage = SqliteValidatorStorage()  
@@ -48,7 +47,6 @@ async def sync_match_data(match_data_endpoint) -> bool:
         bt.logging.error(f"Error getting match data: {e}")
         return False
 
-
 def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:
     matches = storage.get_matches_to_predict(batchsize)
     match_predictions = [MatchPrediction(
@@ -60,7 +58,7 @@ def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:
     ) for match in matches]
     return match_predictions
 
-async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph, input_synapse: GetMatchPrediction, miner_uids: List[int]):
+async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph, input_synapse: GetMatchPrediction, miner_uids: List[int]) -> Tuple[List[MatchPrediction], List[int]]:
     try:
       responses: List[MatchPrediction] = None
       async with bt.dendrite(wallet=wallet) as dendrite:
@@ -106,18 +104,61 @@ async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph,
       )
       return None
 
-def find_match_predictions_to_score(batchsize: int) -> List[MatchPrediction]:
+def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[int]]:
     """Query the validator's local storage for a list of qualifying MatchPredictions that can be scored.
     
-    This should only get executed once match stats have been properly pulled into the validator.
-    Or that check should happen here.
+    Then run scoring algorithms and return scoring results
     """
-
     predictions = []
-    # TODO: query predictions that have not been scored that we have data on.
-    storage.get_match_predictions_to_score(batchsize)
+    # Query for scorable match predictions
+    predictions = storage.get_match_predictions_to_score(batchsize)
 
-    return predictions
+    rewards = []
+    rewards_uids = []
+    for prediction in predictions:
+        uid = prediction.minerId
+
+        sport = prediction.sport
+        if sport == Sport.SOCCER:
+            max_score_difference = MAX_SCORE_DIFFERENCE
+
+        rewards.append(calculate_prediction_score(
+            prediction.homeTeamScore,
+            prediction.awayTeamScore,
+            prediction.actualHomeTeamScore,
+            prediction.actualAwayTeamScore,
+            max_score_difference
+        ))
+        rewards_uids.append(uid)
+
+    return [rewards, rewards_uids]
+
+    
+def calculate_prediction_score(predicted_home_score: int, predicted_away_score: int,
+                               actual_home_score: int, actual_away_score: int,
+                               max_score_difference: int) -> float:
+    # Score for home team prediction
+    home_score_diff = abs(predicted_home_score - actual_home_score)
+    # Calculate a float score between 0 and 1. 1 being an exact match
+    home_score = 0.25 - (home_score_diff / max_score_difference)
+    
+    # Score for away team prediction
+    away_score_diff = abs(predicted_away_score - actual_away_score)
+    # Calculate a float score between 0 and 1. 1 being an exact match
+    away_score = 0.25 - (away_score_diff / max_score_difference)
+    
+    # Determine the correct winner or if it's a draw
+    actual_winner = 'home' if actual_home_score > actual_away_score else 'away' if actual_home_score < actual_away_score else 'draw'
+    predicted_winner = 'home' if predicted_home_score > predicted_away_score else 'away' if predicted_home_score < predicted_away_score else 'draw'
+    
+    # Score for correct winner prediction
+    correct_winner_score = 1 if predicted_winner == actual_winner else 0
+    
+    # Combine the scores
+    # Max score for home and away scores is 0.25. Correct match winner is 0.5. Perfectly predicted match score is 1
+    total_score = home_score + away_score + (correct_winner_score * CORRECT_MATCH_WINNER_SCORE)
+    
+    return total_score
 
 
 def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:

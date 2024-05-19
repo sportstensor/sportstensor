@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from typing import Any, Dict, Optional, Set, Tuple, List
 from common.data import Sport, Match, Prediction, MatchPrediction, League
-from common.constants import MIN_PREDICTION_TIME_THRESHOLD, MAX_PREDICTION_DAYS_THRESHOLD
+from common.constants import MIN_PREDICTION_TIME_THRESHOLD, MAX_PREDICTION_DAYS_THRESHOLD, SCORING_CUTOFF_IN_DAYS
 from storage.validator_storage import ValidatorStorage
 
 
@@ -196,6 +196,12 @@ class SqliteValidatorStorage(ValidatorStorage):
                 )
                 connection.commit()
 
+    def check_match(self, matchId: str) -> Match:
+        """Check if a match with the given ID exists in the database."""
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT EXISTS(SELECT 1 FROM matches WHERE matchId = %s)", (matchId,))
+        return cursor.fetchone()[0]
+
     def get_matches_to_predict(self, batchsize: int = 10) -> List[Match]:
         """Gets batchsize number of matches ready to be predicted."""
         with self.lock:
@@ -266,14 +272,29 @@ class SqliteValidatorStorage(ValidatorStorage):
                     )
                 connection.commit()
 
-    def get_match_predictions_to_score(self, batchsize: int = 10, matchdate_before: dt.datetime = None, end_datetime: dt.datetime = None) -> Optional[List[MatchPrediction]]:
-        """Gets batchsize number of predictions that need to be scored."""
+    def get_match_predictions_to_score(self, batchsize: int = 10, matchDateCutoff: int = SCORING_CUTOFF_IN_DAYS) -> Optional[List[MatchPrediction]]:
+        """Gets batchsize number of predictions that need to be scored and are eligible to be scored (the match is complete)"""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
+
+                # Calculate the current timestamp
+                current_timestamp = int(time.time())
+                # Calculate cutoff date timestamp
+                match_cutoff_timestamp = current_timestamp - (matchDateCutoff * 24 * 3600)
+
                 cursor.execute(
-                    "SELECT * FROM MatchPredictions WHERE isScored = 0 ORDER BY matchDate ASC LIMIT ?",
-                    [batchsize],
+                    """
+                    SELECT mp.*, m.homeTeamScore as actualHomeTeamScore, m.awayTeamScore as actualAwayTeamScore
+                    FROM MatchPredictions mp
+                    WHERE mp.isScored = 0
+                    JOIN Matches m ON (m.matchId = mp.matchId)
+                    AND m.isComplete = 1
+                    AND mp.matchDate > ?
+                    ORDER BY mp.matchDate ASC
+                    LIMIT ?
+                    """,
+                    [match_cutoff_timestamp, batchsize],
                 )
                 results = cursor.fetchall()
                 if results is None:
@@ -345,13 +366,6 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.execute("DELETE FROM MatchPredictions WHERE hotkey = ?", [hotkey])
-
-
-    def check_match(self, match_id):
-        """Check if a match with the given ID exists in the database."""
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT EXISTS(SELECT 1 FROM matches WHERE matchId = %s)", (match_id,))
-        return cursor.fetchone()[0]
 
 
 

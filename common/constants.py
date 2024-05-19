@@ -29,9 +29,21 @@ MAX_PREDICTION_DAYS_THRESHOLD = 2
 # Max number of predictions that can be scored at a time
 MAX_BATCHSIZE_FOR_SCORING = 10
 
+# Cut off days to attempt to score predictions. i.e. Any predictions not scored with X days will be left behind
+SCORING_CUTOFF_IN_DAYS = 3
+
 # Interval in minutes that we attempt to score predictions
 SCORING_INTERVAL_IN_MINUTES = 5
 
 # The maximum number of characters a team name can have.
 MAX_TEAM_NAME_LENGTH = 32
+
+########## SCORING CONSTANTS ##############
+CORRECT_MATCH_WINNER_SCORE = 0.5
+
+MAX_SCORE_DIFFERENCE = 10
+MAX_SCORE_DIFFERENCE_SOCCER = 10
+MAX_SCORE_DIFFERENCE_FOOTBALL = 50
+MAX_SCORE_DIFFERENCE_BASKETBALL = 50
+MAX_SCORE_DIFFERENCE_BASEBALL = 20
 
