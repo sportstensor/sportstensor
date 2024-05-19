@@ -7,7 +7,10 @@ def get_matches():
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
         
-        cursor.execute("SELECT * FROM matches")
+        cursor.execute("""
+            SELECT * FROM matches
+            WHERE matchDate BETWEEN NOW() - INTERVAL 10 DAY AND NOW() + INTERVAL 48 HOUR
+        """)
         match_list = cursor.fetchall()
         
         return match_list
