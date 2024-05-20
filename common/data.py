@@ -115,3 +115,8 @@ class MatchPrediction(Prediction):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
         return v
+
+class MatchPredictionWithMatchData(BaseModel):
+    prediction: MatchPrediction
+    actualHomeTeamScore: int
+    actualAwayTeamScore: int

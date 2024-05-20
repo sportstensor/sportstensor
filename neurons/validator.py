@@ -27,6 +27,7 @@ import torch
 
 # Bittensor Validator Template:
 from common.protocol import GetMatchPrediction
+from common.data import MatchPrediction
 from common.constants import DATA_SYNC_INTERVAL_IN_MINUTES, VALIDATOR_TIMEOUT, NUM_MINERS_TO_SEND_TO, BASE_MINER_PREDICTION_SCORE, MAX_BATCHSIZE_FOR_SCORING, SCORING_INTERVAL_IN_MINUTES
 import vali_utils as utils
 from storage.sqlite_validator_storage import SqliteValidatorStorage
@@ -141,7 +142,8 @@ class Validator(BaseValidatorNeuron):
         # Check if we're ready to score another batch of predictions
         if self.next_scoring_datetime <= dt.datetime.now(dt.UTC):
             bt.logging.info(f"Checking if there are predictions to score.")
-            utils.find_match_predictions_to_score(MAX_BATCHSIZE_FOR_SCORING)
+            prediction_rewards, prediction_rewards_uids = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
+            self.update_scores(torch.FloatTensor(prediction_rewards).to(self.device), prediction_rewards_uids)
             # Update next sync time
             self.next_scoring_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=SCORING_INTERVAL_IN_MINUTES)
         """ END MATCH PREDICTION SCORING """
@@ -149,7 +151,7 @@ class Validator(BaseValidatorNeuron):
     async def get_basic_match_prediction_rewards(
         self,
         input_synapse: GetMatchPrediction,
-        responses: List[GetMatchPrediction],
+        responses: List[MatchPrediction],
     ) -> torch.FloatTensor:
         """
         Returns a tensor of rewards for the given query and responses.

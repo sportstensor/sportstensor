@@ -5,7 +5,7 @@ import bittensor as bt
 import sqlite3
 import threading
 from typing import Any, Dict, Optional, Set, Tuple, List
-from common.data import Sport, Match, Prediction, MatchPrediction, League
+from common.data import Sport, Match, Prediction, MatchPrediction, League, MatchPredictionWithMatchData
 from common.constants import MIN_PREDICTION_TIME_THRESHOLD, MAX_PREDICTION_DAYS_THRESHOLD, SCORING_CUTOFF_IN_DAYS
 from storage.validator_storage import ValidatorStorage
 
@@ -227,10 +227,12 @@ class SqliteValidatorStorage(ValidatorStorage):
                     (lower_bound_timestamp, upper_bound_timestamp, batchsize),
                 )
                 results = cursor.fetchall()
-                if results is None:
-                    return None
+                if not results:
+                    return []
                 
-                return results
+                # Convert the raw database results into Pydantic models
+                matches = [Match(**dict(zip([column[0] for column in cursor.description], row))) for row in results]
+                return matches
     
     def insert_match_predictions(self, predictions: List[MatchPrediction]):
         """Stores unscored predictions returned from miners."""
@@ -272,7 +274,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     )
                 connection.commit()
 
-    def get_match_predictions_to_score(self, batchsize: int = 10, matchDateCutoff: int = SCORING_CUTOFF_IN_DAYS) -> Optional[List[MatchPrediction]]:
+    def get_match_predictions_to_score(self, batchsize: int = 10, matchDateCutoff: int = SCORING_CUTOFF_IN_DAYS) -> Optional[List[MatchPredictionWithMatchData]]:
         """Gets batchsize number of predictions that need to be scored and are eligible to be scored (the match is complete)"""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
@@ -297,8 +299,30 @@ class SqliteValidatorStorage(ValidatorStorage):
                     [match_cutoff_timestamp, batchsize],
                 )
                 results = cursor.fetchall()
-                if results is None:
-                    return None
+                if not results:
+                    return []
+                
+                # Convert the raw database results into the new combined Pydantic model
+                combined_predictions = []
+                for row in results:
+                    prediction_data = {
+                        'predictionId': row['predictionId'],
+                        'minerId': row['minerId'],
+                        'matchId': row['matchId'],
+                        'hotkey': row['hotkey'],
+                        'matchDate': row['matchDate'],
+                        'sport': row['sport'],
+                        'homeTeamName': row['homeTeamName'],
+                        'awayTeamName': row['awayTeamName'],
+                        'homeTeamScore': row['homeTeamScore'],
+                        'awayTeamScore': row['awayTeamScore'],
+                        'isScored': row['isScored'],
+                    }
+                    combined_predictions.append(MatchPredictionWithMatchData(
+                        prediction=MatchPrediction(**prediction_data),
+                        actualHomeTeamScore=row['actualHomeTeamScore'],
+                        actualAwayTeamScore=row['actualAwayTeamScore']
+                    ))
                 
                 return results
     
@@ -341,10 +365,13 @@ class SqliteValidatorStorage(ValidatorStorage):
                     [miner_hotkey],
                 )
                 results = cursor.fetchall()
-                if results is None:
-                    return None
+                if not results:
+                    return []
                 
-                return results
+                # Convert the raw database results into Pydantic models
+                predictions = [MatchPrediction(**dict(zip([column[0] for column in cursor.description], row))) for row in results]
+                return predictions
+            
 
     def read_miner_last_prediction(self, miner_hotkey: str) -> Optional[dt.datetime]:
         """Gets when a specific miner last returned a prediction."""

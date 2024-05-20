@@ -109,13 +109,15 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
     
     Then run scoring algorithms and return scoring results
     """
-    predictions = []
-    # Query for scorable match predictions
-    predictions = storage.get_match_predictions_to_score(batchsize)
+
+    # Query for scorable match predictions with actual match data
+    predictions_with_match_data = storage.get_match_predictions_to_score(batchsize)
 
     rewards = []
     rewards_uids = []
-    for prediction in predictions:
+    predictions = []
+    for pwmd in predictions_with_match_data:
+        prediction = pwmd.prediction
         uid = prediction.minerId
 
         sport = prediction.sport
@@ -125,18 +127,25 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
         rewards.append(calculate_prediction_score(
             prediction.homeTeamScore,
             prediction.awayTeamScore,
-            prediction.actualHomeTeamScore,
-            prediction.actualAwayTeamScore,
+            pwmd.actualHomeTeamScore,
+            pwmd.actualAwayTeamScore,
             max_score_difference
         ))
         rewards_uids.append(uid)
+        predictions.append(prediction)
+
+    if len(predictions) > 0:
+        storage.update_match_predictions(predictions)
 
     return [rewards, rewards_uids]
 
     
-def calculate_prediction_score(predicted_home_score: int, predicted_away_score: int,
-                               actual_home_score: int, actual_away_score: int,
-                               max_score_difference: int) -> float:
+def calculate_prediction_score(
+        predicted_home_score: int, predicted_away_score: int,
+        actual_home_score: int, actual_away_score: int,
+        max_score_difference: int
+    ) -> float:
+    
     # Score for home team prediction
     home_score_diff = abs(predicted_home_score - actual_home_score)
     # Calculate a float score between 0 and 1. 1 being an exact match
