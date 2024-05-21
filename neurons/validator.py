@@ -28,7 +28,15 @@ import torch
 # Bittensor Validator Template:
 from common.protocol import GetMatchPrediction
 from common.data import MatchPrediction
-from common.constants import DATA_SYNC_INTERVAL_IN_MINUTES, VALIDATOR_TIMEOUT, NUM_MINERS_TO_SEND_TO, BASE_MINER_PREDICTION_SCORE, MAX_BATCHSIZE_FOR_SCORING, SCORING_INTERVAL_IN_MINUTES
+from common.constants import (
+    DATA_SYNC_INTERVAL_IN_MINUTES, 
+    APP_DATA_SYNC_INTERVAL_IN_MINUTES, 
+    VALIDATOR_TIMEOUT, 
+    NUM_MINERS_TO_SEND_TO, 
+    BASE_MINER_PREDICTION_SCORE, 
+    MAX_BATCHSIZE_FOR_SCORING, 
+    SCORING_INTERVAL_IN_MINUTES
+)
 import vali_utils as utils
 from storage.sqlite_validator_storage import SqliteValidatorStorage
 
@@ -62,10 +70,12 @@ class Validator(BaseValidatorNeuron):
         """
         api_root = "http://95.179.153.99:8000"
         self.match_data_endpoint = f"{api_root}/matches"
+        self.app_prediction_requests_endpoint = f"{api_root}/app_prediction_requests"
 
         self.client_timeout_seconds = VALIDATOR_TIMEOUT
         self.next_match_syncing_datetime = dt.datetime.now(dt.UTC)
         self.next_scoring_datetime = dt.datetime.now(dt.UTC)
+        self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.UTC)
         self.storage = SqliteValidatorStorage()  # Create an instance of the storage handler
 
     async def forward(self):
@@ -97,7 +107,6 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning("Issue syncing match data")
             self.next_match_syncing_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END MATCH SYNCING """
-
 
         """ START MATCH PREDICTION REQUESTS """
         # Get miner uids to send prediction requests to
@@ -147,6 +156,18 @@ class Validator(BaseValidatorNeuron):
             # Update next sync time
             self.next_scoring_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=SCORING_INTERVAL_IN_MINUTES)
         """ END MATCH PREDICTION SCORING """
+
+        """ START APP PREDICTION FLOW """
+        # Check if we're ready to poll the API for prediction requests from the app
+        if self.next_app_predictions_syncing_datetime <= dt.datetime.now(dt.UTC):
+            bt.logging.info("Syncing the latest app prediction request data to local validator storage.")
+            process_result = await utils.process_app_prediction_requests(self.app_prediction_requests_endpoint)
+            if process_result:
+                bt.logging.info("Successfully processed app match prediction requests.")
+            else:
+                bt.logging.warning("Issue processing app prediction requests.")
+            self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
+        """ END APP PREDICTION FLOW """
 
     async def get_basic_match_prediction_rewards(
         self,

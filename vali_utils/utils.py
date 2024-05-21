@@ -22,6 +22,7 @@ async def sync_match_data(match_data_endpoint) -> bool:
     storage = SqliteValidatorStorage()  
     try:
         async with ClientSession() as session:
+            # TODO: add in authentication
             async with session.get(match_data_endpoint) as response:
                 response.raise_for_status()
                 match_data = await response.json()
@@ -45,6 +46,42 @@ async def sync_match_data(match_data_endpoint) -> bool:
 
     except Exception as e:
         bt.logging.error(f"Error getting match data: {e}")
+        return False
+    
+async def process_app_prediction_requests(app_prediction_requests_endpoint) -> bool:
+    storage = SqliteValidatorStorage()  
+    try:
+        async with ClientSession() as session:
+            # TODO: add in authentication
+            async with session.get(app_prediction_requests_endpoint) as response:
+                response.raise_for_status()
+                prediction_requests = await response.json()
+        
+        if not prediction_requests:
+            bt.logging.info("No app prediction requests returned from API")
+            return False
+        
+        bt.logging.info(f"Sending '{len(prediction_requests)}' app requests to miners for predictions.")
+        for pr in prediction_requests:
+            match_prediction = MatchPrediction(
+                matchId = pr.matchId,
+                matchDatetime = dt.datetime.strptime(pr.matchDate, "%Y-%m-%d %H:%M"),
+                sport = pr.sport,
+                homeTeamName = pr.homeTeamName,
+                awayTeamName = pr.awayTeamName
+            )
+            miner_uids = pr.miner_uids
+
+            input_synapse = GetMatchPrediction(match_prediction=match_prediction)
+            # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
+            finished_responses, working_miner_uids = await send_predictions_to_miners(bt.wallet, bt.metagraph, miner_uids, input_synapse)
+
+            # Post the response back per prediction_request or batch? Probably batch.
+
+        return True
+
+    except Exception as e:
+        bt.logging.error(f"Error syncing app prediction requests: {e}")
         return False
 
 def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:

@@ -8,6 +8,9 @@ PROTOCOL_VERSION = 1
 # Interval in minutes that we sync match data
 DATA_SYNC_INTERVAL_IN_MINUTES = 30
 
+# Interval in minutes that we poll the api for prediction requests from the app
+APP_DATA_SYNC_INTERVAL_IN_MINUTES = 1
+
 # Validator API endpoint timeout in seconds
 VALIDATOR_TIMEOUT = 120
 
