@@ -3,6 +3,7 @@ from typing import Optional, List
 import datetime as dt
 
 from common.data import League, Match, Prediction, MatchPrediction
+from common.protocol import GetMatchPrediction
 
 
 class ValidatorStorage(ABC):
@@ -19,7 +20,7 @@ class ValidatorStorage(ABC):
         raise NotImplemented
 
     @abstractmethod
-    def insert_matches(self, predictions: List[Match]):
+    def insert_matches(self, matches: List[Match]):
         """Stores official matches to score predictions from miners on."""
         raise NotImplemented
     
@@ -39,12 +40,12 @@ class ValidatorStorage(ABC):
         raise NotImplemented
 
     @abstractmethod
-    def insert_match_predictions(self, predictions: List[MatchPrediction]):
+    def insert_match_predictions(self, predictions: List[GetMatchPrediction]):
         """Stores unscored predictions returned from miners."""
         raise NotImplemented
     
     @abstractmethod
-    def get_predictions_to_score(self, batchsize: int) -> Optional[List[MatchPrediction]]:
+    def get_match_predictions_to_score(self, batchsize: int) -> Optional[List[MatchPrediction]]:
         """Gets batchsize number of predictions that need to be scored and are eligible to be scored (the match is complete)"""
         raise NotImplemented
     

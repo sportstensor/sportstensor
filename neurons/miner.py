@@ -32,15 +32,16 @@ from common.protocol import (
     REQUEST_LIMIT_BY_TYPE_PER_PERIOD,
 )
 from common.predictions import make_match_prediction
-from neurons.config import NeuronType
-from neurons.config import NeuronType, check_config, create_config
+#from neurons.config import NeuronType
+#from neurons.config import NeuronType, check_config, create_config
+from base.utils.config import check_config, add_args, config
 
 
 class Miner:
     """The Sports Tensor Miner."""
 
     def __init__(self, config=None):
-        self.config = copy.deepcopy(config or create_config(NeuronType.MINER))
+        self.config = copy.deepcopy(config or self.config())
         check_config(self.config)
 
         bt.logging(config=self.config, logging_dir=self.config.full_path)

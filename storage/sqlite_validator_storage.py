@@ -6,6 +6,7 @@ import sqlite3
 import threading
 from typing import Any, Dict, Optional, Set, Tuple, List
 from common.data import Sport, Match, Prediction, MatchPrediction, League, MatchPredictionWithMatchData
+from common.protocol import GetMatchPrediction
 from common.constants import MIN_PREDICTION_TIME_THRESHOLD, MAX_PREDICTION_DAYS_THRESHOLD, SCORING_CUTOFF_IN_DAYS
 from storage.validator_storage import ValidatorStorage
 
@@ -18,7 +19,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             leagueName    VARCHAR(50)     NOT NULL,
                             sport         INTEGER         NOT NULL,
                             isActive      INTEGER         DEFAULT 0,
-                            lastUpdated   TIMESTAMP(6)    NOT NULL,
+                            lastUpdated   TIMESTAMP(6)    NOT NULL
                             )"""
     
     MATCHES_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS Matches (
@@ -30,7 +31,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             homeTeamScore INTEGER         NULL,
                             awayTeamScore INTEGER         NULL,
                             isComplete    INTEGER         DEFAULT 0,
-                            lastUpdated   TIMESTAMP(6)    NOT NULL,
+                            lastUpdated   TIMESTAMP(6)    NOT NULL
                             )"""
 
     MATCHPREDICTIONS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS MatchPredictions (
@@ -46,7 +47,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             awayTeamScore INTEGER         NULL,
                             isScored      INTEGER         DEFAULT 0,
                             scoredDate    TIMESTAMP(6)    NULL,
-                            lastUpdated   TIMESTAMP(6)    NOT NULL,
+                            lastUpdated   TIMESTAMP(6)    NOT NULL
                             )"""
 
     def __init__(self):
@@ -73,7 +74,7 @@ class SqliteValidatorStorage(ValidatorStorage):
         # Create the database if it doesn't exist, defaulting to the local directory.
         # Use PARSE_DECLTYPES to convert accessed values into the appropriate type.
         connection = sqlite3.connect(
-            "file::memory:?cache=shared",
+            "SportsTensor.db",
             uri=True,
             detect_types=sqlite3.PARSE_DECLTYPES,
             timeout=120.0,
@@ -85,13 +86,13 @@ class SqliteValidatorStorage(ValidatorStorage):
     
     def insert_leagues(self, leagues: List[League]):
         """Stores leagues associated with sports. Indicates which leagues are active to run predictions on."""
+        values = []
         for league in leagues:
-          now_str = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+          now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
           # Parse every League into a list of values to insert.
-          values = []
           values.append(
             [
-                league.leaguehId,
+                league.leagueId,
                 league.leagueName,
                 league.sport,
                 league.isActive,                
@@ -102,24 +103,19 @@ class SqliteValidatorStorage(ValidatorStorage):
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
-                # Batch in groups of 1m if necessary to avoid congestion issues.
-                value_subsets = [
-                    values[x : x + 1_000_000] for x in range(0, len(values), 1_000_000)
-                ]
-                for value_subset in value_subsets:
-                    cursor.executemany(
-                        """INSERT OR IGNORE INTO Leagues (leagueId, leagueName, sport, isActive, lastUpdated) VALUES (?, ?, ?, ?, ?)""",
-                        value_subset,
-                    )
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO Leagues (leagueId, leagueName, sport, isActive, lastUpdated) VALUES (?, ?, ?, ?, ?)""",
+                    values,
+                )
                 connection.commit()
     
     def update_leagues(self, leagues: List[League]):
         """Updates leagues. Mainly for activating or deactivating"""
+        values = []
         for league in leagues:
-          now_str = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+          now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
           # Parse Leagues into a list of values to update.
-          values = []
           values.append(
             [
                 league.leagueName,
@@ -133,51 +129,46 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """UPDATE Leagues SET leagueName = ?, isActive = ?, lastUpdated = ? WHERE matchId = ?""",
+                    """UPDATE Leagues SET leagueName = ?, isActive = ?, lastUpdated = ? WHERE leagueId = ?""",
                     values,
                 )
                 connection.commit()
     
     def insert_matches(self, matches: List[Match]):
         """Stores official matches to score predictions from miners on."""
+        values = []
         for match in matches:
-          now_str = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+            now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-          # Parse every Match into a list of values to insert.
-          values = []
-          values.append(
+            # Parse every Match into a list of values to insert.
+            values.append(
             [
                 match.matchId,
-                match.matchDatetime,
+                match.matchDate,
                 match.sport,
                 match.homeTeamName,
                 match.awayTeamName,
                 now_str
             ]
-          )
+            )
 
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
-                # Batch in groups of 1m if necessary to avoid congestion issues.
-                value_subsets = [
-                    values[x : x + 1_000_000] for x in range(0, len(values), 1_000_000)
-                ]
-                for value_subset in value_subsets:
-                    cursor.executemany(
-                        """INSERT OR IGNORE INTO Matches (matchId, matchDate, sport, homeTeamName, awayTeamName, lastUpdated) VALUES (?, ?, ?, ?, ?, ?)""",
-                        value_subset,
-                    )
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO Matches (matchId, matchDate, sport, homeTeamName, awayTeamName, lastUpdated) VALUES (?, ?, ?, ?, ?, ?)""",
+                    values,
+                )
                 connection.commit()
 
     def update_matches(self, matches: List[Match]):
         """Updates matches. Typically only used when updating final score."""
+        values = []
         for match in matches:
-          now_str = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+            now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-          # Parse Matches into a list of values to update.
-          values = []
-          values.append(
+            # Parse Matches into a list of values to update.
+            values.append(
             [
                 match.homeTeamScore,
                 match.awayTeamScore,
@@ -185,7 +176,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 now_str,
                 match.matchId
             ]
-          )
+            )
 
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
@@ -198,9 +189,11 @@ class SqliteValidatorStorage(ValidatorStorage):
 
     def check_match(self, matchId: str) -> Match:
         """Check if a match with the given ID exists in the database."""
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT EXISTS(SELECT 1 FROM matches WHERE matchId = %s)", (matchId,))
-        return cursor.fetchone()[0]
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.execute("""SELECT EXISTS(SELECT 1 FROM matches WHERE matchId = ?)""", (matchId,))
+                return cursor.fetchone()[0]
 
     def get_matches_to_predict(self, batchsize: int = 10) -> List[Match]:
         """Gets batchsize number of matches ready to be predicted."""
@@ -213,19 +206,22 @@ class SqliteValidatorStorage(ValidatorStorage):
                 lower_bound_timestamp = current_timestamp + MIN_PREDICTION_TIME_THRESHOLD
                 # Calculate the upper bound timestamp (latest match date allowed for predictions)
                 upper_bound_timestamp = current_timestamp + MAX_PREDICTION_DAYS_THRESHOLD * 24 * 3600
+                # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
+                lower_bound_str = dt.datetime.fromtimestamp(lower_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                upper_bound_str = dt.datetime.fromtimestamp(upper_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
                 cursor = connection.cursor()
                 cursor.execute(
                     """
                     SELECT * 
                     FROM Matches
-                    WHERE isComplete = 0 
-                    AND matchDate > ? 
-                    AND matchDate < ? 
+                    WHERE isComplete = 0
+                    AND matchDate BETWEEN ? AND ?
                     ORDER BY RANDOM() LIMIT ?
                     """,
-                    (lower_bound_timestamp, upper_bound_timestamp, batchsize),
+                    (lower_bound_str, upper_bound_str, batchsize),
                 )
+                #print("matchDate > ", lower_bound_str, "matchDate < ", upper_bound_str)
                 results = cursor.fetchall()
                 if not results:
                     return []
@@ -234,44 +230,43 @@ class SqliteValidatorStorage(ValidatorStorage):
                 matches = [Match(**dict(zip([column[0] for column in cursor.description], row))) for row in results]
                 return matches
     
-    def insert_match_predictions(self, predictions: List[MatchPrediction]):
+    def insert_match_predictions(self, predictions: List[GetMatchPrediction]):
         """Stores unscored predictions returned from miners."""
+        values = []
         for prediction in predictions:
-          bt.logging.trace(
-              f"{prediction.axon.hotkey}: Upserting prediction for match {str(prediction.matchId)}, {prediction.awayTeamName} at {prediction.homeTeamName} on {str(prediction.matchDatetime)}"
-          )
+            bt.logging.trace(
+                f"
+                    {prediction.axon.hotkey}: Upserting prediction for match {str(prediction.match_prediction.matchId)}, 
+                    {prediction.match_prediction.awayTeamName} at {prediction.match_prediction.homeTeamName} 
+                    on {str(prediction.match_prediction.matchDatetime)}
+                "
+            )
 
-          now_str = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+            now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-          # Parse every MatchPrediction into a list of values to insert.
-          values = []
-          values.append(
-            [
-                prediction.axon.uid,
-                prediction.axon.hotkey,
-                prediction.matchId,
-                prediction.matchDatetime,
-                prediction.sport,
-                prediction.homeTeamName,
-                prediction.awayTeamName,
-                prediction.homeTeamScore,
-                prediction.awayTeamScore,
-                now_str
-            ]
-          )
+            # Parse every MatchPrediction into a list of values to insert.
+            values.append(
+                [
+                    prediction.axon.uid,
+                    prediction.axon.hotkey,
+                    prediction.match_prediction.matchId,
+                    prediction.match_prediction.matchDatetime,
+                    prediction.match_prediction.sport,
+                    prediction.match_prediction.homeTeamName,
+                    prediction.match_prediction.awayTeamName,
+                    prediction.match_prediction.homeTeamScore,
+                    prediction.match_prediction.awayTeamScore,
+                    now_str
+                ]
+            )
 
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
-                # Batch in groups of 1m if necessary to avoid congestion issues.
-                value_subsets = [
-                    values[x : x + 1_000_000] for x in range(0, len(values), 1_000_000)
-                ]
-                for value_subset in value_subsets:
-                    cursor.executemany(
-                        """INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        value_subset,
-                    )
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    values,
+                )
                 connection.commit()
 
     def get_match_predictions_to_score(self, batchsize: int = 10, matchDateCutoff: int = SCORING_CUTOFF_IN_DAYS) -> Optional[List[MatchPredictionWithMatchData]]:
@@ -328,15 +323,15 @@ class SqliteValidatorStorage(ValidatorStorage):
     
     def update_match_predictions(self, predictions: List[MatchPrediction]):
         """Updates predictions. Typically only used when marking predictions as being scored."""
+        values = []
         for prediction in predictions:
           bt.logging.trace(
               f"{prediction.axon.hotkey}: Marking prediction {str(prediction.predictionId)} as scored"
           )
 
-          now_str = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+          now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
           # Parse MatchPredictions into a list of values to update, marking each as scored with a timestamp of now.
-          values = []
           values.append(
             [
                 1,

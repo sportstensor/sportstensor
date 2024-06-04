@@ -55,7 +55,7 @@ class Match(StrictBaseModel):
     )
 
     # The datetime of the starting time of the match. Should be in UTC?
-    matchDatetime: dt.datetime
+    matchDate: dt.datetime
 
     sport: Sport
     
@@ -68,7 +68,7 @@ class Match(StrictBaseModel):
     awayTeamScore: Optional[int]
 
     # Validators to ensure immutability
-    @validator('matchId', 'matchDatetime', 'sport', 'homeTeamName', 'awayTeamName', pre=True, always=True, check_fields=False)
+    @validator('matchId', 'matchDate', 'sport', 'homeTeamName', 'awayTeamName', pre=True, always=True, check_fields=False)
     def match_fields_are_immutable(cls, v, values, field):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
@@ -81,12 +81,12 @@ class Prediction(StrictBaseModel):
         description="Unique ID that represents a predication."
     )
 
-    matchId: PositiveInt = Field(
+    matchId: str = Field(
         description="Unique ID that represents a match."
     )
 
     # The datetime of the starting time of the match. Should be in UTC?
-    matchDatetime: dt.datetime
+    matchDate: dt.datetime
 
     sport: Sport
     
@@ -95,7 +95,7 @@ class Prediction(StrictBaseModel):
     scoredDate: Optional[dt.datetime]
     
     # Validators to ensure immutability
-    @validator('predictionId', 'matchId', 'matchDatetime', 'sport', pre=True, always=True, check_fields=False)
+    @validator('predictionId', 'matchId', 'matchDate', 'sport', pre=True, always=True, check_fields=False)
     def base_fields_are_immutable(cls, v, values, field):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
