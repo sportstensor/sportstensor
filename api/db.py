@@ -78,7 +78,6 @@ def create_database():
             matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
             lastUpdated TIMESTAMP NOT NULL,
-            sportstensorId VARCHAR(50)
         )''')
         conn.commit()
     except Exception as e:
@@ -86,6 +85,34 @@ def create_database():
     finally:
         c.close()
         conn.close()
+
+
+def create_app_database():
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute('''
+        CREATE TABLE IF NOT EXISTS AppMatchPredictions (
+            app_request_id VARCHAR(50) PRIMARY KEY,
+            matchId VARCHAR(50) NOT NULL,
+            matchDate TIMESTAMP NOT NULL,
+            sport INTEGER NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            homeTeamScore INTEGER,
+            awayTeamScore INTEGER,
+            matchLeague VARCHAR(50),
+            isComplete BOOLEAN DEFAULT FALSE,
+            lastUpdated TIMESTAMP NOT NULL,
+            miner_hotkey VARCHAR(50) NULL
+        )''')
+        conn.commit()
+    except Exception as e:
+        logging.error("Failed to create matches table in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
 
 def get_db_conn():
     try:
@@ -99,3 +126,4 @@ def get_db_conn():
         logging.error("Failed to connect to MySQL database", exc_info=True)
 
 create_database()
+create_app_database()

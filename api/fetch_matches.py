@@ -40,7 +40,9 @@ def fetch_and_store_events():
     urls = [
         'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4328&s=2023-2024',
         'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4387&s=2023-2024',
-        'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4424&s=2024'
+        'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4424&s=2024',
+        'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4346&s=2024'
+
     ]
     
     all_events = []

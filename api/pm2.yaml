@@ -2,7 +2,16 @@ apps:
   - script: uvicorn
     name: "fastapi_app"
     interpreter: python3
-    args: "main:app --host 0.0.0.0 --port 8000"
+    args: 
+      - "main:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "443"
+      - "--ssl-keyfile"
+      - "/root/origin-key.key"
+      - "--ssl-certfile"
+      - "/root/origin-cert.pem"
     exec_mode: fork
     watch: true
     merge_logs: true
