@@ -48,6 +48,10 @@ class GetMatchPrediction(BaseProtocol):
         default=None
     )
 
+    def __str__(self):
+        return f"GetMatchPrediction(match_prediction={self.match_prediction}, axon={self.axon})"
+    __repr__ = __str__
+
 """
 class GetSoccerPrediction(BaseProtocol):
     

@@ -4,10 +4,16 @@ import time
 import bittensor as bt
 import sqlite3
 import threading
+import random
 from typing import Any, Dict, Optional, Set, Tuple, List
 from common.data import Sport, Match, Prediction, MatchPrediction, League, MatchPredictionWithMatchData
 from common.protocol import GetMatchPrediction
-from common.constants import MIN_PREDICTION_TIME_THRESHOLD, MAX_PREDICTION_DAYS_THRESHOLD, SCORING_CUTOFF_IN_DAYS
+from common.constants import (
+    IS_DEV,
+    MIN_PREDICTION_TIME_THRESHOLD, 
+    MAX_PREDICTION_DAYS_THRESHOLD, 
+    SCORING_CUTOFF_IN_DAYS
+)
 from storage.validator_storage import ValidatorStorage
 
 
@@ -148,6 +154,9 @@ class SqliteValidatorStorage(ValidatorStorage):
                 match.sport,
                 match.homeTeamName,
                 match.awayTeamName,
+                match.homeTeamScore,
+                match.awayTeamScore,
+                match.isComplete,
                 now_str
             ]
             )
@@ -156,7 +165,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """INSERT OR IGNORE INTO Matches (matchId, matchDate, sport, homeTeamName, awayTeamName, lastUpdated) VALUES (?, ?, ?, ?, ?, ?)""",
+                    """INSERT OR IGNORE INTO Matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -234,23 +243,26 @@ class SqliteValidatorStorage(ValidatorStorage):
         """Stores unscored predictions returned from miners."""
         values = []
         for prediction in predictions:
-            bt.logging.trace(
-                f"
-                    {prediction.axon.hotkey}: Upserting prediction for match {str(prediction.match_prediction.matchId)}, 
-                    {prediction.match_prediction.awayTeamName} at {prediction.match_prediction.homeTeamName} 
-                    on {str(prediction.match_prediction.matchDatetime)}
-                "
-            )
+            """
+            bt.logging.debug(f" \
+                    {prediction.axon.hotkey}: Upserting prediction for match {str(prediction.match_prediction.matchId)}, \
+                    {prediction.match_prediction.awayTeamName} at {prediction.match_prediction.homeTeamName} \
+                    on {str(prediction.match_prediction.matchDate)} \
+            ")
+            """
 
             now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+            if IS_DEV:
+                random_uid = random.randint(1, 16)  # Generate a random integer between 1 and 16
 
             # Parse every MatchPrediction into a list of values to insert.
             values.append(
                 [
-                    prediction.axon.uid,
-                    prediction.axon.hotkey,
+                    prediction.axon.uid if not IS_DEV else random_uid,
+                    prediction.axon.hotkey if not IS_DEV else f"DEV_{str(random_uid)}",
                     prediction.match_prediction.matchId,
-                    prediction.match_prediction.matchDatetime,
+                    prediction.match_prediction.matchDate,
                     prediction.match_prediction.sport,
                     prediction.match_prediction.homeTeamName,
                     prediction.match_prediction.awayTeamName,
@@ -279,19 +291,21 @@ class SqliteValidatorStorage(ValidatorStorage):
                 current_timestamp = int(time.time())
                 # Calculate cutoff date timestamp
                 match_cutoff_timestamp = current_timestamp - (matchDateCutoff * 24 * 3600)
+                # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
+                match_cutoff_str = dt.datetime.fromtimestamp(match_cutoff_timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
                 cursor.execute(
                     """
                     SELECT mp.*, m.homeTeamScore as actualHomeTeamScore, m.awayTeamScore as actualAwayTeamScore
                     FROM MatchPredictions mp
-                    WHERE mp.isScored = 0
                     JOIN Matches m ON (m.matchId = mp.matchId)
+                    WHERE mp.isScored = 0
                     AND m.isComplete = 1
                     AND mp.matchDate > ?
                     ORDER BY mp.matchDate ASC
                     LIMIT ?
                     """,
-                    [match_cutoff_timestamp, batchsize],
+                    [match_cutoff_str, batchsize],
                 )
                 results = cursor.fetchall()
                 if not results:
@@ -301,32 +315,34 @@ class SqliteValidatorStorage(ValidatorStorage):
                 combined_predictions = []
                 for row in results:
                     prediction_data = {
-                        'predictionId': row['predictionId'],
-                        'minerId': row['minerId'],
-                        'matchId': row['matchId'],
-                        'hotkey': row['hotkey'],
-                        'matchDate': row['matchDate'],
-                        'sport': row['sport'],
-                        'homeTeamName': row['homeTeamName'],
-                        'awayTeamName': row['awayTeamName'],
-                        'homeTeamScore': row['homeTeamScore'],
-                        'awayTeamScore': row['awayTeamScore'],
-                        'isScored': row['isScored'],
+                        'predictionId': row[0],
+                        'minerId': row[1],
+                        'hotkey': row[2],
+                        'matchId': row[3],
+                        'matchDate': row[4],
+                        'sport': row[5],
+                        'homeTeamName': row[6],
+                        'awayTeamName': row[7],
+                        'homeTeamScore': row[8],
+                        'awayTeamScore': row[9],
+                        'isScored': row[10],
+                        # row[11] is scoredDate
+                        # row[12] is lastUpdated
                     }
                     combined_predictions.append(MatchPredictionWithMatchData(
                         prediction=MatchPrediction(**prediction_data),
-                        actualHomeTeamScore=row['actualHomeTeamScore'],
-                        actualAwayTeamScore=row['actualAwayTeamScore']
+                        actualHomeTeamScore=row[13],
+                        actualAwayTeamScore=row[14]
                     ))
                 
-                return results
+                return combined_predictions
     
     def update_match_predictions(self, predictions: List[MatchPrediction]):
         """Updates predictions. Typically only used when marking predictions as being scored."""
         values = []
         for prediction in predictions:
           bt.logging.trace(
-              f"{prediction.axon.hotkey}: Marking prediction {str(prediction.predictionId)} as scored"
+              f"{prediction.hotkey}: Marking prediction {str(prediction.predictionId)} as scored"
           )
 
           now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

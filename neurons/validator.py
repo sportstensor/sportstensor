@@ -60,17 +60,15 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info("load_state()")
         self.load_state()
-
-        """
+        
         api_root = (
-            "https://dev-api.sportstensor.ai/validator/"
+            #"https://dev-api.sportstensor.com"
+            "https://api.sportstensor.com"
             if self.config.subtensor.network == "test" else
-            "https://api.sportstensor.ai/validator"
+            "https://api.sportstensor.com"
         )
-        """
-        api_root = "http://95.179.153.99:8000"
         self.match_data_endpoint = f"{api_root}/matches"
-        self.app_prediction_requests_endpoint = f"{api_root}/app_prediction_requests"
+        self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictions"
 
         self.client_timeout_seconds = VALIDATOR_TIMEOUT
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
@@ -134,10 +132,12 @@ class Validator(BaseValidatorNeuron):
             except Exception as e:
                 bt.logging.error(f"Error in get_basic_match_prediction_rewards: {e}")
                 return
-
-            bt.logging.info(f"Scored responses: {rewards}")
+            
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            self.update_scores(rewards, working_miner_uids)
+            if len(working_miner_uids) > 0:
+                bt.logging.info(f"Rewarding miners {working_miner_uids} that returned a prediction.")
+                self.update_scores(rewards, working_miner_uids)
+
             # Update the scores of miner uids NOT working. Default to 0.
             not_working_miner_uids = []
             no_rewards = []
@@ -145,7 +145,9 @@ class Validator(BaseValidatorNeuron):
                 if uid not in working_miner_uids:
                     not_working_miner_uids.append(uid)
                     no_rewards.append(0.0)
-            self.update_scores(torch.FloatTensor(no_rewards).to(self.device), not_working_miner_uids)
+            if len(not_working_miner_uids) > 0:
+                bt.logging.info(f"Penalizing miners {not_working_miner_uids} that did not respond.")
+                self.update_scores(torch.FloatTensor(no_rewards).to(self.device), not_working_miner_uids)
         """ END MATCH PREDICTION REQUESTS """
 
         """ START MATCH PREDICTION SCORING """
@@ -153,7 +155,13 @@ class Validator(BaseValidatorNeuron):
         if self.next_scoring_datetime <= dt.datetime.now(dt.timezone.utc):
             bt.logging.info(f"Checking if there are predictions to score.")
             prediction_rewards, prediction_rewards_uids = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
-            self.update_scores(torch.FloatTensor(prediction_rewards).to(self.device), prediction_rewards_uids)
+            if len(prediction_rewards) > 0:
+                bt.logging.info(f"Scoring {len(prediction_rewards)} predictions for miners {prediction_rewards_uids}.")
+                bt.logging.info(f"Prediction rewards: {prediction_rewards}")
+                self.update_scores(torch.FloatTensor(prediction_rewards).to(self.device), prediction_rewards_uids)
+
+            else:
+                bt.logging.info("No predictions to score.")
             # Update next sync time
             self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=SCORING_INTERVAL_IN_MINUTES)
         """ END MATCH PREDICTION SCORING """

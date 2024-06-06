@@ -27,6 +27,7 @@ import bittensor as bt
 
 from typing import List
 from traceback import print_exception
+import time
 
 from base.neuron import BaseNeuron
 from base.mock import MockDendrite
@@ -142,6 +143,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
+                start_time = time.time()
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
@@ -155,6 +157,13 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
+
+                # Sleep for the remaining time in the step.
+                elapsed = time.time() - start_time
+                if elapsed < self.config.neuron.timeout:
+                    sleep_time = self.config.neuron.timeout - elapsed
+                    bt.logging.info(f"Sleeping for {sleep_time} ...")
+                    time.sleep(sleep_time)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:

@@ -10,17 +10,20 @@ from common.protocol import GetMatchPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
 
-
 from common.constants import (
+    IS_DEV,
     CORRECT_MATCH_WINNER_SCORE,
-    MAX_SCORE_DIFFERENCE
+    MAX_SCORE_DIFFERENCE,
+    MAX_SCORE_DIFFERENCE_SOCCER,
+    MAX_SCORE_DIFFERENCE_FOOTBALL,
+    MAX_SCORE_DIFFERENCE_BASEBALL,
+    MAX_SCORE_DIFFERENCE_BASKETBALL
 )
 
 # initialize our validator storage class
 storage = SqliteValidatorStorage()
 
 async def sync_match_data(match_data_endpoint) -> bool:
-    #storage = SqliteValidatorStorage()  
     try:
         async with ClientSession() as session:
             # TODO: add in authentication
@@ -47,7 +50,10 @@ async def sync_match_data(match_data_endpoint) -> bool:
                 matchDate=item['matchDate'],
                 sport=item['sport'],
                 homeTeamName=item['homeTeamName'],
-                awayTeamName=item['awayTeamName']
+                awayTeamName=item['awayTeamName'],
+                homeTeamScore=item['homeTeamScore'],
+                awayTeamScore=item['awayTeamScore'],
+                isComplete=item['isComplete']
             )
             if storage.check_match(item['matchId']):
                 matches_to_update.append(match)
@@ -68,7 +74,6 @@ async def sync_match_data(match_data_endpoint) -> bool:
         return False
     
 async def process_app_prediction_requests(app_prediction_requests_endpoint) -> bool:
-    #storage = SqliteValidatorStorage()  
     try:
         async with ClientSession() as session:
             # TODO: add in authentication
@@ -76,24 +81,30 @@ async def process_app_prediction_requests(app_prediction_requests_endpoint) -> b
                 response.raise_for_status()
                 prediction_requests = await response.json()
         
-        if not prediction_requests:
+        if not prediction_requests or 'matches' not in prediction_requests:
             bt.logging.info("No app prediction requests returned from API")
             return False
+        
+        prediction_requests = prediction_requests['matches']
         
         bt.logging.info(f"Sending {len(prediction_requests)} app requests to miners for predictions.")
         for pr in prediction_requests:
             match_prediction = MatchPrediction(
-                matchId = pr.matchId,
-                matchDatetime = dt.datetime.strptime(pr.matchDate, "%Y-%m-%d %H:%M"),
-                sport = pr.sport,
-                homeTeamName = pr.homeTeamName,
-                awayTeamName = pr.awayTeamName
+                matchId = pr['matchId'],
+                matchDate = pr['matchDate'],
+                sport = pr['sport'],
+                homeTeamName = pr['homeTeamName'],
+                awayTeamName = pr['awayTeamName']
             )
-            miner_uids = pr.miner_uids
+            miner_hotkey = pr['miner_hotkey']
+            if IS_DEV:
+                miner_uids = [9999]
+            else:
+                miner_uids = [ax.uid for ax in bt.metagraph.axons if ax.hotkey == miner_hotkey]
 
             input_synapse = GetMatchPrediction(match_prediction=match_prediction)
             # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
-            finished_responses, working_miner_uids = await send_predictions_to_miners(bt.wallet, bt.metagraph, miner_uids, input_synapse)
+            finished_responses, working_miner_uids = await send_predictions_to_miners(bt.wallet, bt.metagraph, input_synapse, miner_uids)
 
             # Post the response back per prediction_request or batch? Probably batch.
 
@@ -103,8 +114,7 @@ async def process_app_prediction_requests(app_prediction_requests_endpoint) -> b
         bt.logging.error(f"Error syncing app prediction requests: {e}")
         return False
 
-def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:
-    #storage = SqliteValidatorStorage()
+def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
     matches = storage.get_matches_to_predict(batchsize)
     match_predictions = [MatchPrediction(
         matchId = match.matchId,
@@ -117,52 +127,52 @@ def get_match_prediction_requests(batchsize: int = 10) -> List[MatchPrediction]:
 
 async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph, input_synapse: GetMatchPrediction, miner_uids: List[int]) -> Tuple[List[MatchPrediction], List[int]]:
     try:
-        """ TODO: TURN BACK ON AFTER TESTING
-        async with bt.dendrite(wallet=wallet) as dendrite:
-            random.shuffle(miner_uids)
-            responses = await dendrite.forward(
-                axons=[metagraph.axons[uid] for uid in miner_uids],
-                synapse=input_synapse,
-                timeout=120,
-            )
-            """
-        # For now, just return a list of random MatchPrediction responses
-        responses = [
-            GetMatchPrediction(
-                match_prediction=MatchPrediction(
-                    matchId=input_synapse.match_prediction.matchId,
-                    matchDate=input_synapse.match_prediction.matchDate,
-                    sport=input_synapse.match_prediction.sport,
-                    homeTeamName=input_synapse.match_prediction.homeTeamName,
-                    awayTeamName=input_synapse.match_prediction.awayTeamName,
-                    homeTeamScore=random.randint(0, 10),
-                    awayTeamScore=random.randint(0, 10),
+        if IS_DEV:
+            # For now, just return a list of random MatchPrediction responses
+            responses = [
+                GetMatchPrediction(
+                    match_prediction=MatchPrediction(
+                        matchId=input_synapse.match_prediction.matchId,
+                        matchDate=input_synapse.match_prediction.matchDate,
+                        sport=input_synapse.match_prediction.sport,
+                        homeTeamName=input_synapse.match_prediction.homeTeamName,
+                        awayTeamName=input_synapse.match_prediction.awayTeamName,
+                        homeTeamScore=random.randint(0, 10),
+                        awayTeamScore=random.randint(0, 10),
+                    )
+                ) for uid in miner_uids]
+        else:
+            async with bt.dendrite(wallet=wallet) as dendrite:
+                random.shuffle(miner_uids)
+                responses = await dendrite.forward(
+                    axons=[metagraph.axons[uid] for uid in miner_uids],
+                    synapse=input_synapse,
+                    timeout=120,
                 )
-            ) for uid in miner_uids]
         
         working_miner_uids = []
         finished_responses = []
         for response in responses:
             is_prediction_valid, error_msg = is_match_prediction_valid(response.match_prediction)
-            """ TODO: TURN BACK ON AFTER TESTING
-            if not response or not response.match_prediction.homeTeamScore or not response.match_prediction.awayTeamScore or not response.axon or not response.axon.hotkey:
-                bt.logging.info(
-                    f"{response.axon.hotkey}: Miner failed to respond with a prediction."
-                )
-                continue
-            elif not is_prediction_valid:
-                bt.logging.info(
-                    f"{response.axon.hotkey}: Miner prediction failed validation: {error_msg}"
-                )
-                continue
-            else:
-                uid = response.axon.uid
+            if IS_DEV:
+                uid = miner_uids.pop(random.randrange(len(miner_uids)))
                 working_miner_uids.append(uid)
                 finished_responses.append(response)
-            """
-            uid = miner_uids.pop(random.randrange(len(miner_uids)))
-            working_miner_uids.append(uid)
-            finished_responses.append(response)
+            else:
+                if not response or not response.match_prediction.homeTeamScore or not response.match_prediction.awayTeamScore or not response.axon or not response.axon.hotkey:
+                    bt.logging.info(
+                        f"{response.axon.hotkey}: Miner failed to respond with a prediction."
+                    )
+                    continue
+                elif not is_prediction_valid:
+                    bt.logging.info(
+                        f"{response.axon.hotkey}: Miner prediction failed validation: {error_msg}"
+                    )
+                    continue
+                else:
+                    uid = response.axon.uid
+                    working_miner_uids.append(uid)
+                    finished_responses.append(response)
 
         if len(working_miner_uids) == 0:
             bt.logging.info("No miner responses available.")
@@ -170,7 +180,8 @@ async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph,
         
         bt.logging.info(f"Received responses: {responses}")
         # store miner predictions in validator database to be scored when applicable
-        storage.insert_match_predictions(finished_responses, working_miner_uids)
+        bt.logging.info(f"Storing predictions in validator database.")
+        storage.insert_match_predictions(finished_responses)
 
         return (finished_responses, working_miner_uids)
 
@@ -198,8 +209,15 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
         uid = prediction.minerId
 
         sport = prediction.sport
+        max_score_difference = MAX_SCORE_DIFFERENCE
         if sport == Sport.SOCCER:
-            max_score_difference = MAX_SCORE_DIFFERENCE
+            max_score_difference = MAX_SCORE_DIFFERENCE_SOCCER
+        elif sport == Sport.FOOTBALL:
+            max_score_difference = MAX_SCORE_DIFFERENCE_FOOTBALL
+        elif sport == Sport.BASEBALL:
+            max_score_difference = MAX_SCORE_DIFFERENCE_BASEBALL
+        elif sport == Sport.BASKETBALL:
+            max_score_difference = MAX_SCORE_DIFFERENCE_BASKETBALL
 
         rewards.append(calculate_prediction_score(
             prediction.homeTeamScore,
@@ -214,7 +232,15 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
     if len(predictions) > 0:
         storage.update_match_predictions(predictions)
 
-    return [rewards, rewards_uids]
+    # Normalize the rewards so that they sum up to 1.0
+    total_rewards = sum(rewards)
+    if total_rewards > 0:
+        normalized_rewards = [reward / total_rewards for reward in rewards]
+    else:
+        # Handle the case where total_rewards is 0 to avoid division by zero
+        normalized_rewards = [0 for _ in rewards]
+
+    return [normalized_rewards, rewards_uids]
 
     
 def calculate_prediction_score(

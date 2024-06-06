@@ -81,6 +81,14 @@ class Prediction(StrictBaseModel):
         description="Unique ID that represents a predication."
     )
 
+    minerId: Optional[PositiveInt] = Field(
+        description="Unique ID that represents a miner."
+    )
+
+    hotkey: Optional[str] = Field(
+        description="A unique identifier for the miner."
+    )
+
     matchId: str = Field(
         description="Unique ID that represents a match."
     )

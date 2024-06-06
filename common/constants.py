@@ -1,5 +1,7 @@
 import datetime
 
+IS_DEV = True
+
 # Collection of constants for use throughout the codebase.
 
 # The current protocol version (int)
