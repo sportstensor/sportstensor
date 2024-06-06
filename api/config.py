@@ -1,6 +1,9 @@
 import os
 
-NETWORK = os.environ["NETWORK"]
-NETUID = int(os.environ["NETUID"])
+NETWORK = "test"
+NETUID = 0
+IS_PROD = False
 
-IS_PROD = os.environ.get("IS_PROD", "false").lower() == "true"
+#NETWORK = os.environ["NETWORK"]
+#NETUID = int(os.environ["NETUID"])
+#IS_PROD = os.environ.get("IS_PROD", "false").lower() == "true"

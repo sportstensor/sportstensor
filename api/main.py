@@ -12,8 +12,10 @@ from fastapi.responses import JSONResponse, FileResponse
 from starlette import status
 from substrateinterface import Keypair
 
+# mysqlclient install issues: https://stackoverflow.com/a/77020207
 import mysql.connector
 from mysql.connector import Error
+
 from datetime import datetime
 import api.db as db
 from api.config import (
