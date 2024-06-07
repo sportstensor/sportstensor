@@ -195,7 +195,14 @@ async def main():
 
     await asyncio.gather(
         resync_metagraph(),
-        asyncio.to_thread(uvicorn.run, app, host="0.0.0.0", port=8000)
+        asyncio.to_thread(
+            uvicorn.run, 
+            app, 
+            host="0.0.0.0",
+            port=443, 
+            ssl_certfile="/root/origin-cert.pem",
+            ssl_keyfile="/root/origin-key.key"
+        )
     )
 
 if __name__ == "__main__":
