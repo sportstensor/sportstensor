@@ -73,7 +73,7 @@ async def sync_match_data(match_data_endpoint) -> bool:
         bt.logging.error(f"Error getting match data: {e}")
         return False
     
-async def process_app_prediction_requests(app_prediction_requests_endpoint) -> bool:
+async def process_app_prediction_requests(dendrite: bt.dendrite, metagraph: bt.metagraph, app_prediction_requests_endpoint: str) -> bool:
     try:
         async with ClientSession() as session:
             # TODO: add in authentication
@@ -104,7 +104,7 @@ async def process_app_prediction_requests(app_prediction_requests_endpoint) -> b
 
             input_synapse = GetMatchPrediction(match_prediction=match_prediction)
             # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
-            finished_responses, working_miner_uids = await send_predictions_to_miners(bt.wallet, bt.metagraph, input_synapse, miner_uids)
+            finished_responses, working_miner_uids = await send_predictions_to_miners(dendrite, metagraph, input_synapse, miner_uids)
 
             # Post the response back per prediction_request or batch? Probably batch.
 
@@ -125,7 +125,7 @@ def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
     ) for match in matches]
     return match_predictions
 
-async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph, input_synapse: GetMatchPrediction, miner_uids: List[int]) -> Tuple[List[MatchPrediction], List[int]]:
+async def send_predictions_to_miners(dendrite: bt.dendrite, metagraph: bt.metagraph, input_synapse: GetMatchPrediction, miner_uids: List[int]) -> Tuple[List[MatchPrediction], List[int]]:
     try:
         if IS_DEV:
             # For now, just return a list of random MatchPrediction responses
@@ -142,13 +142,26 @@ async def send_predictions_to_miners(wallet: bt.wallet, metagraph: bt.metagraph,
                     )
                 ) for uid in miner_uids]
         else:
-            async with bt.dendrite(wallet=wallet) as dendrite:
-                random.shuffle(miner_uids)
-                responses = await dendrite.forward(
-                    axons=[metagraph.axons[uid] for uid in miner_uids],
-                    synapse=input_synapse,
-                    timeout=120,
-                )
+            
+            random.shuffle(miner_uids)
+            axons = [metagraph.axons[uid] for uid in miner_uids]
+            for axon in axons:
+                if axon.hotkey == '5EqZoEKc6c8TaG4xRRHTT1uZiQF5jkjQCeUV5t77L6YbeaJ8':
+                    axon.ip = '127.0.0.1'
+            responses = await dendrite.forward(
+                # Send the query to selected miner axons in the network.
+                axons=axons,
+                synapse=input_synapse,
+                deserialize=False,
+                timeout=120,
+            )
+            """
+            responses = await dendrite.forward(
+                axons=[metagraph.axons[uid] for uid in miner_uids],
+                synapse=input_synapse,
+                timeout=120,
+            )
+            """
         
         working_miner_uids = []
         finished_responses = []

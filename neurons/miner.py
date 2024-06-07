@@ -15,189 +15,32 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import asyncio
 from collections import defaultdict
-import copy
-import sys
-import threading
 import time
 import traceback
 import typing
 import bittensor as bt
-import datetime as dt
-from common import constants, utils
-from common.data import MatchPrediction
+
+from base.miner import BaseMinerNeuron
+
+from common import constants
 from common.protocol import (
-    GetMatchPrediction,
-    REQUEST_LIMIT_BY_TYPE_PER_PERIOD,
+    GetMatchPrediction
 )
 from common.predictions import make_match_prediction
-#from neurons.config import NeuronType
-#from neurons.config import NeuronType, check_config, create_config
-from base.utils.config import check_config, add_args, config
 
-
-class Miner:
+class Miner(BaseMinerNeuron):
     """The Sports Tensor Miner."""
 
     def __init__(self, config=None):
-        self.config = copy.deepcopy(config or self.config())
-        check_config(self.config)
-
-        bt.logging(config=self.config, logging_dir=self.config.full_path)
-        bt.logging.info(self.config)
-
+        super(Miner, self).__init__(config=config)
         
-        # The wallet holds the cryptographic key pairs for the miner.
-        self.wallet = bt.wallet(config=self.config)
-        bt.logging.info(f"Wallet: {self.wallet}.")
-
-        # The subtensor is our connection to the Bittensor blockchain.
-        self.subtensor = bt.subtensor(config=self.config)
-        bt.logging.info(f"Subtensor: {self.subtensor}.")
-
-        # The metagraph holds the state of the network, letting us know about other validators and miners.
-        self.metagraph = self.subtensor.metagraph(self.config.netuid)
-        bt.logging.info(f"Metagraph: {self.metagraph}.")
-
-        # Each miner gets a unique identity (UID) in the network for differentiation.
-        # TODO: Stop doing meaningful work in the constructor to make neurons more testable.
-        if self.wallet.hotkey.ss58_address in self.metagraph.hotkeys:
-            self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-            bt.logging.info(
-                f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}."
-            )
-        else:
-            self.uid = 0
-            bt.logging.warning(
-                f"Hotkey {self.wallet.hotkey.ss58_address} not found in metagraph. Assuming this is a test."
-            )
-
-        self.last_sync_timestamp = dt.datetime.min
-        self.step = 0
-
-        # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
-
-        # Attach determiners which functions are called when servicing a request.
-        bt.logging.info("Attaching forward function to miner axon.")
-        self.axon.attach(
-            forward_fn=self.get_index,
-            blacklist_fn=self.get_index_blacklist,
-            priority_fn=self.get_index_priority,
-        )
-        bt.logging.success(f"Axon created: {self.axon}.")
-
-        # Instantiate runners.
-        self.should_exit: bool = False
-        self.is_running: bool = False
-        self.thread: threading.Thread = None
-        self.lock = threading.RLock()
-
         # TODO: Instantiate base level LLM?
 
-        # Configure per hotkey per request limits.
-        self.request_lock = threading.RLock()
-        self.last_cleared_request_limits = dt.datetime.now()
-        self.requests_by_type_by_hotkey = defaultdict(lambda: defaultdict(lambda: 0))
-    
-
-    def run(self):
-        """
-        Initiates and manages the main loop for the miner.
-        """
-
-        # Check that miner is registered on the network.
-        self.sync()
-
-        # Serve passes the axon information to the network + netuid we are hosting on.
-        # This will auto-update if the axon port of external ip have changed.
-        bt.logging.info(
-            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}."
-        )
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
-
-        # Start  starts the miner's axon, making it active on the network.
-        self.axon.start()
-
-        self.last_sync_timestamp = dt.datetime.now()
-        bt.logging.success(f"Miner starting at {self.last_sync_timestamp}.")
-
-        while not self.should_exit:
-            # This loop maintains the miner's operations until intentionally stopped.
-            try:
-                
-                # Epoch length defaults to 100 blocks at 12 seconds each for 20 minutes.
-                while dt.datetime.now() - self.last_sync_timestamp < (
-                    dt.timedelta(seconds=12 * self.config.neuron.epoch_length)
-                ):
-                    # Wait before checking again.
-                    time.sleep(12)
-
-                    # Check if we should exit.
-                    if self.should_exit:
-                        break
-
-                # Sync metagraph.
-                self.sync()
-
-                self._log_status(self.step)
-
-                self.last_sync_timestamp = dt.datetime.now()
-                self.step += 1
-
-            # If someone intentionally stops the miner, it'll safely terminate operations.
-            except KeyboardInterrupt:
-                if not self.config.offline:
-                    self.axon.stop()
-                bt.logging.success("Miner killed by keyboard interrupt.")
-                sys.exit()
-
-            # In case of unforeseen errors, the miner will log the error and continue operations.
-            except Exception as e:
-                bt.logging.error(traceback.format_exc())
-    
-
-    def resync_metagraph(self):
-        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("Attempting to resync the metagraph.")
-
-        # Sync the metagraph.
-        new_metagraph = self.subtensor.metagraph(netuid=self.config.netuid)
-        with self.lock:
-            self.metagraph = new_metagraph
-
-        bt.logging.success("Successfuly resynced the metagraph.")
-
-    def _log_status(self, step: int):
-        """Logs a summary of the miner status in the subnet."""
-        relative_incentive = self.metagraph.I[self.uid].item() / max(self.metagraph.I)
-        incentive_and_hk = zip(self.metagraph.I, self.metagraph.hotkeys)
-        incentive_and_hk = sorted(incentive_and_hk, key=lambda x: x[0], reverse=True)
-        position = -1
-        for i, (_, hk) in enumerate(incentive_and_hk):
-            if hk == self.wallet.hotkey.ss58_address:
-                position = i
-                break
-        log = (
-            f"Step:{step} | "
-            f"Block:{self.metagraph.block.item()} | "
-            f"Stake:{self.metagraph.S[self.uid]} | "
-            f"Incentive:{self.metagraph.I[self.uid]} | "
-            f"Relative Incentive:{relative_incentive} | "
-            f"Position:{position} | "
-            f"Emission:{self.metagraph.E[self.uid]}"
-        )
-        bt.logging.info(log)
-    
-
-    async def get_match_prediction(
+    async def forward(
         self, synapse: GetMatchPrediction
     ) -> GetMatchPrediction:
-        """Runs after the GetMatchPrediction synapse has been deserialized (i.e. after synapse.data is available)."""
-        bt.logging.info(
-            f"Received GetMatchPrediction request from {synapse.dendrite.hotkey}."
-        )
+        bt.logging.info(f"Received GetMatchPrediction request in forward() from {synapse.dendrite.hotkey}.")
 
         # Make the match prediction based on the requested MatchPrediction object
         # TODO: does this need to by async?
@@ -205,46 +48,130 @@ class Miner:
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
-            f"Returning MatchPrediction ID: {str(synapse.match_prediction.matchID)} to {synapse.dendrite.hotkey}."
+            f"Returning MatchPrediction for matchID: {str(synapse.match_prediction.matchID)} to {synapse.dendrite.hotkey}: \n{synapse.match_prediction}."
+        )
+
+        return synapse
+    
+    async def get_match_prediction(
+        self, synapse: GetMatchPrediction
+    ) -> GetMatchPrediction:
+        bt.logging.info(f"Received GetMatchPrediction request in get_match_prediction() from {synapse.dendrite.hotkey}.")
+
+        # Make the match prediction based on the requested MatchPrediction object
+        # TODO: does this need to by async?
+        synapse.match_prediction = make_match_prediction(synapse.match_prediction)
+        synapse.version = constants.PROTOCOL_VERSION
+
+        bt.logging.success(
+            f"Returning MatchPrediction for matchID: {str(synapse.match_prediction.matchID)} to {synapse.dendrite.hotkey}: \n{synapse.match_prediction}."
         )
 
         return synapse
 
-    def default_priority(self, synapse: bt.Synapse) -> float:
-        """The default priority that prioritizes by validator stake."""
-        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        priority = float(self.metagraph.S[caller_uid])
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}.",
-        )
-        return priority
-
-    def get_config_for_test(self) -> bt.config:
-        return self.config
-
-    def sync(self):
+    async def blacklist(
+        self, synapse: GetMatchPrediction
+    ) -> typing.Tuple[bool, str]:
         """
-        Wrapper for synchronizing the state of the network for the given miner.
-        """
-        # Ensure miner hotkey is still registered on the network.
-        self.check_registered()
-        self.resync_metagraph()
+        Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
+        define the logic for blacklisting requests based on your needs and desired security parameters.
 
-    def check_registered(self):
-        # --- Check for registration.
-        if not self.subtensor.is_hotkey_registered(
-            netuid=self.config.netuid,
-            hotkey_ss58=self.wallet.hotkey.ss58_address,
-        ):
-            bt.logging.error(
-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
-                f" Please register the hotkey using `btcli subnets register` before trying again."
+        Blacklist runs before the synapse data has been deserialized (i.e. before synapse.data is available).
+        The synapse is instead contructed via the headers of the request. It is important to blacklist
+        requests before they are deserialized to avoid wasting resources on requests that will be ignored.
+
+        Args:
+            synapse (template.protocol.Videos): A synapse object constructed from the headers of the incoming request.
+
+        Returns:
+            Tuple[bool, str]: A tuple containing a boolean indicating whether the synapse's hotkey is blacklisted,
+                            and a string providing the reason for the decision.
+
+        This function is a security measure to prevent resource wastage on undesired requests. It should be enhanced
+        to include checks against the metagraph for entity registration, validator status, and sufficient stake
+        before deserialization of synapse data to minimize processing overhead.
+
+        Example blacklist logic:
+        - Reject if the hotkey is not a registered entity within the metagraph.
+        - Consider blacklisting entities that are not validators or have insufficient stake.
+
+        In practice it would be wise to blacklist requests from entities that are not validators, or do not have
+        enough stake. This can be checked via metagraph.S and metagraph.validator_permit. You can always attain
+        the uid of the sender via a metagraph.hotkeys.index( synapse.dendrite.hotkey ) call.
+
+        Otherwise, allow the request to be processed further.
+        """
+        if not synapse.dendrite.hotkey:
+            return True, "Hotkey not provided"
+        registered = synapse.dendrite.hotkey in self.metagraph.hotkeys
+        if self.config.blacklist.allow_non_registered and not registered:
+            return False, "Allowing un-registered hotkey"
+        elif not registered:
+            bt.logging.trace(
+                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
             )
-            sys.exit(1)
+            return True, f"Unrecognized hotkey {synapse.dendrite.hotkey}"
 
+        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        if self.config.blacklist.force_validator_permit:
+            # If the config is set to force validator permit, then we should only allow requests from validators.
+            if not self.metagraph.validator_permit[uid]:
+                bt.logging.warning(
+                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
+                )
+                return True, "Non-validator hotkey"
+
+        stake = self.metagraph.S[uid].item()
+        if self.config.blacklist.validator_min_stake and stake < self.config.blacklist.validator_min_stake:
+            bt.logging.warning(f"Blacklisting request from {synapse.dendrite.hotkey} [uid={uid}], not enough stake -- {stake}")
+            return True, "Stake below minimum"
+
+        bt.logging.trace(
+            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
+        )
+        return False, "Hotkey recognized!"
+
+    async def priority(self, synapse: GetMatchPrediction) -> float:
+        """
+        The priority function determines the order in which requests are handled. More valuable or higher-priority
+        requests are processed before others. You should design your own priority mechanism with care.
+
+        This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
+
+        Args:
+            synapse (template.protocol.Videos): The synapse object that contains metadata about the incoming request.
+
+        Returns:
+            float: A priority score derived from the stake of the calling entity.
+
+        Miners may recieve messages from multiple entities at once. This function determines which request should be
+        processed first. Higher values indicate that the request should be processed first. Lower values indicate
+        that the request should be processed later.
+
+        Example priority logic:
+        - A higher stake results in a higher priority value.
+        """
+        caller_uid = self.metagraph.hotkeys.index(
+            synapse.dendrite.hotkey
+        )  # Get the caller index.
+        prirority = float(
+            self.metagraph.S[caller_uid]
+        )  # Return the stake as the priority.
+        bt.logging.trace(
+            f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
+        )
+        return prirority
+
+    def save_state(self):
+        """
+        We define this function to avoid printing out the log message in the BaseNeuron class
+        that says `save_state() not implemented`.
+        """
+        pass
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
-            time.sleep(60)
+            #time.sleep(60)
+            time.sleep(5)

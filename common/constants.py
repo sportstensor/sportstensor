@@ -1,6 +1,6 @@
 import datetime
 
-IS_DEV = True
+IS_DEV = False
 
 # Collection of constants for use throughout the codebase.
 

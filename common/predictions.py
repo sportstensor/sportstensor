@@ -1,20 +1,45 @@
-from miner_dashboard import activate
-from common.data import MatchPrediction
+import bittensor as bt
+#from miner_dashboard import activate
+from common.data import MatchPrediction, Sport
 
-def make_match_prediction(match_prediction: MatchPrediction):
-    date = match_prediction.matchDatetime.strftime("%Y-%m-%d")
-    home_team = match_prediction.homeTeamName
-    away_team = match_prediction.awayTeamName
+def make_match_prediction(prediction: MatchPrediction):
 
-    predictions = activate(date, home_team, away_team)
+    # Setting default prediction scores to 0
+    prediction.homeTeamScore = 0
+    prediction.awayTeamScore = 0
 
-    if (home_team, away_team) in predictions:
-        pred_scores = predictions[(home_team, away_team)]
-        match_prediction.homeTeamScore = int(pred_scores[0])
-        match_prediction.awayTeamScore = int(pred_scores[1])
+    if prediction.sport == Sport.SOCCER:
+        bt.logging.info("Predicting soccer match...")
+        date = prediction.matchDate.strftime("%Y-%m-%d")
+        #predictions = predictSoccerMatch(date, prediction.homeTeamName, prediction.awayTeamName)
+        predictions = None
+
+        if predictions is not None and (prediction.homeTeamName, prediction.awayTeamName) in predictions:
+            pred_scores = predictions[(prediction.homeTeamName, prediction.awayTeamName)]
+            prediction.homeTeamScore = int(pred_scores[0])
+            prediction.awayTeamScore = int(pred_scores[1])
+        else:
+            # Default prediction if no specific prediction exists
+            prediction.homeTeamScore = 1
+            prediction.awayTeamScore = 0
+
+    elif prediction.sport == Sport.FOOTBALL:
+        bt.logging.info("Handling football...")
+        
+
+    elif prediction.sport == Sport.BASEBALL:
+        bt.logging.info("Predicting baseball game...")
+        
+
+    elif prediction.sport == Sport.BASKETBALL:
+        bt.logging.info("Handling basketball...")
+        
+
+    elif prediction.sport == Sport.CRICKET:
+        bt.logging.info("Handling cricket...")
+
     else:
-        # Default prediction if no specific prediction exists
-        match_prediction.homeTeamScore = 1
-        match_prediction.awayTeamScore = 0
+        bt.logging.info("Unknown sport, returning 0 for both scores")
+    
 
-    return match_prediction
+    return prediction

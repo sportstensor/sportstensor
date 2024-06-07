@@ -30,8 +30,8 @@ class Sport(IntEnum):
     FOOTBALL = 2
     BASEBALL = 3
     BASKETBALL = 4
+    CRICKET = 5
     # Additional enum values reserved for yet to be implemented sources.
-    UNKNOWN_5 = 5
     UNKNOWN_6 = 6
     UNKNOWN_7 = 7
 
@@ -108,6 +108,16 @@ class Prediction(StrictBaseModel):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
         return v
+    
+    def __str__(self):
+        sport_name = self.sport.name if isinstance(self.sport, Sport) else Sport(self.sport).name
+        return (
+            f"Prediction(predictionId={self.predictionId}, "
+            f"minerId={self.minerId}, hotkey={self.hotkey}, "
+            f"matchId={self.matchId}, matchDate={self.matchDate}, "
+            f"sport={sport_name}, isScored={self.isScored}, "
+            f"scoredDate={self.scoredDate})"
+        )
 
 class MatchPrediction(Prediction):
     """Represents a prediction of a sports match."""
@@ -123,6 +133,14 @@ class MatchPrediction(Prediction):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
         return v
+    
+    def __str__(self):
+        base_str = super().__str__()
+        return (
+            f"{base_str[:-1]}, "  # Remove the closing parenthesis from the base string
+            f"homeTeamName={self.homeTeamName}, awayTeamName={self.awayTeamName}, "
+            f"homeTeamScore={self.homeTeamScore}, awayTeamScore={self.awayTeamScore})"
+        )
 
 class MatchPredictionWithMatchData(BaseModel):
     prediction: MatchPrediction

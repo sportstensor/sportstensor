@@ -116,38 +116,40 @@ class Validator(BaseValidatorNeuron):
         
         # Get a prediction requests to send to miners
         match_prediction_requests = utils.get_match_prediction_requests()
-        print("match_prediction_requests", match_prediction_requests)
 
-        # The dendrite client queries the network.
-        bt.logging.info(f"Sending {len(match_prediction_requests)} matches to miners {miner_uids} for predictions.")
-        # Loop through predictions and send to miners
-        for mpr in match_prediction_requests:
-            input_synapse = GetMatchPrediction(match_prediction=mpr)
-            # Send prediction requests to miners and store their responses
-            finished_responses, working_miner_uids = await utils.send_predictions_to_miners(bt.wallet, bt.metagraph, input_synapse, miner_uids)
+        if (len(match_prediction_requests) > 0):
+            # The dendrite client queries the network.
+            bt.logging.info(f"Sending {len(match_prediction_requests)} matches to miners {miner_uids} for predictions.")
+            # Loop through predictions and send to miners
+            for mpr in match_prediction_requests:
+                input_synapse = GetMatchPrediction(match_prediction=mpr)
+                # Send prediction requests to miners and store their responses
+                finished_responses, working_miner_uids = await utils.send_predictions_to_miners(self.dendrite, self.metagraph, input_synapse, miner_uids)
 
-            # Adjust the scores based on responses from miners.
-            try:
-                rewards = (await self.get_basic_match_prediction_rewards(input_synapse=input_synapse, responses=finished_responses)).to(self.device)
-            except Exception as e:
-                bt.logging.error(f"Error in get_basic_match_prediction_rewards: {e}")
-                return
-            
-            # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            if len(working_miner_uids) > 0:
-                bt.logging.info(f"Rewarding miners {working_miner_uids} that returned a prediction.")
-                self.update_scores(rewards, working_miner_uids)
+                # Adjust the scores based on responses from miners.
+                try:
+                    rewards = (await self.get_basic_match_prediction_rewards(input_synapse=input_synapse, responses=finished_responses)).to(self.device)
+                except Exception as e:
+                    bt.logging.error(f"Error in get_basic_match_prediction_rewards: {e}")
+                    return
+                
+                # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
+                if len(working_miner_uids) > 0:
+                    bt.logging.info(f"Rewarding miners {working_miner_uids} that returned a prediction.")
+                    self.update_scores(rewards, working_miner_uids)
 
-            # Update the scores of miner uids NOT working. Default to 0.
-            not_working_miner_uids = []
-            no_rewards = []
-            for uid in miner_uids:
-                if uid not in working_miner_uids:
-                    not_working_miner_uids.append(uid)
-                    no_rewards.append(0.0)
-            if len(not_working_miner_uids) > 0:
-                bt.logging.info(f"Penalizing miners {not_working_miner_uids} that did not respond.")
-                self.update_scores(torch.FloatTensor(no_rewards).to(self.device), not_working_miner_uids)
+                # Update the scores of miner uids NOT working. Default to 0.
+                not_working_miner_uids = []
+                no_rewards = []
+                for uid in miner_uids:
+                    if uid not in working_miner_uids:
+                        not_working_miner_uids.append(uid)
+                        no_rewards.append(0.0)
+                if len(not_working_miner_uids) > 0:
+                    bt.logging.info(f"Penalizing miners {not_working_miner_uids} that did not respond.")
+                    self.update_scores(torch.FloatTensor(no_rewards).to(self.device), not_working_miner_uids)
+        else:
+            bt.logging.info("No matches available to send for predictions.")
         """ END MATCH PREDICTION REQUESTS """
 
         """ START MATCH PREDICTION SCORING """
@@ -170,7 +172,7 @@ class Validator(BaseValidatorNeuron):
         # Check if we're ready to poll the API for prediction requests from the app
         if self.next_app_predictions_syncing_datetime <= dt.datetime.now(dt.timezone.utc):
             bt.logging.info("Syncing the latest app prediction request data to local validator storage.")
-            process_result = await utils.process_app_prediction_requests(self.app_prediction_requests_endpoint)
+            process_result = await utils.process_app_prediction_requests(self.dendrite, self.metagraph, self.app_prediction_requests_endpoint)
             if process_result:
                 bt.logging.info("Successfully processed app match prediction requests.")
             else:
