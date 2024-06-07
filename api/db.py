@@ -63,6 +63,8 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
         conn.close()
 
 def create_database():
+    c = None
+    conn = None
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -77,17 +79,21 @@ def create_database():
             awayTeamScore INTEGER,
             matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
-            lastUpdated TIMESTAMP NOT NULL,
+            lastUpdated TIMESTAMP NOT NULL
         )''')
         conn.commit()
     except Exception as e:
         logging.error("Failed to create matches table in MySQL database", exc_info=True)
     finally:
-        c.close()
-        conn.close()
+        if c is not None:
+            c.close()
+        if conn is not None:
+            conn.close()
 
 
 def create_app_database():
+    c = None
+    conn = None
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -110,8 +116,10 @@ def create_app_database():
     except Exception as e:
         logging.error("Failed to create matches table in MySQL database", exc_info=True)
     finally:
-        c.close()
-        conn.close()
+        if c is not None:
+            c.close()
+        if conn is not None:
+            conn.close()
 
 
 def get_db_conn():
