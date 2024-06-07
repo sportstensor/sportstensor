@@ -122,16 +122,22 @@ def create_app_database():
             conn.close()
 
 
+import mysql.connector
+import logging
+
 def get_db_conn():
     try:
         conn = mysql.connector.connect(
             host='localhost', 
             database='sports_events', 
-            user='root', 
-            password='Cunnaredu1996@'
+            user='cunlucx', 
+            password='e4-GJZZj=YwkjRW['
         )
-    except Exception as e:
-        logging.error("Failed to connect to MySQL database", exc_info=True)
+        return conn
+    except mysql.connector.Error as e:
+        logging.error(f"Failed to connect to MySQL database: {e}")
+        return None  # Explicitly return None if there is an error
+
 
 create_database()
 create_app_database()
