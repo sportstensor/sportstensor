@@ -124,7 +124,7 @@ class Validator(BaseValidatorNeuron):
             for mpr in match_prediction_requests:
                 input_synapse = GetMatchPrediction(match_prediction=mpr)
                 # Send prediction requests to miners and store their responses
-                finished_responses, working_miner_uids = await utils.send_predictions_to_miners(self.dendrite, self.metagraph, input_synapse, miner_uids)
+                finished_responses, working_miner_uids = await utils.send_predictions_to_miners(self, input_synapse, miner_uids)
 
                 # Adjust the scores based on responses from miners.
                 try:

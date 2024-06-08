@@ -93,8 +93,10 @@ class Prediction(StrictBaseModel):
         description="Unique ID that represents a match."
     )
 
-    # The datetime of the starting time of the match. Should be in UTC?
-    matchDate: dt.datetime
+    # The datetime of the starting time of the match. Should be in UTC
+    matchDate: dt.datetime = Field(
+        description="The datetime of the starting time of the match. Should be UTC"
+    )
 
     sport: Sport
     

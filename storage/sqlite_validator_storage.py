@@ -259,8 +259,8 @@ class SqliteValidatorStorage(ValidatorStorage):
             # Parse every MatchPrediction into a list of values to insert.
             values.append(
                 [
-                    prediction.axon.uid if not IS_DEV else random_uid,
-                    prediction.axon.hotkey if not IS_DEV else f"DEV_{str(random_uid)}",
+                    prediction.match_prediction.minerId if not IS_DEV else random_uid,
+                    prediction.match_prediction.hotkey if not IS_DEV else f"DEV_{str(random_uid)}",
                     prediction.match_prediction.matchId,
                     prediction.match_prediction.matchDate,
                     prediction.match_prediction.sport,

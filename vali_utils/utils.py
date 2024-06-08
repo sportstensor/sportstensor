@@ -20,6 +20,8 @@ from common.constants import (
     MAX_SCORE_DIFFERENCE_BASKETBALL
 )
 
+from neurons.validator import Validator
+
 # initialize our validator storage class
 storage = SqliteValidatorStorage()
 
@@ -118,14 +120,14 @@ def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
     matches = storage.get_matches_to_predict(batchsize)
     match_predictions = [MatchPrediction(
         matchId = match.matchId,
-        matchDate = match.matchDate,
+        matchDate = str(match.matchDate),
         sport = match.sport,
         homeTeamName = match.homeTeamName,
         awayTeamName = match.awayTeamName
     ) for match in matches]
     return match_predictions
 
-async def send_predictions_to_miners(dendrite: bt.dendrite, metagraph: bt.metagraph, input_synapse: GetMatchPrediction, miner_uids: List[int]) -> Tuple[List[MatchPrediction], List[int]]:
+async def send_predictions_to_miners(vali: Validator, input_synapse: GetMatchPrediction, miner_uids: List[int]) -> Tuple[List[MatchPrediction], List[int]]:
     try:
         if IS_DEV:
             # For now, just return a list of random MatchPrediction responses
@@ -144,24 +146,20 @@ async def send_predictions_to_miners(dendrite: bt.dendrite, metagraph: bt.metagr
         else:
             
             random.shuffle(miner_uids)
-            axons = [metagraph.axons[uid] for uid in miner_uids]
-            for axon in axons:
-                if axon.hotkey == '5EqZoEKc6c8TaG4xRRHTT1uZiQF5jkjQCeUV5t77L6YbeaJ8':
-                    axon.ip = '127.0.0.1'
-            responses = await dendrite.forward(
+            axons = [vali.metagraph.axons[uid] for uid in miner_uids]
+            #for axon in axons:
+                #if axon.hotkey == '5EqZoEKc6c8TaG4xRRHTT1uZiQF5jkjQCeUV5t77L6YbeaJ8':
+                    #axon.ip = '127.0.0.1'
+            
+            # convert matchDate to string for serialization
+            input_synapse.match_prediction.matchDate = str(input_synapse.match_prediction.matchDate)
+            responses = await vali.dendrite(
                 # Send the query to selected miner axons in the network.
                 axons=axons,
                 synapse=input_synapse,
-                deserialize=False,
+                deserialize=True,
                 timeout=120,
             )
-            """
-            responses = await dendrite.forward(
-                axons=[metagraph.axons[uid] for uid in miner_uids],
-                synapse=input_synapse,
-                timeout=120,
-            )
-            """
         
         working_miner_uids = []
         finished_responses = []
@@ -172,7 +170,7 @@ async def send_predictions_to_miners(dendrite: bt.dendrite, metagraph: bt.metagr
                 working_miner_uids.append(uid)
                 finished_responses.append(response)
             else:
-                if not response or not response.match_prediction.homeTeamScore or not response.match_prediction.awayTeamScore or not response.axon or not response.axon.hotkey:
+                if response is None or response.match_prediction.homeTeamScore is None or response.match_prediction.awayTeamScore is None or response.axon is None or response.axon.hotkey is None:
                     bt.logging.info(
                         f"{response.axon.hotkey}: Miner failed to respond with a prediction."
                     )
@@ -183,8 +181,10 @@ async def send_predictions_to_miners(dendrite: bt.dendrite, metagraph: bt.metagr
                     )
                     continue
                 else:
-                    uid = response.axon.uid
+                    uid = [uid for uid, axon in zip(miner_uids, axons) if axon.hotkey == response.axon.hotkey][0]
                     working_miner_uids.append(uid)
+                    response.match_prediction.minerId = uid
+                    response.match_prediction.hotkey = response.axon.hotkey
                     finished_responses.append(response)
 
         if len(working_miner_uids) == 0:
@@ -299,7 +299,7 @@ def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
           False,
           f"Home team score {prediction.homeTeamScore} is not an integer",
       )
-    if prediction.homeTeamScore >= 0:
+    if prediction.homeTeamScore < 0:
       return (
           False,
           f"Home team score {prediction.homeTeamScore} is a negative integer",
@@ -310,7 +310,7 @@ def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
           False,
           f"Away team score {prediction.awayTeamScore} is not an integer",
       )
-    if prediction.awayTeamScore >= 0:
+    if prediction.awayTeamScore < 0:
       return (
           False,
           f"Away team score {prediction.awayTeamScore} is a negative integer",
