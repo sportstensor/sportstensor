@@ -1,4 +1,4 @@
 #!/bin/bash
 
-# finally, run the api
+# run the api
 python -m api.main
