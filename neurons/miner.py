@@ -15,12 +15,12 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from collections import defaultdict
 import time
 import traceback
 import typing
 import bittensor as bt
 
+import base
 from base.miner import BaseMinerNeuron
 
 from common import constants
@@ -48,23 +48,7 @@ class Miner(BaseMinerNeuron):
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
-            f"Returning MatchPrediction for matchID: {str(synapse.match_prediction.matchID)} to {synapse.dendrite.hotkey}: \n{synapse.match_prediction}."
-        )
-
-        return synapse
-    
-    async def get_match_prediction(
-        self, synapse: GetMatchPrediction
-    ) -> GetMatchPrediction:
-        bt.logging.info(f"Received GetMatchPrediction request in get_match_prediction() from {synapse.dendrite.hotkey}.")
-
-        # Make the match prediction based on the requested MatchPrediction object
-        # TODO: does this need to by async?
-        synapse.match_prediction = make_match_prediction(synapse.match_prediction)
-        synapse.version = constants.PROTOCOL_VERSION
-
-        bt.logging.success(
-            f"Returning MatchPrediction for matchID: {str(synapse.match_prediction.matchID)} to {synapse.dendrite.hotkey}: \n{synapse.match_prediction}."
+            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n{synapse.match_prediction}."
         )
 
         return synapse
