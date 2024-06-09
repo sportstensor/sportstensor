@@ -229,6 +229,15 @@ def create_tables():
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL
         )''')
+        c.execute('''
+        CREATE TABLE IF NOT EXISTS MatchPredictionResults_test (
+            miner_hotkey VARCHAR(64) PRIMARY KEY,
+            miner_uid INTEGER NOT NULL,
+            total_predictions INTEGER NOT NULL,
+            winner_predictions INTEGER NOT NULL,
+            avg_score FLOAT NOT NULL,
+            last_updated TIMESTAMP NOT NULL
+        )''')
         conn.commit()
     except Exception as e:
         logging.error("Failed to create matches table in MySQL database", exc_info=True)
