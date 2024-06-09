@@ -107,7 +107,7 @@ def upload_prediction_results(prediction_results):
             prediction_results['scores']
         ))
 
-        prediction_scores_table_name = "MatchPredictionScores"
+        prediction_scores_table_name = "MatchPredictionResults"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
         c.executemany(f'''
