@@ -216,8 +216,9 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Calculate the upper bound timestamp (latest match date allowed for predictions)
                 upper_bound_timestamp = current_timestamp + MAX_PREDICTION_DAYS_THRESHOLD * 24 * 3600
                 # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
-                lower_bound_str = dt.datetime.fromtimestamp(lower_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                upper_bound_str = dt.datetime.fromtimestamp(upper_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                lower_bound_str = dt.datetime.utcfromtimestamp(lower_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                upper_bound_str = dt.datetime.utcfromtimestamp(upper_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                print(lower_bound_str, upper_bound_str)
 
                 cursor = connection.cursor()
                 cursor.execute(
@@ -292,7 +293,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Calculate cutoff date timestamp
                 match_cutoff_timestamp = current_timestamp - (matchDateCutoff * 24 * 3600)
                 # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
-                match_cutoff_str = dt.datetime.fromtimestamp(match_cutoff_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                match_cutoff_str = dt.datetime.utcfromtimestamp(match_cutoff_timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
                 cursor.execute(
                     """
