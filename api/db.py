@@ -119,7 +119,7 @@ def upload_prediction_results(prediction_results):
                 avg_score,
                 last_updated
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, NOW()
             ) ON DUPLICATE KEY UPDATE
                 total_predictions = total_predictions + VALUES(total_predictions),
                 winner_predictions = winner_predictions + VALUES(winner_predictions),
