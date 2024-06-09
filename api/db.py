@@ -110,7 +110,7 @@ def upload_prediction_results(prediction_results):
         prediction_scores_table_name = "MatchPredictionScores"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
-        c.executemany('''
+        c.executemany(f'''
             INSERT INTO {prediction_scores_table_name} (
                 miner_hotkey,
                 miner_uid,
