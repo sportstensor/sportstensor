@@ -17,7 +17,8 @@ from common.constants import (
     MAX_SCORE_DIFFERENCE_SOCCER,
     MAX_SCORE_DIFFERENCE_FOOTBALL,
     MAX_SCORE_DIFFERENCE_BASEBALL,
-    MAX_SCORE_DIFFERENCE_BASKETBALL
+    MAX_SCORE_DIFFERENCE_BASKETBALL,
+    MAX_SCORE_DIFFERENCE_CRICKET
 )
 
 from neurons.validator import Validator
@@ -75,7 +76,7 @@ async def sync_match_data(match_data_endpoint) -> bool:
         bt.logging.error(f"Error getting match data: {e}")
         return False
     
-async def process_app_prediction_requests(dendrite: bt.dendrite, metagraph: bt.metagraph, app_prediction_requests_endpoint: str) -> bool:
+async def process_app_prediction_requests(vali: Validator, app_prediction_requests_endpoint: str) -> bool:
     try:
         async with ClientSession() as session:
             # TODO: add in authentication
@@ -102,11 +103,11 @@ async def process_app_prediction_requests(dendrite: bt.dendrite, metagraph: bt.m
             if IS_DEV:
                 miner_uids = [9999]
             else:
-                miner_uids = [ax.uid for ax in bt.metagraph.axons if ax.hotkey == miner_hotkey]
+                miner_uids = [ax.uid for ax in vali.metagraph.axons if ax.hotkey == miner_hotkey]
 
             input_synapse = GetMatchPrediction(match_prediction=match_prediction)
             # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
-            finished_responses, working_miner_uids = await send_predictions_to_miners(dendrite, metagraph, input_synapse, miner_uids)
+            finished_responses, working_miner_uids = await send_predictions_to_miners(vali, input_synapse, miner_uids)
 
             # Post the response back per prediction_request or batch? Probably batch.
 
@@ -147,9 +148,9 @@ async def send_predictions_to_miners(vali: Validator, input_synapse: GetMatchPre
             
             random.shuffle(miner_uids)
             axons = [vali.metagraph.axons[uid] for uid in miner_uids]
-            #for axon in axons:
-                #if axon.hotkey == '5EqZoEKc6c8TaG4xRRHTT1uZiQF5jkjQCeUV5t77L6YbeaJ8':
-                    #axon.ip = '127.0.0.1'
+            for axon in axons:
+                if axon.hotkey == '5EqZoEKc6c8TaG4xRRHTT1uZiQF5jkjQCeUV5t77L6YbeaJ8':
+                    axon.ip = '127.0.0.1'
             
             # convert matchDate to string for serialization
             input_synapse.match_prediction.matchDate = str(input_synapse.match_prediction.matchDate)
@@ -215,6 +216,7 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
     predictions_with_match_data = storage.get_match_predictions_to_score(batchsize)
 
     rewards = []
+    correct_winner_results = []
     rewards_uids = []
     predictions = []
     for pwmd in predictions_with_match_data:
@@ -231,14 +233,18 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
             max_score_difference = MAX_SCORE_DIFFERENCE_BASEBALL
         elif sport == Sport.BASKETBALL:
             max_score_difference = MAX_SCORE_DIFFERENCE_BASKETBALL
+        elif sport == Sport.CRICKET:
+            max_score_difference = MAX_SCORE_DIFFERENCE_CRICKET
 
-        rewards.append(calculate_prediction_score(
+        total_score, correct_winner_score = calculate_prediction_score(
             prediction.homeTeamScore,
             prediction.awayTeamScore,
             pwmd.actualHomeTeamScore,
             pwmd.actualAwayTeamScore,
             max_score_difference
-        ))
+        )
+        rewards.append(total_score)
+        correct_winner_results.append(correct_winner_score)
         rewards_uids.append(uid)
         predictions.append(prediction)
 
@@ -253,7 +259,7 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
         # Handle the case where total_rewards is 0 to avoid division by zero
         normalized_rewards = [0 for _ in rewards]
 
-    return [normalized_rewards, rewards_uids]
+    return [normalized_rewards, rewards, correct_winner_results, rewards_uids]
 
     
 def calculate_prediction_score(
@@ -283,7 +289,7 @@ def calculate_prediction_score(
     # Max score for home and away scores is 0.25. Correct match winner is 0.5. Perfectly predicted match score is 1
     total_score = home_score + away_score + (correct_winner_score * CORRECT_MATCH_WINNER_SCORE)
     
-    return total_score
+    return total_score, correct_winner_score
 
 
 def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
@@ -317,6 +323,25 @@ def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
       )
 
     return (True, "")
+
+
+async def post_prediction_results(prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_results_hotkeys):
+    try:
+        # Post the scoring results back to the api
+        scoring_results = {
+            'scores': prediction_scores,
+            'correct_winner_results': correct_winner_results,
+            'uids': prediction_rewards_uids,
+            'hotkeys': prediction_results_hotkeys,
+        }
+        async with ClientSession() as session:
+            # TODO: add authentication
+            async with session.post(prediction_results_endpoint, json=scoring_results) as response:
+                response.raise_for_status()
+                bt.logging.info("Successfully posted prediction results to API.")
+
+    except Exception as e:
+        bt.logging.error(f"Error posting prediction results to API: {e}")
 
 
 def get_single_successful_response(

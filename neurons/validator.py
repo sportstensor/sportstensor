@@ -29,6 +29,7 @@ import torch
 from common.protocol import GetMatchPrediction
 from common.data import MatchPrediction
 from common.constants import (
+    ENABLE_APP,
     DATA_SYNC_INTERVAL_IN_MINUTES, 
     APP_DATA_SYNC_INTERVAL_IN_MINUTES, 
     VALIDATOR_TIMEOUT, 
@@ -39,8 +40,6 @@ from common.constants import (
 )
 import vali_utils.utils as utils
 from storage.sqlite_validator_storage import SqliteValidatorStorage
-
-
 
 # import base validator class which takes care of most of the boilerplate
 from base.validator import BaseValidatorNeuron
@@ -68,13 +67,13 @@ class Validator(BaseValidatorNeuron):
             "https://api.sportstensor.com"
         )
         self.match_data_endpoint = f"{api_root}/matches"
+        self.prediction_results_endpoint = f"{api_root}/predictionResults"
         self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictions"
 
         self.client_timeout_seconds = VALIDATOR_TIMEOUT
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
-        #self.storage = SqliteValidatorStorage()  # Create an instance of the storage handler
 
     async def forward(self):
         """
@@ -97,7 +96,7 @@ class Validator(BaseValidatorNeuron):
 
         """ START MATCH SYNCING """
         if self.next_match_syncing_datetime <= dt.datetime.now(dt.timezone.utc):
-            bt.logging.info("Syncing the latest match data to local validator storage.")
+            bt.logging.info("*** Syncing the latest match data to local validator storage. ***")
             sync_result = await utils.sync_match_data(self.match_data_endpoint)
             if sync_result:
                 bt.logging.info("Successfully synced match data.")
@@ -119,7 +118,7 @@ class Validator(BaseValidatorNeuron):
 
         if (len(match_prediction_requests) > 0):
             # The dendrite client queries the network.
-            bt.logging.info(f"Sending {len(match_prediction_requests)} matches to miners {miner_uids} for predictions.")
+            bt.logging.info(f"*** Sending {len(match_prediction_requests)} matches to miners {miner_uids} for predictions. ***")
             # Loop through predictions and send to miners
             for mpr in match_prediction_requests:
                 input_synapse = GetMatchPrediction(match_prediction=mpr)
@@ -155,12 +154,18 @@ class Validator(BaseValidatorNeuron):
         """ START MATCH PREDICTION SCORING """
         # Check if we're ready to score another batch of predictions
         if self.next_scoring_datetime <= dt.datetime.now(dt.timezone.utc):
-            bt.logging.info(f"Checking if there are predictions to score.")
-            prediction_rewards, prediction_rewards_uids = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
+            bt.logging.info(f"*** Checking if there are predictions to score. ***")
+            prediction_rewards, prediction_scores, correct_winner_results, prediction_rewards_uids = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
             if len(prediction_rewards) > 0:
                 bt.logging.info(f"Scoring {len(prediction_rewards)} predictions for miners {prediction_rewards_uids}.")
                 bt.logging.info(f"Prediction rewards: {prediction_rewards}")
                 self.update_scores(torch.FloatTensor(prediction_rewards).to(self.device), prediction_rewards_uids)
+
+                # Get hotkeys associated with returned prediction reward uids
+                prediction_rewards_hotkeys = [self.metagraph.axons[uid].hotkey for uid in prediction_rewards_uids]
+
+                # Post prediction scoring results to API for storage/analysis
+                post_result = await utils.post_prediction_results(self.prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_rewards_hotkeys)
 
             else:
                 bt.logging.info("No predictions to score.")
@@ -169,15 +174,16 @@ class Validator(BaseValidatorNeuron):
         """ END MATCH PREDICTION SCORING """
 
         """ START APP PREDICTION FLOW """
-        # Check if we're ready to poll the API for prediction requests from the app
-        if self.next_app_predictions_syncing_datetime <= dt.datetime.now(dt.timezone.utc):
-            bt.logging.info("Syncing the latest app prediction request data to local validator storage.")
-            process_result = await utils.process_app_prediction_requests(self.dendrite, self.metagraph, self.app_prediction_requests_endpoint)
-            if process_result:
-                bt.logging.info("Successfully processed app match prediction requests.")
-            else:
-                bt.logging.warning("Issue processing app prediction requests.")
-            self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
+        if ENABLE_APP:
+            # Check if we're ready to poll the API for prediction requests from the app
+            if self.next_app_predictions_syncing_datetime <= dt.datetime.now(dt.timezone.utc):
+                bt.logging.info("*** Syncing the latest app prediction request data to local validator storage. ***")
+                process_result = await utils.process_app_prediction_requests(self, self.app_prediction_requests_endpoint)
+                if process_result:
+                    bt.logging.info("Successfully processed app match prediction requests.")
+                else:
+                    bt.logging.warning("Issue processing app prediction requests.")
+                self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END APP PREDICTION FLOW """
 
     async def get_basic_match_prediction_rewards(

@@ -1,6 +1,8 @@
 import mysql.connector
 import logging
-
+import datetime as dt
+from datetime import timezone
+from api.config import IS_PROD
 
 def get_matches():
     try:
@@ -17,6 +19,23 @@ def get_matches():
     
     except Exception as e:
         logging.error("Failed to retrieve matches from the MySQL database", exc_info=True)
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_match_by_id(match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute('SELECT * FROM matches WHERE matchId = %s', (id,))
+        match = cursor.fetchone()
+        
+        return match
+    
+    except Exception as e:
+        logging.error("Failed to retrieve match from the MySQL database", exc_info=True)
         return False
     finally:
         cursor.close()
@@ -62,7 +81,127 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
         c.close()
         conn.close()
 
-def create_database():
+def upload_prediction_results(prediction_results):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        current_utc_time = dt.datetime.now(timezone.utc)
+        current_utc_time = current_utc_time.strftime('%Y-%m-%d %H:%M:%S')
+
+        """
+        {
+            'scores': prediction_scores,
+            'correct_winner_results': correct_winner_results,
+            'uids': prediction_rewards_uids,
+            'hotkeys': prediction_results_hotkeys,
+        }
+        """
+
+        # Prepare the data for executemany
+        data_to_insert = list(zip(
+            prediction_results['hotkeys'],
+            prediction_results['uids'],
+            [1] * len(prediction_results['uids']),
+            prediction_results['correct_winner_results'],
+            prediction_results['scores']
+        ))
+
+        prediction_scores_table_name = "MatchPredictionScores"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+        c.executemany('''
+            INSERT INTO {prediction_scores_table_name} (
+                miner_hotkey,
+                miner_uid,
+                total_predictions,
+                winner_predictions,
+                avg_score,
+                last_updated
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, NOW()
+            ) ON DUPLICATE KEY UPDATE
+                total_predictions = total_predictions + VALUES(total_predictions),
+                winner_predictions = winner_predictions + VALUES(winner_predictions),
+                avg_score = ((avg_score * (total_predictions - VALUES(total_predictions))) + (VALUES(avg_score) * VALUES(total_predictions))) / total_predictions,
+                last_updated = NOW();
+            ''',
+            data_to_insert
+        )
+        
+        conn.commit()
+        logging.info("Prediction results data inserted or updated in database")
+
+    except Exception as e:
+        logging.error("Failed to insert match in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+def upsert_app_match_prediction(prediction):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        current_utc_time = dt.datetime.now(timezone.utc)
+        current_utc_time = current_utc_time.strftime('%Y-%m-%d %H:%M:%S')
+
+        c.execute('''
+            INSERT INTO AppMatchPredictions (app_request_id, matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated, miner_hotkey) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                matchId=VALUES(matchId), 
+                matchDate=VALUES(matchDate), 
+                sport=VALUES(sport),
+                homeTeamName=VALUES(homeTeamName), 
+                awayTeamName=VALUES(awayTeamName),
+                homeTeamScore=VALUES(homeTeamScore), 
+                awayTeamScore=VALUES(awayTeamScore),
+                isComplete=VALUES(isComplete), 
+                lastUpdated=VALUES(lastUpdated),
+                miner_hotkey=VALUES(miner_hotkey)
+            ''',
+            (
+                prediction['app_request_id'],
+                prediction['matchId'],
+                prediction['matchDate'],
+                prediction['sport'],
+                prediction['homeTeamName'],
+                prediction['awayTeamName'],
+                prediction.get('homeTeamScore'),  # These can be None, hence using get
+                prediction.get('awayTeamScore'),
+                prediction.get('isComplete', 0),  # Default to 0 if not provided
+                current_utc_time,
+                prediction.get('miner_hotkey')  # This can be None
+            ))
+        
+        conn.commit()
+        logging.info("Data inserted or updated in database")
+
+    except Exception as e:
+        logging.error("Failed to insert match in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+def get_app_match_predictions():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT * FROM AppMatchPredictions")
+        match_list = cursor.fetchall()
+        
+        return match_list
+    
+    except Exception as e:
+        logging.error("Failed to retrieve app match predictions from the MySQL database", exc_info=True)
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def create_tables():
     c = None
     conn = None
     try:
@@ -81,6 +220,15 @@ def create_database():
             isComplete BOOLEAN DEFAULT FALSE,
             lastUpdated TIMESTAMP NOT NULL
         )''')
+        c.execute('''
+        CREATE TABLE IF NOT EXISTS MatchPredictionResults (
+            miner_hotkey VARCHAR(64) PRIMARY KEY,
+            miner_uid INTEGER NOT NULL,
+            total_predictions INTEGER NOT NULL,
+            winner_predictions INTEGER NOT NULL,
+            avg_score FLOAT NOT NULL,
+            last_updated TIMESTAMP NOT NULL
+        )''')
         conn.commit()
     except Exception as e:
         logging.error("Failed to create matches table in MySQL database", exc_info=True)
@@ -91,7 +239,7 @@ def create_database():
             conn.close()
 
 
-def create_app_database():
+def create_app_tables():
     c = None
     conn = None
     try:
@@ -110,7 +258,7 @@ def create_app_database():
             matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
             lastUpdated TIMESTAMP NOT NULL,
-            miner_hotkey VARCHAR(50) NULL
+            miner_hotkey VARCHAR(64) NULL
         )''')
         conn.commit()
     except Exception as e:
@@ -120,10 +268,6 @@ def create_app_database():
             c.close()
         if conn is not None:
             conn.close()
-
-
-import mysql.connector
-import logging
 
 def get_db_conn():
     try:
@@ -139,5 +283,5 @@ def get_db_conn():
         return None  # Explicitly return None if there is an error
 
 
-create_database()
-create_app_database()
+create_tables()
+create_app_tables()

@@ -1,8 +1,8 @@
 import datetime
 
 IS_DEV = False
-
-# Collection of constants for use throughout the codebase.
+# Controls if validators should process our SportsTensor App-based logic
+ENABLE_APP = False
 
 # The current protocol version (int)
 PROTOCOL_VERSION = 1
@@ -51,3 +51,4 @@ MAX_SCORE_DIFFERENCE_SOCCER = 10
 MAX_SCORE_DIFFERENCE_FOOTBALL = 50
 MAX_SCORE_DIFFERENCE_BASKETBALL = 50
 MAX_SCORE_DIFFERENCE_BASEBALL = 20
+MAX_SCORE_DIFFERENCE_CRICKET = 20
