@@ -218,7 +218,6 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
                 lower_bound_str = dt.datetime.utcfromtimestamp(lower_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
                 upper_bound_str = dt.datetime.utcfromtimestamp(upper_bound_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                print(lower_bound_str, upper_bound_str)
 
                 cursor = connection.cursor()
                 cursor.execute(
@@ -246,7 +245,7 @@ class SqliteValidatorStorage(ValidatorStorage):
         for prediction in predictions:
             """
             bt.logging.debug(f" \
-                    {prediction.axon.hotkey}: Upserting prediction for match {str(prediction.match_prediction.matchId)}, \
+                    [{prediction.match_prediction.minerId}] {prediction.match_prediction.hotkey}: Upserting prediction for match {str(prediction.match_prediction.matchId)}, \
                     {prediction.match_prediction.awayTeamName} at {prediction.match_prediction.homeTeamName} \
                     on {str(prediction.match_prediction.matchDate)} \
             ")

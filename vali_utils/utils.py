@@ -201,7 +201,7 @@ async def send_predictions_to_miners(vali: Validator, input_synapse: GetMatchPre
 
     except Exception:
         bt.logging.error(
-            f"Failed to send predictions to miners.",
+            f"Failed to send predictions to miners and store in validator database.",
             traceback.format_exc(),
         )
         return None
@@ -393,15 +393,13 @@ def check_uid_availability(
     # Available otherwise.
     return True
 
-def get_random_uids(
-    self, k: int, exclude: List[int] = None
-) -> torch.LongTensor:
+def get_random_uids(self, k: int, exclude: List[int] = None) -> List[int]:
     """Returns k available random uids from the metagraph.
     Args:
         k (int): Number of uids to return.
         exclude (List[int]): List of uids to exclude from the random sampling.
     Returns:
-        uids (torch.LongTensor): Randomly sampled available uids.
+        uids (List[int]): Randomly sampled available uids.
     Notes:
         If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
     """
@@ -419,7 +417,7 @@ def get_random_uids(
             if uid_is_not_excluded:
                 candidate_uids.append(uid)
 
-    # Check if candidate_uids contain enough for querying, if not grab all avaliable uids
+    # Check if candidate_uids contain enough for querying, if not grab all available uids
     available_uids = candidate_uids
 
     # Only grab random set of uids if k is greater than 0. allows to send all by passing in -1 
@@ -430,10 +428,10 @@ def get_random_uids(
                 new_avail_uids,
                 min(len(new_avail_uids), k - len(candidate_uids)),
             )
-        uids = torch.tensor(random.sample(
+        uids = random.sample(
             available_uids,
             min(k, len(available_uids))
-        )).to(self.device)
+        )
     else:
         uids = available_uids
 
