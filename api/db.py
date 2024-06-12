@@ -3,6 +3,7 @@ import logging
 import datetime as dt
 from datetime import timezone
 from api.config import IS_PROD
+import os
 
 def get_matches():
     try:
@@ -21,8 +22,10 @@ def get_matches():
         logging.error("Failed to retrieve matches from the MySQL database", exc_info=True)
         return False
     finally:
-        cursor.close()
-        conn.close()
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 def get_match_by_id(match_id):
     try:
@@ -282,9 +285,10 @@ def get_db_conn():
     try:
         conn = mysql.connector.connect(
             host='localhost', 
-            database='sports_events', 
-            user='cunlucx', 
-            password='e4-GJZZj=YwkjRW['
+            database='sportstensor', 
+            user=os.getenv('DB_USER'), 
+            password=os.getenv('DB_PASSWORD')
+
         )
         return conn
     except mysql.connector.Error as e:
