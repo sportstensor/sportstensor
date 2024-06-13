@@ -38,6 +38,7 @@ def get_hotkey(credentials: Annotated[HTTPBasicCredentials, Depends(security)]) 
 
 def authenticate_with_bittensor(hotkey, metagraph):
     if hotkey not in metagraph.hotkeys:
+        print(f"Hotkey not found in metagraph.")
         return False
 
     uid = metagraph.hotkeys.index(hotkey)
@@ -121,6 +122,7 @@ async def main():
     ):
     #async def upload_prediction_results(prediction_results: dict = Body(...)):
         if not authenticate_with_bittensor(hotkey, metagraph):
+            print(f"Valid hotkey required, returning 403. hotkey: {hotkey}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Valid hotkey required.",
