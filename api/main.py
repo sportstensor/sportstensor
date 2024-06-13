@@ -41,7 +41,7 @@ def authenticate_with_bittensor(hotkey, metagraph):
         return False
 
     uid = metagraph.hotkeys.index(hotkey)
-    if not metagraph.validator_permit[uid]:
+    if not metagraph.validator_permit[uid] and NETWORK != "test":
         print("Bittensor validator permit required")
         return False
     
@@ -115,13 +115,21 @@ async def main():
             return {"error": "Failed to retrieve match predictions data."}
 
     @app.post("/predictionResults")
-    #async def upload_prediction_results(
-    #    prediction_results: dict = Body(...), 
-    #    hotkey: Annotated[str, Depends(get_hotkey)]
-    #):
-    async def upload_prediction_results(prediction_results: dict = Body(...)):
+    async def upload_prediction_results(
+        prediction_results: dict = Body(...), 
+        hotkey: Annotated[str, Depends(get_hotkey)] = None
+    ):
+    #async def upload_prediction_results(prediction_results: dict = Body(...)):
+        if not authenticate_with_bittensor(hotkey, metagraph):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Valid hotkey required.",
+            )
+        # get uid of bittensor validator
+        uid = metagraph.hotkeys.index(hotkey)
+
         result = db.upload_prediction_results(prediction_results)
-        return {"message": "Prediction results uploaded successfully"}
+        return {"message": "Prediction results uploaded successfully from validator " + str(uid)}
 
     def serialize_datetime(value):
         """Serialize datetime to JSON-compatible format, if necessary."""
