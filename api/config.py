@@ -1,7 +1,7 @@
 import os
 
 NETWORK = "test"
-NETUID = 0
+NETUID = 172
 IS_PROD = False
 
 #NETWORK = os.environ["NETWORK"]
