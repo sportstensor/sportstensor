@@ -165,7 +165,7 @@ class Validator(BaseValidatorNeuron):
                 prediction_rewards_hotkeys = [self.metagraph.axons[uid].hotkey for uid in prediction_rewards_uids]
 
                 # Post prediction scoring results to API for storage/analysis
-                post_result = await utils.post_prediction_results(self.prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_rewards_hotkeys)
+                post_result = await utils.post_prediction_results(self, self.prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_rewards_hotkeys)
 
             else:
                 bt.logging.info("No predictions to score.")

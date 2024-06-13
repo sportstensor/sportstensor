@@ -325,7 +325,10 @@ def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
     return (True, "")
 
 
-async def post_prediction_results(prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_results_hotkeys):
+async def post_prediction_results(vali, prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_results_hotkeys):
+    keypair = vali.dendrite.keypair
+    hotkey = keypair.ss58_address
+    signature = f"0x{keypair.sign(hotkey).hex()}"
     try:
         # Post the scoring results back to the api
         scoring_results = {
@@ -335,8 +338,11 @@ async def post_prediction_results(prediction_results_endpoint, prediction_scores
             'hotkeys': prediction_results_hotkeys,
         }
         async with ClientSession() as session:
-            # TODO: add authentication
-            async with session.post(prediction_results_endpoint, json=scoring_results) as response:
+            async with session.post(
+                prediction_results_endpoint,
+                auth=BasicAuth(hotkey, signature),
+                json=scoring_results
+            ) as response:
                 response.raise_for_status()
                 bt.logging.info("Successfully posted prediction results to API.")
 
