@@ -155,11 +155,12 @@ class Validator(BaseValidatorNeuron):
         # Check if we're ready to score another batch of predictions
         if self.next_scoring_datetime <= dt.datetime.now(dt.timezone.utc):
             bt.logging.info(f"*** Checking if there are predictions to score. ***")
-            prediction_rewards, prediction_scores, correct_winner_results, prediction_rewards_uids = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
-            if len(prediction_rewards) > 0:
-                bt.logging.info(f"Scoring {len(prediction_rewards)} predictions for miners {prediction_rewards_uids}.")
-                bt.logging.info(f"Prediction rewards: {prediction_rewards}")
-                self.update_scores(torch.FloatTensor(prediction_rewards).to(self.device), prediction_rewards_uids)
+            normalized_rewards, normalized_rewards_uids, prediction_scores, correct_winner_results, prediction_rewards_uids = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
+            if len(normalized_rewards) > 0:
+                bt.logging.info(f"Scoring {len(prediction_rewards_uids)} predictions for miners {prediction_rewards_uids}.")
+                bt.logging.info(f"Aggregated and normalized prediction rewards: {normalized_rewards}")
+                bt.logging.info(f"Aggregated and normalized prediction rewards UIDs: {normalized_rewards_uids}")
+                self.update_scores(torch.FloatTensor(normalized_rewards).to(self.device), normalized_rewards_uids)
 
                 # Get hotkeys associated with returned prediction reward uids
                 prediction_rewards_hotkeys = [self.metagraph.axons[uid].hotkey for uid in prediction_rewards_uids]

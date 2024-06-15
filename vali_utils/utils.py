@@ -5,6 +5,8 @@ import random
 import traceback
 from typing import List, Optional, Tuple, Type, Union
 import datetime as dt
+from collections import defaultdict
+
 from common.data import Sport, Match, Prediction, MatchPrediction
 from common.protocol import GetMatchPrediction
 import storage.validator_storage as storage
@@ -248,18 +250,30 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
         rewards_uids.append(uid)
         predictions.append(prediction)
 
+    # mark predictions as scored in the local db
     if len(predictions) > 0:
         storage.update_match_predictions(predictions)
 
-    # Normalize the rewards so that they sum up to 1.0
-    total_rewards = sum(rewards)
+    # Aggregate rewards for each miner
+    aggregated_rewards = defaultdict(float)
+    for uid, reward in zip(rewards_uids, rewards):
+        aggregated_rewards[uid] += reward
+
+    # Convert the aggregated rewards to a list of tuples (uid, aggregated_reward)
+    aggregated_rewards_list = list(aggregated_rewards.items())
+
+    # Normalize the aggregated rewards so that they sum up to 1.0
+    total_rewards = sum(reward for uid, reward in aggregated_rewards_list)
     if total_rewards > 0:
-        normalized_rewards = [reward / total_rewards for reward in rewards]
+        normalized_rewards = [reward / total_rewards for uid, reward in aggregated_rewards_list]
     else:
         # Handle the case where total_rewards is 0 to avoid division by zero
-        normalized_rewards = [0 for _ in rewards]
+        normalized_rewards = [0 for uid, reward in aggregated_rewards_list]
 
-    return [normalized_rewards, rewards, correct_winner_results, rewards_uids]
+    # Extract the corresponding UIDs for the normalized rewards
+    normalized_rewards_uids = [uid for uid, reward in aggregated_rewards_list]
+
+    return [normalized_rewards, normalized_rewards_uids, rewards, correct_winner_results, rewards_uids]
 
     
 def calculate_prediction_score(
