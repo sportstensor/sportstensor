@@ -8,30 +8,57 @@ import requests
 import os
 import openpyxl
 from sklearn.preprocessing import MinMaxScaler
+import time
+import random
 
 def get_data(more_data:bool) -> pd.DataFrame:       
     
-    file_path = 'data_and_models/fixtures_advanced.xlsx'
+    file_path = 'data_and_models/mls_fixture_data.xlsx'
     if more_data:
 
         current_year = datetime.now().year 
         years_back = 0 ## roughly 380 fixtures a year ## default 10    
         years_of_interest = [int(year) for year in range(current_year - years_back, current_year + 1) if year != 2020]
-        league_of_interest = 'EPL' # Other selections: "Ligue-1", "Bundesliga", "Serie-A", "La-Liga"
+        league_of_interest = 'MLS' # Other selections: "Ligue-1", "Bundesliga", "Serie-A", "La-Liga"
         row_index = 0
 
-        fixtures = pd.DataFrame(columns = ['HT-AT-DATE', 'DATE', 'HT', 'AT', 'HT_GD', 'AT_GD', 'HT_ELO', 'AT_ELO', 'HT_SC', 'AT_SC'])
+        fixtures = pd.DataFrame(columns = ['HT-AT-DATE', 'DATE', 'HT', 'AT', 'HT_GD', 'AT_GD', 'HT_SC', 'AT_SC']) # 'HT_ELO', 'AT_ELO'
         for year in years_of_interest:
             url_retrieval = ScraperFC.FBRef()
             urls = url_retrieval.get_match_links(year = year, league = league_of_interest)   
 
-            goal_diff_dict = {key: 0 for key in range(1, 41)}
+            ## Change range to +1 than the amount of teams in dictionaries (32 + 1)
+            goal_diff_dict = {key: 0 for key in range(1, 33)}
+        
+            with open('proxies.txt', 'r') as file:
+                proxy_list = file.readlines()
+            proxy_index_counter = 1
 
+            scraped_urls = []
             for match_url in urls:
+
+                if match_url in scraped_urls:
+                    break
+
                 match_input = {}
-                index = match_url.split('/')[-1].split('-Premier-League')[0]
+                index = match_url.split('/')[-1].split('-Major-League-Soccer')[0]
                 match_input['HT-AT-DATE'] = index
-                html = requests.get(match_url)
+
+                ##### ADD PROXY LOGIC #######################################################
+                if proxy_index_counter == len(proxy_list):
+                    proxy_index_counter = 1
+                proxy_for_match = proxy_list[proxy_index_counter - 1]
+                proxy_for_match = proxy_for_match[:-1]
+                proxy_index_counter += 1
+                proxy_parts = proxy_for_match.split(':')
+                proxy_html = proxy_parts[2] + ':' + proxy_parts[3] + '@' + proxy_parts[0] + ':' + proxy_parts[1]
+                proxy_html_dict = {
+                    'http' : 'http://' + proxy_html #, 'https' : 'https://' + proxy_html
+                    }
+                ##############################################################################
+
+                html = requests.get(match_url, proxies = proxy_html_dict)
+                randomised_sleep_time(1,7)
                 soup = BeautifulSoup(html.text, 'html.parser')
 
                 ## Get Scores and calculate GD ## 
@@ -50,11 +77,11 @@ def get_data(more_data:bool) -> pd.DataFrame:
 
                 home_name = names[0].split('\n')[1]
                 match_input['HT'] = get_team_sorted_val(home_name)
-                home_name_elo = get_team_name_clubelo_format(home_name)
+                #home_name_elo = get_team_name_clubelo_format(home_name)
 
                 away_name = names[1].split(' Match Report')[0]
                 match_input['AT'] = get_team_sorted_val(away_name)
-                away_name_elo = get_team_name_clubelo_format(away_name)
+                #away_name_elo = get_team_name_clubelo_format(away_name)
 
                 ## Retrieving goal difference prior to match and adding values post match ##
                 match_input['HT_GD'] = goal_diff_dict[get_team_sorted_val(home_name)]
@@ -70,15 +97,16 @@ def get_data(more_data:bool) -> pd.DataFrame:
                 match_input['DATE'] = datetime.strptime(date_string, '%Y-%m-%d')
 
                 ## Retrieving ELO ##
-                away_elo = ScraperFC.ClubElo()
-                away_elo = away_elo.scrape_team_on_date(away_name_elo, date_string)
-                home_elo = ScraperFC.ClubElo()
-                home_elo = home_elo.scrape_team_on_date(home_name_elo, date_string)
-                match_input['HT_ELO'] = home_elo
-                match_input['AT_ELO'] = away_elo
+                # away_elo = ScraperFC.ClubElo()
+                # away_elo = away_elo.scrape_team_on_date(away_name_elo, date_string)
+                # home_elo = ScraperFC.ClubElo()
+                # home_elo = home_elo.scrape_team_on_date(home_name_elo, date_string)
+                # match_input['HT_ELO'] = home_elo
+                # match_input['AT_ELO'] = away_elo
 
                 ## Adding to dataframe and adjusting index ##
                 fixtures.loc[row_index] = match_input
+                scraped_urls.append(match_url)
                 print('Match Added: ' + index)
                 row_index += 1
             
@@ -101,10 +129,10 @@ def get_data(more_data:bool) -> pd.DataFrame:
 def scale_data(data:pd.DataFrame) -> Tuple[dict, np.ndarray, np.ndarray]:
 
     ## Scaling data so it is normalized and ready for ingestion ##
-    X_scaled = data[['HT', 'AT', 'HT_ELO', 'AT_ELO', 'HT_GD', 'AT_GD']].values
+    X_scaled = data[['HT', 'AT', 'HT_GD', 'AT_GD']].values #, 'HT_ELO', 'AT_ELO'
     y_scaled = data[['HT_SC', 'AT_SC']].values.astype(float)
 
-    columns_in_input = ['HT', 'AT', 'HT_ELO', 'AT_ELO', 'HT_GD', 'AT_GD', 'HT_SC', 'AT_SC']
+    columns_in_input = ['HT', 'AT', 'HT_GD', 'AT_GD', 'HT_SC', 'AT_SC'] #, 'HT_ELO', 'AT_ELO'
 
     # Scale features
     scalers = {}
@@ -132,7 +160,7 @@ def prep_pred_input(date:str, home_team:str, away_team:str, scalers:dict) -> np.
 
     if date_formatted.date() < current_date:
         
-        file_path = 'data_and_models/fixtures_advanced.xlsx'
+        file_path = 'data_and_models/mls_fixture_data.xlsx'
         if not os.path.exists(file_path):
             print('Data needed, scrape it and store it in order to get input')
             input = 0
@@ -146,7 +174,7 @@ def prep_pred_input(date:str, home_team:str, away_team:str, scalers:dict) -> np.
                 matching_input = 0
                 print('Match could not be found in data source, scrape more data or check inputs.')  
 
-            input = matching_input[['HT', 'AT', 'HT_ELO', 'AT_ELO', 'HT_GD', 'AT_GD']].values.astype(float)
+            input = matching_input[['HT', 'AT', 'HT_GD', 'AT_GD']].values.astype(float) #, 'HT_ELO', 'AT_ELO'
             
             index = 0
             for column in scalers.keys():                
@@ -161,18 +189,24 @@ def prep_pred_input(date:str, home_team:str, away_team:str, scalers:dict) -> np.
         input['HT'] = home_val
         input['AT'] = away_val
 
-        home_name_elo = get_team_name_clubelo_format(home_team)
-        home_elo = ScraperFC.ClubElo()
-        home_elo = home_elo.scrape_team_on_date(home_name_elo, date)
+        # home_name_elo = get_team_name_clubelo_format(home_team)
+        # home_elo = ScraperFC.ClubElo()
+        # home_elo = home_elo.scrape_team_on_date(home_name_elo, date)
 
-        away_name_elo = get_team_name_clubelo_format(away_team)
-        away_elo = ScraperFC.ClubElo()
-        away_elo = away_elo.scrape_team_on_date(away_name_elo, date)
+        # away_name_elo = get_team_name_clubelo_format(away_team)
+        # away_elo = ScraperFC.ClubElo()
+        # away_elo = away_elo.scrape_team_on_date(away_name_elo, date)
 
-        input['HT_ELO'] = home_elo
-        input['AT_ELO'] = away_elo
+        # input['HT_ELO'] = home_elo
+        # input['AT_ELO'] = away_elo
    
-        prem_table_current = pd.read_html('https://fbref.com/en/comps/9/Premier-League-Stats')[0]
+        # Fetch all tables from the webpage
+        url = 'https://fbref.com/en/comps/22/Major-League-Soccer-Seasons'
+        tables = pd.read_html(url)
+
+        # Combine tables 0 and 2 (assuming they have the same structure)
+        prem_table_current = pd.concat([tables[0], tables[2]], ignore_index=True)
+
         home_team_fb = get_team_name_fbref_format(home_team)
         home_team_row = prem_table_current.loc[prem_table_current['Squad'] == home_team_fb]
         home_gd = home_team_row['GD'].values[0]
@@ -202,47 +236,47 @@ def get_team_sorted_val(team_name:str):
     ### Each team should have a unique value, it is not representing any numeric quantity although the model 
     # may make that assumption hence some smarts to order necessary. ###
 
+    # If teams change name over years, make sure both names are included in dictionary with the same value #
+
     team_vals = {
-        'Arsenal':40,
-        'Chelsea':39,
-        'Manchester United':38,
-        'Liverpool':37,
-        'Tottenham Hotspur':36,
-        'Everton':35,
-        'Manchester City':34,
-        'Aston Villa':33,
-        'Newcastle United':32,
-        'West Ham United':31,
-        'Southampton':30,
-        'Fulham':29,
-        'Crystal Palace':28,
-        'Leicester City':27,
-        'West Bromwich Albion':26,
-        'Swansea City':25,
-        'Burnley':24,
-        'Bournemouth':23,
-        'Brighton & Hove Albion':22,
-        'Wolverhampton Wanderers':21,
-        'Stoke City':20,
-        'Sunderland':19,
-        'Norwich City':18,
-        'Watford':17,
-        'Birmingham':16,
-        'Blackburn Rovers':15,
-        'Wigan Athletic':14,
-        'Middlesbrough':13,
-        'Bolton Wanderers':12,
-        'Leeds United':11,
-        'Queens Park Rangers':10,
-        'Hull City':9,
-        'Sheffield United':8,
-        'Brentford':7, 
-        'Reading':6,
-        'Cardiff City':5,
-        'Nottingham Forest':4,
-        'Huddersfield Town':3,
-        'AFC Sunderland':2,
-        'Luton Town':1
+        'D.C. United': 32,
+        'LA Galaxy': 31,
+        'New England Revolution': 30,
+        'Colorado Rapids': 29,
+        'Columbus Crew': 28,
+        'FC Dallas': 27,
+        'Dallas Burn': 27,
+        'San Jose Earthquakes': 26,
+        'San Jose Clash': 26,
+        'Sporting Kansas City': 25,
+        'Kansas City Wiz': 25,
+        'New York Red Bulls': 24,
+        'New York': 24,
+        'New Jersey MetroStars': 24,
+        'Chicago Fire': 23,
+        'Real Salt Lake': 22,
+        'Toronto FC': 21,
+        'Houston Dynamo': 20,
+        'Seattle Sounders FC': 19,
+        'Philadelphia Union': 18,
+        'Portland Timbers': 17,
+        'Vancouver Whitecaps': 16,
+        'CF Montréal': 15,
+        'Montreal Impact': 15,
+        'Orlando City': 14,
+        'New York City FC': 13,
+        'Atlanta United': 12,
+        'Minnesota United': 11,
+        'Los Angeles FC': 10,
+        'FC Cincinnati': 9,
+        'Inter Miami': 8,
+        'Nashville SC': 7,
+        'Austin FC': 6,
+        'Charlotte FC': 5,
+        'St. Louis City': 4,
+        'Chivas USA': 3,
+        'Tampa Bay Mutiny': 2,
+        'Miami Fusion': 1,
     }
 
     return team_vals[team_name]
@@ -252,96 +286,82 @@ def get_team_name_clubelo_format(team_name:str):
     ### Retrieves format of team name that works for ClubElo
 
     club_elo_team_name_format = {
-        'Arsenal': 'Arsenal',
-        'Chelsea':'Chelsea',
-        'Manchester United':'ManUnited',
-        'Liverpool':'Liverpool',
-        'Tottenham Hotspur':'Tottenham',
-        'Everton':'Everton',
-        'Manchester City':'ManCity',
-        'Aston Villa':'AstonVilla',
-        'Newcastle United':'Newcastle',
-        'West Ham United':'WestHam',
-        'Southampton':'Southampton',
-        'Fulham':'Fulham',
-        'Crystal Palace':'CrystalPalace',
-        'Leicester City':'Leicester',
-        'West Bromwich Albion':'WestBrom',
-        'Swansea City':'Swansea',
-        'Burnley':'Burnley',
-        'Bournemouth':'Bournemouth',
-        'Brighton & Hove Albion':'Brighton',
-        'Wolverhampton Wanderers':'Wolves',
-        'Stoke City':'Stoke',
-        'Sunderland':'Sunderland',
-        'Norwich City':'Norwich',
-        'Watford':'Watford',
-        'Birmingham':'Birmingham',
-        'Blackburn Rovers':'Blackburn',
-        'Wigan Athletic':'Wigan',
-        'Middlesbrough':'Middlesbrough',
-        'Bolton Wanderers':'Bolton',
-        'Leeds United':'Leeds',
-        'Queens Park Rangers':'QPR',
-        'Hull City':'Hull',
-        'Sheffield United':'SheffieldUnited',
-        'Brentford':'Brentford', 
-        'Reading':'Reading',
-        'Cardiff City':'Cardiff',
-        'Nottingham Forest':'Forest',
-        'Huddersfield Town':'Huddersfield',
-        'AFC Sunderland':'AFCSunderland',
-        'Luton Town':'Luton'
-    }
+        'Sporting Kansas City': 'Sporting Kansas City',
+        'Austin FC': 'Austin FC',
+        'FC Dallas': 'FC Dallas',
+        'Chicago Fire': 'Chicago Fire',
+        'Philadelphia Union': 'Philadelphia Union',
+        'Colorado Rapids': 'Colorado Rapids',
+        'Portland Timbers': 'Portland Timbers',
+        'Vancouver Whitcaps': 'Vancouver Whitcaps',
+        'Nashville SC': 'Nashville',
+        'Charlotte FC': 'Charlotte FC',
+        'Columbus Crew': 'Columbus Crew',
+        'Seattle Sounders FC': 'Seattle',
+        'Los Angeles FC': 'Los Angeles FC',
+        'Real Salt Lake': 'Real Salt Lake',
+        'Inter Miami': 'Inter Miami',
+        'FC Cincinnati': 'FC Cincinnati',
+        'New York City FC': 'New York City FC',
+        'NY Red Bulls': 'NY Red Bulls',
+        'St. Louis City': 'St. Louis City',
+        'Toronto FC': 'Toronto FC',
+        'LA Galaxy': 'LA Galaxy',
+        'Minnesota United': 'Minnesota United',
+        'Houston Dynamo': 'Houston Dynamo',
+        'D.C. United': 'D.C. United',
+        'Orlando City': 'Orlando City',
+        'CF Montréal': 'CF Montréal',
+        'Atlanta United': 'Atlanta United',
+        'San Jose Earthquakes': 'San Jose Earthquakes',
+        'NE Revolution': 'NE Revolution'
+        }
 
     return club_elo_team_name_format[team_name]
 
 
 def get_team_name_fbref_format(team_name:str):
 
-    ### Retrieves format of team name that works for ClubElo
+    ### Retrieves format of team name that works for Fbref
 
     fbref_team_name_format = {
-        'Arsenal': 'Arsenal',
-        'Chelsea':'Chelsea',
-        'Manchester United':'Manchester Utd',
-        'Liverpool':'Liverpool',
-        'Tottenham Hotspur':'Tottenham',
-        'Everton':'Everton',
-        'Manchester City':'Manchester City',
-        'Aston Villa':'Aston Villa',
-        'Newcastle United':'Newcastle Utd',
-        'West Ham United':'West Ham',
-        'Southampton':'Southampton',
-        'Fulham':'Fulham',
-        'Crystal Palace':'Crystal Palace',
-        'Leicester City':'Leicester',
-        'West Bromwich Albion':'WestBrom',
-        'Swansea City':'Swansea',
-        'Burnley':'Burnley',
-        'Bournemouth':'Bournemouth',
-        'Brighton & Hove Albion':'Brighton',
-        'Wolverhampton Wanderers':'Wolves',
-        'Stoke City':'Stoke',
-        'Sunderland':'Sunderland',
-        'Norwich City':'Norwich',
-        'Watford':'Watford',
-        'Birmingham':'Birmingham',
-        'Blackburn Rovers':'Blackburn',
-        'Wigan Athletic':'Wigan',
-        'Middlesbrough':'Middlesbrough',
-        'Bolton Wanderers':'Bolton',
-        'Leeds United':'Leeds',
-        'Queens Park Rangers':'QPR',
-        'Hull City':'Hull',
-        'Sheffield United':'Sheffield Utd',
-        'Brentford':'Brentford', 
-        'Reading':'Reading',
-        'Cardiff City':'Cardiff',
-        'Nottingham Forest':"Nott'ham Forest",
-        'Huddersfield Town':'Huddersfield',
-        'AFC Sunderland':'AFC Sunderland',
-        'Luton Town':'Luton Town'
-    }
+        'Sporting Kansas City': 'Sporting KC',
+        'Austin FC': 'Austin',
+        'FC Dallas': 'FC Dallas',
+        'Chicago Fire': 'Fire',
+        'Philadelphia Union': 'Philadelphia',
+        'Colorado Rapids': 'Rapids',
+        'Portland Timbers': 'Portland Timbers',
+        'Vancouver Whitcaps': 'Vancouver Whitcaps',
+        'Nashville SC': 'Nashville',
+        'Charlotte FC': 'Charlotte',
+        'Columbus Crew': 'Crew',
+        'Seattle Sounders FC': 'Seattle Sounders FC',
+        'Los Angeles FC': 'LAFC',
+        'Real Salt Lake': 'RSL',
+        'Inter Miami': 'Inter Miami',
+        'FC Cincinnati': 'FC Cincinnati',
+        'New York City FC': 'NYCFC',
+        'New York Red Bulls': 'NY Red Bulls',
+        'St. Louis City SC': 'St. Louis',
+        'Toronto FC': 'Toronto FC',
+        'L.A. Galaxy': 'LA Galaxy',
+        'Minnesota United': 'Minnesota Utd',
+        'Houston Dynamo': 'Dynamo FC',
+        'DC United': 'D.C. United',
+        'Orlando City': 'Orlando City',
+        'CF Montréal': 'CF Montréal',
+        'Atlanta United': 'Atlanta Utd',
+        'San Jose Earthquakes': 'SJ Earthquakes',
+        'New England Revolution': 'NE Revolution',
+        'Vancouver Whitecaps': 'Vancouver W\'caps',
+
+        }
+
 
     return fbref_team_name_format[team_name]
+
+def randomised_sleep_time(lower_bound, upper_bound):    
+    delay = random.uniform(lower_bound, upper_bound)
+    print(f" Sleeping for {delay:.2f} seconds...")
+    time.sleep(delay)

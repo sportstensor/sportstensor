@@ -4,7 +4,9 @@ from predictions import predict
 
 import numpy as np
 
-def activate(match_datetime, homeTeamName, awayTeamName):
+
+def activate(matchDate, homeTeamName, awayTeamName):
+
     scrape_more_data = False
     data = get_data(scrape_more_data)
 
@@ -12,9 +14,10 @@ def activate(match_datetime, homeTeamName, awayTeamName):
 
     model = load_or_run_model(scalers, X_scaled, y_scaled)
 
-    pred_input, hist_score = prep_pred_input(match_datetime, homeTeamName, awayTeamName, scalers)
+    pred_input, hist_score = prep_pred_input(matchDate, homeTeamName, awayTeamName, scalers)
+
     predicted_outcome = model.predict(pred_input)
-    
+        
     predicted_outcome[:,0] = np.round(scalers['HT_SC'].inverse_transform(predicted_outcome[:, 0].reshape(-1, 1)).reshape(-1))
     predicted_outcome[:,1] = np.round(scalers['AT_SC'].inverse_transform(predicted_outcome[:, 1].reshape(-1, 1)).reshape(-1))
 
@@ -24,3 +27,4 @@ def activate(match_datetime, homeTeamName, awayTeamName):
     #      'predicted score:', predicted_outcome[0], 'actual score:', hist_score) 
 
     return predictions
+
