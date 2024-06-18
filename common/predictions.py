@@ -1,5 +1,5 @@
 import bittensor as bt
-#from miner_dashboard import activate
+from miner_dashboard import activate
 from common.data import MatchPrediction, Sport
 import random
 
@@ -11,9 +11,13 @@ def make_match_prediction(prediction: MatchPrediction):
 
     if prediction.sport == Sport.SOCCER:
         bt.logging.info("Predicting soccer match...")
-        date = prediction.matchDate.strftime("%Y-%m-%d")
+        MatchDate = prediction.matchDate.strftime("%Y-%m-%d")
+
+        homeTeamName = prediction.homeTeamName
+        awayTeamName = prediction.awayTeamName
+        
         #predictions = predictSoccerMatch(date, prediction.homeTeamName, prediction.awayTeamName)
-        predictions = None
+        predictions = activate(MatchDate, homeTeamName, awayTeamName)
 
         if predictions is not None and (prediction.homeTeamName, prediction.awayTeamName) in predictions:
             pred_scores = predictions[(prediction.homeTeamName, prediction.awayTeamName)]
