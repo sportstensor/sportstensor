@@ -8,8 +8,8 @@ def test():
     matchId = 1234,
     matchDate = dt.datetime.strptime(matchDate, "%Y-%m-%d"),
     sport = Sport.SOCCER,
-    homeTeamName = "New York Red Bulls",
-    awayTeamName = "Vancouver Whitecaps",
+    homeTeamName = "Toronto FC",
+    awayTeamName = "Columbus Crew",
   )
   match_prediction = make_match_prediction(match_prediction)
 

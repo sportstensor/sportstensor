@@ -10,10 +10,17 @@ import openpyxl
 from sklearn.preprocessing import MinMaxScaler
 import time
 import random
+from huggingface_hub import hf_hub_download
+
+
 
 def get_data(more_data:bool) -> pd.DataFrame:       
     
-    file_path = 'data_and_models/mls_fixture_data.xlsx'
+    repo_id = "sportstensor/basic_mls_model"
+    filename = "mls_fixture_data.xlsx"
+
+    file_path = hf_hub_download(repo_id=repo_id, filename=filename)
+    
     if more_data:
 
         current_year = datetime.now().year 

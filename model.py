@@ -11,11 +11,15 @@ from tensorflow.keras.optimizers import Adam
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split
 from matplotlib import pyplot as plt
+from huggingface_hub import hf_hub_download
 
 def load_or_run_model(scalers: dict, X_scaled: np.ndarray, y_scaled: np.ndarray):
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2, random_state=42)
 
-    file_path = 'data_and_models/basic_model.keras'
+    repo_id = "sportstensor/basic_mls_model"
+    filename = "basic_mls_model.keras"
+
+    file_path = hf_hub_download(repo_id=repo_id, filename=filename)
 
     if not os.path.exists(file_path):
         model = Sequential([
