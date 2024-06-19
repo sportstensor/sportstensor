@@ -1,7 +1,7 @@
 <div align="center">
 
 # SportsTensor Bittensor Subnet: Sports insights through state-of-the-art & decentralized AI <!-- omit in toc -->
-[![OMEGA](/docs/header_bg.png)](https://sportstensor.com)
+[![Sportstensor](/docs/header_bg.jpg)](https://sportstensor.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
