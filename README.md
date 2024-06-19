@@ -6,7 +6,7 @@
 
 ---
 
-## Be, and it becomes ... <!-- omit in toc -->
+## SportsTensor redefines sports analytics, transforming raw data into valuable insights using cutting-edge machine learning technology.<!-- omit in toc -->
 </div>
 
 ---
@@ -30,11 +30,11 @@ Welcome to SportsTensor, a cutting-edge platform designed to transform sports an
 
 ## Key Features
 
-- 🌍 **Data-Driven Insights**: Provides actionable insights and predictions based on historical and real-time data for strategic planning and performance analysis.
-- 🧠 **Decentralized and Reliable**: Utilizes the decentralized Bittensor network, enhancing the accuracy and reliability of data through community-verified contributions.
+- 💾 **Data-Driven Insights**: Provides actionable insights and predictions based on historical and real-time data for strategic planning and performance analysis.
+- ⛓️ **Decentralized and Reliable**: Utilizes the decentralized Bittensor network, enhancing the accuracy and reliability of data through community-verified contributions.
 - 💰 **Incentivized Data Collection**: Miners are rewarded to develop high-performance predictive models on our Bittensor-based subnet.
-- 🤖 **Easy Access and Integration**: Offers convenient access via mobile and web platforms, with APIs for easy integration into existing systems.
-- 🎮 **Scalable Solution**: Designed to seamlessly scale up and accommodate growing data needs without disrupting user experience.
+- 🔌 **Easy Access and Integration**: Offers convenient access via mobile and web platforms, with APIs for easy integration into existing systems.
+- 🏗️ **Scalable Solution**: Designed to seamlessly scale up and accommodate growing data needs without disrupting user experience.
 
 ## Miner and Validator Functionality
 
@@ -54,7 +54,7 @@ Welcome to SportsTensor, a cutting-edge platform designed to transform sports an
 ## Roadmap
 
 ### Phase 1: Foundation (Q3 2024)
-- [x] Launch on testnet, develop baseline models for soccer and baseball.
+- [x] Launch on testnet, develop baseline models for soccer (Major Soccer League).
 
 ### Phase 2: Expansion (Q3 2024)
 - [ ] Introduce validation metrics, begin brand awareness campaigns, launch front-end.
