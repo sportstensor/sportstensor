@@ -27,7 +27,7 @@ from common import constants
 from common.protocol import (
     GetMatchPrediction
 )
-from common.predictions import make_match_prediction
+from st.sport_prediction_model import make_match_prediction
 
 class Miner(BaseMinerNeuron):
     """The Sports Tensor Miner."""
@@ -35,7 +35,6 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
         
-        # TODO: Instantiate base level LLM?
 
     async def forward(
         self, synapse: GetMatchPrediction

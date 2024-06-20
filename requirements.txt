@@ -1,1 +1,12 @@
 bittensor==6.9.3
+
+numpy
+pandas
+beautifulsoup4
+requests
+ScraperFC
+openpyxl
+huggingface_hub
+tensorflow
+scikit-learn
+matplotlib
