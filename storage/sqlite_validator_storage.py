@@ -32,6 +32,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             matchId       VARCHAR(50)     PRIMARY KEY,
                             matchDate     TIMESTAMP(6)    NOT NULL,
                             sport         INTEGER         NOT NULL,
+                            league        VARCHAR(50)     NOT NULL,
                             homeTeamName  VARCHAR(30)     NOT NULL,
                             awayTeamName  VARCHAR(30)     NOT NULL,
                             homeTeamScore INTEGER         NULL,
@@ -47,6 +48,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             matchId       VARCHAR(50)     NOT NULL,
                             matchDate     TIMESTAMP(6)    NOT NULL,
                             sport         INTEGER         NOT NULL,
+                            league        VARCHAR(50)     NOT NULL,
                             homeTeamName  VARCHAR(30)     NOT NULL,
                             awayTeamName  VARCHAR(30)     NOT NULL,
                             homeTeamScore INTEGER         NULL,
@@ -65,7 +67,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             cursor = connection.cursor()
 
             # Create the Matches table (if it does not already exist).
-            cursor.execute(SqliteValidatorStorage.LEAGUES_TABLE_CREATE)
+            #cursor.execute(SqliteValidatorStorage.LEAGUES_TABLE_CREATE)
 
             # Create the Matches table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.MATCHES_TABLE_CREATE)
@@ -152,6 +154,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 match.matchId,
                 match.matchDate,
                 match.sport,
+                match.league,
                 match.homeTeamName,
                 match.awayTeamName,
                 match.homeTeamScore,
@@ -165,7 +168,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """INSERT OR IGNORE INTO Matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT OR IGNORE INTO Matches (matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -264,6 +267,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     prediction.match_prediction.matchId,
                     prediction.match_prediction.matchDate,
                     prediction.match_prediction.sport,
+                    prediction.match_prediction.league,
                     prediction.match_prediction.homeTeamName,
                     prediction.match_prediction.awayTeamName,
                     prediction.match_prediction.homeTeamScore,
@@ -276,7 +280,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -321,18 +325,19 @@ class SqliteValidatorStorage(ValidatorStorage):
                         'matchId': row[3],
                         'matchDate': row[4],
                         'sport': row[5],
-                        'homeTeamName': row[6],
-                        'awayTeamName': row[7],
-                        'homeTeamScore': row[8],
-                        'awayTeamScore': row[9],
-                        'isScored': row[10],
-                        # row[11] is scoredDate
-                        # row[12] is lastUpdated
+                        'league': row[6],
+                        'homeTeamName': row[7],
+                        'awayTeamName': row[8],
+                        'homeTeamScore': row[9],
+                        'awayTeamScore': row[10],
+                        'isScored': row[11],
+                        # row[12] is scoredDate
+                        # row[13] is lastUpdated
                     }
                     combined_predictions.append(MatchPredictionWithMatchData(
                         prediction=MatchPrediction(**prediction_data),
-                        actualHomeTeamScore=row[13],
-                        actualAwayTeamScore=row[14]
+                        actualHomeTeamScore=row[14],
+                        actualAwayTeamScore=row[15]
                     ))
                 
                 return combined_predictions

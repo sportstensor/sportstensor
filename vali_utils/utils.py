@@ -54,6 +54,7 @@ async def sync_match_data(match_data_endpoint) -> bool:
                 matchId=item['matchId'],
                 matchDate=item['matchDate'],
                 sport=item['sport'],
+                league=item['matchLeague'],
                 homeTeamName=item['homeTeamName'],
                 awayTeamName=item['awayTeamName'],
                 homeTeamScore=item['homeTeamScore'],
@@ -125,6 +126,7 @@ def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
         matchId = match.matchId,
         matchDate = str(match.matchDate),
         sport = match.sport,
+        league = match.league,
         homeTeamName = match.homeTeamName,
         awayTeamName = match.awayTeamName
     ) for match in matches]
@@ -140,6 +142,7 @@ async def send_predictions_to_miners(vali: Validator, input_synapse: GetMatchPre
                         matchId=input_synapse.match_prediction.matchId,
                         matchDate=input_synapse.match_prediction.matchDate,
                         sport=input_synapse.match_prediction.sport,
+                        league=input_synapse.match_prediction.league,
                         homeTeamName=input_synapse.match_prediction.homeTeamName,
                         awayTeamName=input_synapse.match_prediction.awayTeamName,
                         homeTeamScore=random.randint(0, 10),

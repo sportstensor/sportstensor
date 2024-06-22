@@ -1,14 +1,15 @@
 import datetime as dt
-from common.data import Sport, MatchPrediction
+from common.data import Sport, League, MatchPrediction
 from st.sport_prediction_model import make_match_prediction
 #from sportstensor.predictions import make_match_prediction
 
 def test():
-  matchDate = "2024-06-20"
+  matchDate = "2024-06-25"
   match_prediction = MatchPrediction(
     matchId = 1234,
     matchDate = dt.datetime.strptime(matchDate, "%Y-%m-%d"),
     sport = Sport.SOCCER,
+    league = League.MLS,
     homeTeamName = "Toronto FC",
     awayTeamName = "Columbus Crew",
   )
