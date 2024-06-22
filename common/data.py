@@ -3,7 +3,7 @@ import time
 #from common import constants
 #from . import utils
 import datetime as dt
-from enum import IntEnum
+from enum import IntEnum, Enum
 from typing import Any, Dict, List, Type, Optional
 from pydantic import (
     BaseModel,
@@ -35,9 +35,17 @@ class Sport(IntEnum):
     UNKNOWN_6 = 6
     UNKNOWN_7 = 7
 
-class League(StrictBaseModel):
+class League(Enum):
     """Represents a sports league, mainly used for mapping and indicating active status to run predictiosn on."""
 
+    MLB = "MLB"
+    NFL = "NFL"
+    NBA = "NBA"
+    NHL = "NHL"
+    EPL = "EPL"
+    MLS = "American Major League Soccer"
+
+    """
     leagueId: PositiveInt = Field(
         description="Unique ID that represents a league."
     )
@@ -46,6 +54,7 @@ class League(StrictBaseModel):
     )
     sport: Sport
     isActive: bool = False
+    """
 
 class Match(StrictBaseModel):
     """Represents a match/game, sport agnostic."""
@@ -58,6 +67,7 @@ class Match(StrictBaseModel):
     matchDate: dt.datetime
 
     sport: Sport
+    league: League
     
     # Set variable to keep track if the match has completed. Default to False.
     isComplete: bool = False
@@ -68,7 +78,7 @@ class Match(StrictBaseModel):
     awayTeamScore: Optional[int]
 
     # Validators to ensure immutability
-    @validator('matchId', 'matchDate', 'sport', 'homeTeamName', 'awayTeamName', pre=True, always=True, check_fields=False)
+    @validator('matchId', 'matchDate', 'sport', 'league', 'homeTeamName', 'awayTeamName', pre=True, always=True, check_fields=False)
     def match_fields_are_immutable(cls, v, values, field):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
@@ -99,13 +109,14 @@ class Prediction(StrictBaseModel):
     )
 
     sport: Sport
+    league: League
     
     # Set variable to keep track if the prediction has been scored. Default to False.
     isScored: bool = False
     scoredDate: Optional[dt.datetime]
     
     # Validators to ensure immutability
-    @validator('predictionId', 'matchId', 'matchDate', 'sport', pre=True, always=True, check_fields=False)
+    @validator('predictionId', 'matchId', 'matchDate', 'sport', 'league', pre=True, always=True, check_fields=False)
     def base_fields_are_immutable(cls, v, values, field):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
@@ -113,12 +124,13 @@ class Prediction(StrictBaseModel):
     
     def __str__(self):
         sport_name = self.sport.name if isinstance(self.sport, Sport) else Sport(self.sport).name
+        league_name = self.league.name if isinstance(self.league, League) else League(self.league).name
         return (
             f"Prediction(predictionId={self.predictionId}, "
             f"minerId={self.minerId}, hotkey={self.hotkey}, "
             f"matchId={self.matchId}, matchDate={self.matchDate}, "
-            f"sport={sport_name}, isScored={self.isScored}, "
-            f"scoredDate={self.scoredDate})"
+            f"sport={sport_name}, league={league_name}, "
+            f"isScored={self.isScored}, scoredDate={self.scoredDate})"
         )
 
 class MatchPrediction(Prediction):
