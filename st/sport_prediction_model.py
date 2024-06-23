@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import bittensor as bt
-from common.data import MatchPrediction, Sport
+from common.data import MatchPrediction, Sport, League
 
 
 class SportPredictionModel(ABC):
@@ -23,6 +23,8 @@ def make_match_prediction(prediction: MatchPrediction):
     from st.models.baseball import BaseballPredictionModel
     from st.models.basketball import BasketballPredictionModel
     from st.models.cricket import CricketPredictionModel
+    # Add new league classes here
+    from st.models.soccer_mls import MLSSoccerPredictionModel
 
     sport_classes = {
         Sport.SOCCER: SoccerPredictionModel,
@@ -31,12 +33,24 @@ def make_match_prediction(prediction: MatchPrediction):
         Sport.BASKETBALL: BasketballPredictionModel,
         Sport.CRICKET: CricketPredictionModel
     }
+    league_classes = {
+        League.MLS: MLSSoccerPredictionModel
+    }
 
+    league_class = league_classes.get(prediction.league)
     sport_class = sport_classes.get(prediction.sport)
-    if sport_class:
+
+    # Check if we have a league-specific prediction model first
+    if league_class:
+        league_prediction = league_class(prediction)
+        league_prediction.set_default_scores()
+        league_prediction.make_prediction()
+    # If not, check if we have a sport-specific prediction model
+    elif sport_class:
         sport_prediction = sport_class(prediction)
         sport_prediction.set_default_scores()
         sport_prediction.make_prediction()
+    # If we don't have a prediction model for the sport, return 0 for both scores
     else:
         bt.logging.info("Unknown sport, returning 0 for both scores")
         prediction.homeTeamScore = 0
