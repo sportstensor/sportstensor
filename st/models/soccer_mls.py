@@ -16,13 +16,12 @@ import openpyxl
 from huggingface_hub import hf_hub_download
 
 import tensorflow as tf
-from tensorflow.keras.models import load_model, Sequential
-from tensorflow.keras.layers import Dense, InputLayer
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.optimizers import Adam
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from keras._tf_keras.keras.models import load_model, Sequential
+from keras._tf_keras.keras.layers import Dense, Dropout, InputLayer
+from keras._tf_keras.keras.callbacks import EarlyStopping, ModelCheckpoint
+import keras._tf_keras.keras.optimizers as optimizers
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from matplotlib import pyplot as plt
 
 from st.models.soccer import SoccerPredictionModel
@@ -341,7 +340,9 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
 
         team_vals = {
             'D.C. United': 32,
+            'DC United': 32,
             'LA Galaxy': 31,
+            'L.A. Galaxy': 31,
             'New England Revolution': 30,
             'Colorado Rapids': 29,
             'Columbus Crew': 28,
