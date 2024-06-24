@@ -33,6 +33,7 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
         self.huggingface_model = "sportstensor/basic_mls_model"
         self.mls_fixture_data_filepath = "mls_fixture_data.xlsx"
         self.mls_model_filepath = "basic_mls_model.keras"
+        self.mls_combined_table_filepath = "combined_table.csv"
 
     def make_prediction(self):
         bt.logging.info("Predicting soccer match...")
@@ -255,6 +256,8 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
 
     def prep_pred_input(self, date:str, home_team:str, away_team:str, scalers:dict) -> np.array:
 
+        file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mls_combined_table_filepath)
+
         date_formatted = datetime.strptime(date, '%Y-%m-%d')
         home_val = self.get_team_sorted_val(home_team)
         away_val = self.get_team_sorted_val(away_team)
@@ -301,11 +304,8 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
             # input['AT_ELO'] = away_elo
     
             # Fetch all tables from the webpage
-            url = 'https://fbref.com/en/comps/22/Major-League-Soccer-Seasons'
-            tables = pd.read_html(url)
-
-            # Combine tables 0 and 2 (assuming they have the same structure)
-            prem_table_current = pd.concat([tables[0], tables[2]], ignore_index=True)
+            prem_table_current = pd.read_csv(file_path)
+            return prem_table_current
 
             home_team_fb = self.get_team_name_fbref_format(home_team)
             home_team_row = prem_table_current.loc[prem_table_current['Squad'] == home_team_fb]
