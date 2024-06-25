@@ -68,8 +68,6 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
 
         # Ensure that predictions dictionary is always returned
         predictions = {(homeTeamName, awayTeamName): (predicted_outcome[0][0], predicted_outcome[0][1])}
-        # print({'DATE': match_datetime, 'HT': homeTeamName, 'AT': awayTeamName},
-        #      'predicted score:', predicted_outcome[0], 'actual score:', hist_score) 
 
         return predictions
     
@@ -175,39 +173,10 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
             input = {}
             input['HT'] = home_val
             input['AT'] = away_val
-
-            # home_name_elo = get_team_name_clubelo_format(home_team)
-            # home_elo = ScraperFC.ClubElo()
-            # home_elo = home_elo.scrape_team_on_date(home_name_elo, date)
-
-            # away_name_elo = get_team_name_clubelo_format(away_team)
-            # away_elo = ScraperFC.ClubElo()
-            # away_elo = away_elo.scrape_team_on_date(away_name_elo, date)
-
-            # input['HT_ELO'] = home_elo
-            # input['AT_ELO'] = away_elo
     
-            # Fetch all tables from the webpage
+            # Fetch all tables from the CSV
             prem_table_current = pd.read_csv(file_path)
             return prem_table_current
-
-            home_team_fb = self.get_team_name_fbref_format(home_team)
-            home_team_row = prem_table_current.loc[prem_table_current['Squad'] == home_team_fb]
-            home_gd = home_team_row['GD'].values[0]
-            input['HT_GD'] = home_gd  
-            away_team_fb = self.get_team_name_fbref_format(away_team)
-            away_team_row = prem_table_current[prem_table_current['Squad'] == away_team_fb]
-            away_gd = away_team_row['GD'].values[0]
-            input['AT_GD'] = away_gd
-            
-            input = np.array(list(input.values())).reshape(1,-1)
-            index = 0
-            for column in scalers.keys():                
-                if index < input.shape[1]:
-                    input[:,index] = scalers[column].transform(input[:,index].reshape(-1,1)).reshape(1,-1)
-                index += 1
-
-            output = 'Outcome not known yet as game not taken place'
 
         return input, output
 
