@@ -21,13 +21,13 @@ compute_spec:
       architecture: "x86_64"  # Architecture type (e.g., x86_64, arm64)
 
     gpu:
-      required: True                       # Does the application require a GPU?
-      min_vram: 2                          # Minimum GPU VRAM (GB)
-      recommended_vram: 4                  # Recommended GPU VRAM (GB)
-      cuda_cores: 8                        # Minimum number of CUDA cores (if applicable)
-      min_compute_capability: 6.0          # Minimum CUDA compute capability
-      recommended_compute_capability: 7.0  # Recommended CUDA compute capability
-      recommended_gpu: "NVIDIA "           # provide a recommended GPU to purchase/rent
+      required: False                       # Does the application require a GPU?
+      min_vram: 0                          # Minimum GPU VRAM (GB)
+      recommended_vram: 0                  # Recommended GPU VRAM (GB)
+      cuda_cores: 0                        # Minimum number of CUDA cores (if applicable)
+      min_compute_capability: 0          # Minimum CUDA compute capability
+      recommended_compute_capability: 0  # Recommended CUDA compute capability
+      recommended_gpu: ""           # provide a recommended GPU to purchase/rent
 
     memory:
       min_ram: 4           # Minimum RAM (GB)
