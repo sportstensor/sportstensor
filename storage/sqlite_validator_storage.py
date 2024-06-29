@@ -306,6 +306,10 @@ class SqliteValidatorStorage(ValidatorStorage):
                     WHERE mp.isScored = 0
                     AND m.isComplete = 1
                     AND mp.matchDate > ?
+                    AND mp.homeTeamScore IS NOT NULL
+                    AND mp.awayTeamScore IS NOT NULL
+                    AND m.homeTeamScore IS NOT NULL
+                    AND m.awayTeamScore IS NOT NULL
                     ORDER BY mp.matchDate ASC
                     LIMIT ?
                     """,
