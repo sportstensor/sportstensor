@@ -4,6 +4,7 @@ from traceback import print_exception
 import bittensor
 import uvicorn
 import asyncio
+import logging
 from fastapi import FastAPI, HTTPException, Depends, Body, Path, Security
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi.security.api_key import APIKeyHeader
@@ -93,9 +94,23 @@ async def main():
         if match:
             # Apply datetime serialization to all fields in the dictionary that need it
             match = {key: serialize_datetime(value) for key, value in match.items()}
-            return {match}
+            return match
         else:
             return {"error": "Failed to retrieve match data."}
+            
+    @app.get("/get-prediction")
+    async def get_prediction(id: str):
+    	print(f"API called with id: {id}")  # Print statement to confirm the endpoint is hit
+    	logging.info(f"API called with id: {id}")
+
+    	prediction = db.get_prediction_by_id(id)
+    	if prediction:
+        # Apply datetime serialization to all fields in the dictionary that need it
+        	prediction = {key: serialize_datetime(value) for key, value in prediction.items()}
+        	return prediction
+    	else:
+        	return {"error": "Failed to retrieve prediction data."}
+
 
     @app.post("/AddAppPrediction")
     #async def upsert_prediction(

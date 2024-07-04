@@ -32,7 +32,7 @@ def get_match_by_id(match_id):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
         
-        cursor.execute('SELECT * FROM matches WHERE matchId = %s', (id,))
+        cursor.execute('SELECT * FROM matches WHERE matchId = %s', (match_id,))
         match = cursor.fetchone()
         
         return match
@@ -43,6 +43,7 @@ def get_match_by_id(match_id):
     finally:
         cursor.close()
         conn.close()
+
 
 def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
     try:
@@ -203,6 +204,9 @@ def get_app_match_predictions():
     finally:
         cursor.close()
         conn.close()
+        
+        
+
 
 def create_tables():
     c = None
@@ -298,3 +302,28 @@ def get_db_conn():
 
 create_tables()
 create_app_tables()
+
+def get_prediction_by_id(app_id):
+    try:
+        # Log the received app_id
+        logging.info(f"Fetching prediction for app_request_id: {app_id}")
+        
+        # Ensure app_id is a string
+        if not isinstance(app_id, str):
+            app_id = str(app_id)
+        
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute('SELECT * FROM AppMatchPredictions WHERE app_request_id = %s', (app_id,))
+        prediction = cursor.fetchone()
+        
+        return prediction
+    except Exception as e:
+        logging.error("Failed to retrieve prediction from the MySQL database", exc_info=True)
+        return None
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
