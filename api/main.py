@@ -100,17 +100,16 @@ async def main():
             
     @app.get("/get-prediction")
     async def get_prediction(id: str):
-    	print(f"API called with id: {id}")  # Print statement to confirm the endpoint is hit
-    	logging.info(f"API called with id: {id}")
+        print(f"API called with id: {id}")  # Print statement to confirm the endpoint is hit
+        logging.info(f"API called with id: {id}")
 
-    	prediction = db.get_prediction_by_id(id)
-    	if prediction:
-        # Apply datetime serialization to all fields in the dictionary that need it
-        	prediction = {key: serialize_datetime(value) for key, value in prediction.items()}
-        	return prediction
-    	else:
-        	return {"error": "Failed to retrieve prediction data."}
-
+        prediction = db.get_prediction_by_id(id)
+        if prediction:
+            # Apply datetime serialization to all fields in the dictionary that need it
+            prediction = {key: serialize_datetime(value) for key, value in prediction.items()}
+            return prediction
+        else:
+            return {"error": "Failed to retrieve prediction data."}
 
     @app.post("/AddAppPrediction")
     #async def upsert_prediction(
@@ -135,7 +134,6 @@ async def main():
         prediction_results: dict = Body(...), 
         hotkey: Annotated[str, Depends(get_hotkey)] = None
     ):
-    #async def upload_prediction_results(prediction_results: dict = Body(...)):
         if not authenticate_with_bittensor(hotkey, metagraph):
             print(f"Valid hotkey required, returning 403. hotkey: {hotkey}")
             raise HTTPException(
@@ -147,6 +145,42 @@ async def main():
 
         result = db.upload_prediction_results(prediction_results)
         return {"message": "Prediction results uploaded successfully from validator " + str(uid)}
+    
+    @app.get("/predictionResults")
+    async def get_prediction_results(
+        miner_hotkey: Optional[str] = None,
+        sport: Optional[str] = None,
+        league: Optional[str] = None
+    ):  
+        if league is not None:
+            results = db.get_prediction_stats_by_league(league, miner_hotkey)
+        elif sport is not None:
+            results = db.get_prediction_stats_by_sport(sport, miner_hotkey)
+        else:
+            results = db.get_prediction_stats_total(miner_hotkey)
+        
+        if results:
+            return {"results": results}
+        else:
+            return {"error": "Failed to retrieve prediction results data."}
+        
+    @app.get("/predictionResultsPerMiner")
+    async def get_prediction_results_per_miner(
+        miner_hotkey: Optional[str] = None,
+        sport: Optional[str] = None,
+        league: Optional[str] = None
+    ):  
+        if league is not None:
+            results = db.get_prediction_stats_by_league(league, miner_hotkey, True)
+        elif sport is not None:
+            results = db.get_prediction_stats_by_sport(sport, miner_hotkey, True)
+        else:
+            results = db.get_prediction_stats_total(miner_hotkey, True)
+        
+        if results:
+            return {"results": results}
+        else:
+            return {"error": "Failed to retrieve prediction results data."}
 
     def serialize_datetime(value):
         """Serialize datetime to JSON-compatible format, if necessary."""
