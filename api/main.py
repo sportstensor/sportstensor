@@ -163,6 +163,24 @@ async def main():
             return {"results": results}
         else:
             return {"error": "Failed to retrieve prediction results data."}
+        
+    @app.get("/predictionResultsPerMiner")
+    async def get_prediction_results_per_miner(
+        miner_hotkey: Optional[str] = None,
+        sport: Optional[str] = None,
+        league: Optional[str] = None
+    ):  
+        if league is not None:
+            results = db.get_prediction_stats_by_league(league, miner_hotkey, True)
+        elif sport is not None:
+            results = db.get_prediction_stats_by_sport(sport, miner_hotkey, True)
+        else:
+            results = db.get_prediction_stats_total(miner_hotkey, True)
+        
+        if results:
+            return {"results": results}
+        else:
+            return {"error": "Failed to retrieve prediction results data."}
 
     def serialize_datetime(value):
         """Serialize datetime to JSON-compatible format, if necessary."""

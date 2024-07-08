@@ -148,30 +148,41 @@ def upload_prediction_results(prediction_results):
         c.close()
         conn.close()
 
-def get_prediction_stats_by_league(league, miner_hotkey=None):
+def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=False):
     try:
         conn = get_db_conn()
-        c = conn.cursor()
+        c = conn.cursor(dictionary=True)
 
         prediction_scores_table_name = "MatchPredictionResults"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
+        
         query = f'''
             SELECT
                 league,
                 AVG(avg_score) AS avg_score,
                 SUM(total_predictions) AS total_predictions,
                 SUM(winner_predictions) AS winner_predictions
+        '''
+        
+        if group_by_miner:
+            query += ', miner_hotkey'
+        
+        query += f'''
             FROM {prediction_scores_table_name}
             WHERE league = %s
         '''
+        
         params = [league]
         
         if miner_hotkey:
             query += ' AND miner_hotkey = %s'
             params.append(miner_hotkey)
         
-        query += ' GROUP BY league'
+        if group_by_miner:
+            query += ' GROUP BY league, miner_hotkey'
+        else:
+            query += ' GROUP BY league'
         
         c.execute(query, params)
         return c.fetchall()
@@ -182,60 +193,82 @@ def get_prediction_stats_by_league(league, miner_hotkey=None):
         c.close()
         conn.close()
 
-def get_prediction_stats_by_sport(sport, miner_hotkey=None):
+def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False):
     try:
         conn = get_db_conn()
-        c = conn.cursor()
+        c = conn.cursor(dictionary=True)
 
         prediction_scores_table_name = "MatchPredictionResults"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
+        
         query = f'''
             SELECT
                 sport,
                 AVG(avg_score) AS avg_score,
                 SUM(total_predictions) AS total_predictions,
                 SUM(winner_predictions) AS winner_predictions
+        '''
+        
+        if group_by_miner:
+            query += ', miner_hotkey'
+        
+        query += f'''
             FROM {prediction_scores_table_name}
             WHERE sport = %s
         '''
+        
         params = [sport]
         
         if miner_hotkey:
             query += ' AND miner_hotkey = %s'
             params.append(miner_hotkey)
         
-        query += ' GROUP BY sport'
+        if group_by_miner:
+            query += ' GROUP BY sport, miner_hotkey'
+        else:
+            query += ' GROUP BY sport'
         
         c.execute(query, params)
         return c.fetchall()
-
+    
     except Exception as e:
         logging.error("Failed to query sport prediction stats from MySQL database", exc_info=True)
     finally:
         c.close()
         conn.close()
 
-def get_prediction_stats_total(miner_hotkey=None):
+def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
     try:
         conn = get_db_conn()
-        c = conn.cursor()
+        c = conn.cursor(dictionary=True)
 
         prediction_scores_table_name = "MatchPredictionResults"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
+        
         query = f'''
             SELECT
                 AVG(avg_score) AS avg_score,
                 SUM(total_predictions) AS total_predictions,
                 SUM(winner_predictions) AS winner_predictions
+        '''
+        
+        if group_by_miner:
+            query += ', miner_hotkey'
+        
+        query += f'''
             FROM {prediction_scores_table_name}
         '''
+        
         params = []
         
         if miner_hotkey:
             query += ' WHERE miner_hotkey = %s'
             params.append(miner_hotkey)
+        
+        if group_by_miner:
+            query += ' GROUP BY miner_hotkey'
         
         c.execute(query, params)
         return c.fetchall()
