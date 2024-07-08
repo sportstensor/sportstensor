@@ -155,7 +155,15 @@ class Validator(BaseValidatorNeuron):
         # Check if we're ready to score another batch of predictions
         if self.next_scoring_datetime <= dt.datetime.now(dt.timezone.utc):
             bt.logging.info(f"*** Checking if there are predictions to score. ***")
-            normalized_rewards, normalized_rewards_uids, prediction_scores, correct_winner_results, prediction_rewards_uids = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
+
+            (normalized_rewards, 
+            normalized_rewards_uids, 
+            prediction_scores, 
+            correct_winner_results, 
+            prediction_rewards_uids, 
+            prediction_sports, 
+            prediction_leagues) = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
+
             if len(normalized_rewards) > 0:
                 bt.logging.info(f"Scoring {len(prediction_rewards_uids)} predictions for miners {prediction_rewards_uids}.")
                 bt.logging.info(f"Aggregated and normalized prediction rewards: {normalized_rewards}")
@@ -166,7 +174,16 @@ class Validator(BaseValidatorNeuron):
                 prediction_rewards_hotkeys = [self.metagraph.axons[uid].hotkey for uid in prediction_rewards_uids]
 
                 # Post prediction scoring results to API for storage/analysis
-                post_result = await utils.post_prediction_results(self, self.prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_rewards_hotkeys)
+                post_result = await utils.post_prediction_results(
+                    self, 
+                    self.prediction_results_endpoint, 
+                    prediction_scores, 
+                    correct_winner_results, 
+                    prediction_rewards_uids, 
+                    prediction_rewards_hotkeys,
+                    prediction_sports,
+                    prediction_leagues
+                )
 
             else:
                 bt.logging.info("No predictions to score.")
