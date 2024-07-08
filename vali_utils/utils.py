@@ -224,6 +224,8 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
     correct_winner_results = []
     rewards_uids = []
     predictions = []
+    sports = []
+    leagues = []
     for pwmd in predictions_with_match_data:
         prediction = pwmd.prediction
         uid = prediction.minerId
@@ -252,6 +254,8 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
         correct_winner_results.append(correct_winner_score)
         rewards_uids.append(uid)
         predictions.append(prediction)
+        sports.append(sport)
+        leagues.append(prediction.league)
 
     # mark predictions as scored in the local db
     if len(predictions) > 0:
@@ -276,7 +280,7 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
     # Extract the corresponding UIDs for the normalized rewards
     normalized_rewards_uids = [uid for uid, reward in aggregated_rewards_list]
 
-    return [normalized_rewards, normalized_rewards_uids, rewards, correct_winner_results, rewards_uids]
+    return [normalized_rewards, normalized_rewards_uids, rewards, correct_winner_results, rewards_uids, sports, leagues]
 
     
 def calculate_prediction_score(
@@ -288,12 +292,12 @@ def calculate_prediction_score(
     # Score for home team prediction
     home_score_diff = abs(predicted_home_score - actual_home_score)
     # Calculate a float score between 0 and 1. 1 being an exact match
-    home_score = 0.25 - (home_score_diff / max_score_difference)
+    home_score = max(0, 0.25 - (home_score_diff / max_score_difference))
     
     # Score for away team prediction
     away_score_diff = abs(predicted_away_score - actual_away_score)
     # Calculate a float score between 0 and 1. 1 being an exact match
-    away_score = 0.25 - (away_score_diff / max_score_difference)
+    away_score = max(0, 0.25 - (away_score_diff / max_score_difference))
     
     # Determine the correct winner or if it's a draw
     actual_winner = 'home' if actual_home_score > actual_away_score else 'away' if actual_home_score < actual_away_score else 'draw'
@@ -342,7 +346,7 @@ def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
     return (True, "")
 
 
-async def post_prediction_results(vali, prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_results_hotkeys):
+async def post_prediction_results(vali, prediction_results_endpoint, prediction_scores, correct_winner_results, prediction_rewards_uids, prediction_results_hotkeys, prediction_sports, prediction_leagues):
     keypair = vali.dendrite.keypair
     hotkey = keypair.ss58_address
     signature = f"0x{keypair.sign(hotkey).hex()}"
@@ -353,6 +357,8 @@ async def post_prediction_results(vali, prediction_results_endpoint, prediction_
             'correct_winner_results': correct_winner_results,
             'uids': prediction_rewards_uids,
             'hotkeys': prediction_results_hotkeys,
+            'sports': prediction_sports,
+            'leagues': prediction_leagues,
         }
         async with ClientSession() as session:
             async with session.post(

@@ -99,6 +99,8 @@ def upload_prediction_results(prediction_results):
             'correct_winner_results': correct_winner_results,
             'uids': prediction_rewards_uids,
             'hotkeys': prediction_results_hotkeys,
+            'sports': prediction_sports,
+            'leagues': prediction_leagues
         }
         """
 
@@ -106,6 +108,8 @@ def upload_prediction_results(prediction_results):
         data_to_insert = list(zip(
             prediction_results['hotkeys'],
             prediction_results['uids'],
+            prediction_results['leagues'],
+            prediction_results['sports'],
             [1] * len(prediction_results['uids']),
             prediction_results['correct_winner_results'],
             prediction_results['scores']
@@ -118,12 +122,14 @@ def upload_prediction_results(prediction_results):
             INSERT INTO {prediction_scores_table_name} (
                 miner_hotkey,
                 miner_uid,
+                league,
+                sport,
                 total_predictions,
                 winner_predictions,
                 avg_score,
                 last_updated
             ) VALUES (
-                %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, NOW()
             ) ON DUPLICATE KEY UPDATE
                 total_predictions = total_predictions + VALUES(total_predictions),
                 winner_predictions = winner_predictions + VALUES(winner_predictions),
@@ -138,6 +144,104 @@ def upload_prediction_results(prediction_results):
 
     except Exception as e:
         logging.error("Failed to insert match in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+def get_prediction_stats_by_league(league, miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        prediction_scores_table_name = "MatchPredictionResults"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+        query = f'''
+            SELECT
+                league,
+                AVG(avg_score) AS avg_score,
+                SUM(total_predictions) AS total_predictions,
+                SUM(winner_predictions) AS winner_predictions
+            FROM {prediction_scores_table_name}
+            WHERE league = %s
+        '''
+        params = [league]
+        
+        if miner_hotkey:
+            query += ' AND miner_hotkey = %s'
+            params.append(miner_hotkey)
+        
+        query += ' GROUP BY league'
+        
+        c.execute(query, params)
+        return c.fetchall()
+    
+    except Exception as e:
+        logging.error("Failed to query league prediction stats from MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+def get_prediction_stats_by_sport(sport, miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        prediction_scores_table_name = "MatchPredictionResults"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+        query = f'''
+            SELECT
+                sport,
+                AVG(avg_score) AS avg_score,
+                SUM(total_predictions) AS total_predictions,
+                SUM(winner_predictions) AS winner_predictions
+            FROM {prediction_scores_table_name}
+            WHERE sport = %s
+        '''
+        params = [sport]
+        
+        if miner_hotkey:
+            query += ' AND miner_hotkey = %s'
+            params.append(miner_hotkey)
+        
+        query += ' GROUP BY sport'
+        
+        c.execute(query, params)
+        return c.fetchall()
+
+    except Exception as e:
+        logging.error("Failed to query sport prediction stats from MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+def get_prediction_stats_total(miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        prediction_scores_table_name = "MatchPredictionResults"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+        query = f'''
+            SELECT
+                AVG(avg_score) AS avg_score,
+                SUM(total_predictions) AS total_predictions,
+                SUM(winner_predictions) AS winner_predictions
+            FROM {prediction_scores_table_name}
+        '''
+        params = []
+        
+        if miner_hotkey:
+            query += ' WHERE miner_hotkey = %s'
+            params.append(miner_hotkey)
+        
+        c.execute(query, params)
+        return c.fetchall()
+    
+    except Exception as e:
+        logging.error("Failed to query total prediction stats from MySQL database", exc_info=True)
     finally:
         c.close()
         conn.close()
@@ -229,21 +333,29 @@ def create_tables():
         )''')
         c.execute('''
         CREATE TABLE IF NOT EXISTS MatchPredictionResults (
-            miner_hotkey VARCHAR(64) PRIMARY KEY,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_hotkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
+            sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
-            last_updated TIMESTAMP NOT NULL
+            last_updated TIMESTAMP NOT NULL,
+            UNIQUE (miner_hotkey, league)
         )''')
         c.execute('''
         CREATE TABLE IF NOT EXISTS MatchPredictionResults_test (
-            miner_hotkey VARCHAR(64) PRIMARY KEY,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_hotkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
+            sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
-            last_updated TIMESTAMP NOT NULL
+            last_updated TIMESTAMP NOT NULL,
+            UNIQUE (miner_hotkey, league)
         )''')
         conn.commit()
     except Exception as e:
