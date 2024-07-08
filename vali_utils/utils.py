@@ -292,12 +292,12 @@ def calculate_prediction_score(
     # Score for home team prediction
     home_score_diff = abs(predicted_home_score - actual_home_score)
     # Calculate a float score between 0 and 1. 1 being an exact match
-    home_score = 0.25 - (home_score_diff / max_score_difference)
+    home_score = max(0, 0.25 - (home_score_diff / max_score_difference))
     
     # Score for away team prediction
     away_score_diff = abs(predicted_away_score - actual_away_score)
     # Calculate a float score between 0 and 1. 1 being an exact match
-    away_score = 0.25 - (away_score_diff / max_score_difference)
+    away_score = max(0, 0.25 - (away_score_diff / max_score_difference))
     
     # Determine the correct winner or if it's a draw
     actual_winner = 'home' if actual_home_score > actual_away_score else 'away' if actual_home_score < actual_away_score else 'draw'
