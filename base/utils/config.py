@@ -112,13 +112,6 @@ def add_args(cls, parser):
         default=False,
     )
 
-    parser.add_argument(
-        "--wandb.notes",
-        type=str,
-        help="Notes to add to the wandb run.",
-        default="",
-    )
-
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
@@ -142,20 +135,6 @@ def add_miner_args(cls, parser):
         action="store_true",
         help="If set, miners will accept queries from non registered entities. (Dangerous!)",
         default=False,
-    )
-
-    parser.add_argument(
-        "--wandb.project_name",
-        type=str,
-        default="template-miners",
-        help="Wandb project to log to.",
-    )
-
-    parser.add_argument(
-        "--wandb.entity",
-        type=str,
-        default="opentensor-dev",
-        help="Wandb entity to log to.",
     )
 
 
@@ -219,20 +198,6 @@ def add_validator_args(cls, parser):
         type=int,
         help="The maximum number of TAO allowed to query a validator with a vpermit.",
         default=4096,
-    )
-
-    parser.add_argument(
-        "--wandb.project_name",
-        type=str,
-        help="The name of the project where you are sending the new run.",
-        default="template-validators",
-    )
-
-    parser.add_argument(
-        "--wandb.entity",
-        type=str,
-        help="The name of the project where you are sending the new run.",
-        default="opentensor-dev",
     )
 
 

@@ -17,13 +17,14 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-import asyncio
+import os
 from typing import List
 import datetime as dt
 
 # Bittensor
 import bittensor as bt
 import torch
+import wandb
 
 # Bittensor Validator Template:
 from common.protocol import GetMatchPrediction
@@ -59,6 +60,16 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info("load_state()")
         self.load_state()
+
+        self.wandb_run_start = None
+        if not self.config.wandb.off:
+            if os.getenv("WANDB_API_KEY"):
+                self.new_wandb_run()
+            else:
+                bt.logging.exception("WANDB_API_KEY not found. Set it with `export WANDB_API_KEY=<your API key>`. Alternatively, you can disable W&B with --wandb.off, but it is strongly recommended to run with W&B enabled.")
+                self.config.wandb.off = True
+        else:
+            bt.logging.warning("Running with --wandb.off. It is strongly recommended to run with W&B enabled.")
         
         api_root = (
             #"https://dev-api.sportstensor.com"
@@ -74,6 +85,30 @@ class Validator(BaseValidatorNeuron):
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
+
+    def new_wandb_run(self):
+        # Shoutout SN13 for the wandb snippet!
+        """Creates a new wandb run to save information to."""
+        # Create a unique run id for this run.
+        now = dt.datetime.now()
+        self.wandb_run_start = now
+        run_id = now.strftime("%Y-%m-%d_%H-%M-%S")
+        name = "validator-" + str(self.uid) + "-" + run_id
+        self.wandb_run = wandb.init(
+            name=name,
+            project="sportstensor-vali-logs",
+            entity="sportstensor",
+            config={
+                "uid": self.uid,
+                "hotkey": self.wallet.hotkey.ss58_address,
+                "run_name": run_id,
+                "type": "validator",
+            },
+            allow_val_change=True,
+            anonymous="allow",
+        )
+
+        bt.logging.debug(f"Started a new wandb run: {name}")
 
     async def forward(self):
         """

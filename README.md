@@ -113,6 +113,9 @@ The maximum possible score is 1.0, achieved by perfectly predicting the home and
 - CPU
 - If running on runpod, `runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04` is a good base template.
 
+#### Recommended
+- Utilizing wandb. Set environment variable with `export WANDB_API_KEY=<your API key>`. Alternatively, you can disable wandb with --wandb.off
+
 #### Setup
 1. To start, clone the repository and `cd` to it:
 ```bash
@@ -124,14 +127,14 @@ cd sportstensor
 
 #### Run auto-updating validator with PM2 (recommended)
 ```bash
-pm2 start auto_updating_validator.sh --name sportstensor-validator -- \
+pm2 start vali_auto_update.sh --name sportstensor-validator -- \
     --netuid {netuid} \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
     --axon.port {port} \
     --logging.trace
 ```
-Note: you might need to adjust "python" to "python3" within the `neurons/auto_updating_validator.sh` depending on your preferred system python.
+Note: you might need to adjust "python" to "python3" within the `vali_auto_update.sh` depending on your preferred system python.
 
 #### Run basic validator with PM2
 ```bash

@@ -28,6 +28,8 @@ import bittensor as bt
 from typing import List
 from traceback import print_exception
 import time
+import datetime as dt
+from subprocess import Popen, PIPE
 
 from base.neuron import BaseNeuron
 from base.mock import MockDendrite
@@ -83,6 +85,9 @@ class BaseValidatorNeuron(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
+        self.last_update_check = dt.datetime.now()
+        self.update_check_interval = 1800  # 30 minutes
+
     def serve_axon(self):
         """Serve axon to enable external connections."""
 
@@ -114,6 +119,29 @@ class BaseValidatorNeuron(BaseNeuron):
             for _ in range(self.config.neuron.num_concurrent_forwards)
         ]
         await asyncio.gather(*coroutines)
+
+    def is_git_latest(self) -> bool:
+        p = Popen(['git', 'rev-parse', 'HEAD'], stdout=PIPE, stderr=PIPE)
+        out, err = p.communicate()
+        if err:
+            return False
+        current_commit = out.decode().strip()
+        p = Popen(['git', 'ls-remote', 'origin', 'HEAD'], stdout=PIPE, stderr=PIPE)
+        out, err = p.communicate()
+        if err:
+            return False
+        latest_commit = out.decode().split()[0]
+        bt.logging.info(f'Current commit: {current_commit}, Latest commit: {latest_commit}')
+        return current_commit == latest_commit
+
+    def should_restart(self) -> bool:
+        # Check if enough time has elapsed since the last update check, if not assume we are up to date.
+        if (dt.datetime.now() - self.last_update_check).seconds < self.update_check_interval:
+            return False
+        
+        self.last_update_check = dt.datetime.now()
+
+        return not self.is_git_latest()
 
     def run(self):
         """
@@ -153,10 +181,25 @@ class BaseValidatorNeuron(BaseNeuron):
                 if self.should_exit:
                     break
 
+                if self.config.neuron.auto_update and self.should_restart():
+                    bt.logging.info(f'Validator is out of date, quitting to restart.')
+                    raise KeyboardInterrupt
+
                 # Sync metagraph and potentially set weights.
                 self.sync()
 
                 self.step += 1
+
+                # Check if we should start a new wandb run.
+                if not self.config.wandb.off:
+                    if (dt.datetime.now() - self.wandb_run_start) >= dt.timedelta(
+                        days=1
+                    ):
+                        bt.logging.info(
+                            "Current wandb run is more than 1 day old. Starting a new run."
+                        )
+                        self.wandb_run.finish()
+                        self.new_wandb_run()
 
                 # Sleep for the remaining time in the step.
                 elapsed = time.time() - start_time
