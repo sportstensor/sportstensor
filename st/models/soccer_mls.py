@@ -10,9 +10,6 @@ import numpy as np
 import pandas as pd
 
 from bs4 import BeautifulSoup
-import requests
-import ScraperFC
-import openpyxl
 from huggingface_hub import hf_hub_download
 
 import tensorflow as tf
