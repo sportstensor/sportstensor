@@ -8,6 +8,10 @@ from datetime import datetime, timedelta, timezone
 # Setup basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+from api.config import (
+    NETWORK
+)
+
 # Define sport mapping
 sport_mapping = {
     'SOCCER': 1,
@@ -36,15 +40,34 @@ def create_match_id(home_team, away_team, match_date):
     return f"{home_prefix}{away_prefix}{formatted_date}"
 
 def fetch_and_store_events():
-    logging.info("Fetching data from APIs")
-    urls = [
-        'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4328&s=2023-2024',
-        'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4387&s=2023-2024',
-        'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4424&s=2024',
-        'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4346&s=2024'
+    api_endpoints_url = (
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vTHtmeoWU0e7YqyDBtcSxsE-ocUG-ciPaLX4dZyQDkGQWxnth6GltLiO1a8uInq9nmRSpOSfyg2I45K/pub?gid=1997764475&single=true&output=csv"
+        if NETWORK == "test" else
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vTHtmeoWU0e7YqyDBtcSxsE-ocUG-ciPaLX4dZyQDkGQWxnth6GltLiO1a8uInq9nmRSpOSfyg2I45K/pub?gid=0&single=true&output=csv"
+    )
 
-    ]
+    # get event API endpoints from CSV URL and load them into our urls list
+    try:
+        response = requests.get(api_endpoints_url)
+        response.raise_for_status()
+        
+        # split the response text into lines
+        lines = response.text.split("\n")
+        # filter the lines to include only those where column C is "Active"
+        urls = [line.split(",")[0].strip() for line in lines if line.split(",")[2].strip() == "Active"]
+        logging.info(f"Loaded {len(urls)} API endpoints from {api_endpoints_url}")
+
+    except Exception as e:
+        logging.error(f"Error loading API endpoints from URL {api_endpoints_url}: {e}")
+        logging.info(f"Using fallback hardcoded API endpoints.")
+        urls = [
+            #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4328&s=2023-2024', #English Premier League
+            #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4387&s=2023-2024', #NBA
+            #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4424&s=2024', #MLB
+            'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4346&s=2024' #American Major League Soccer
+        ]
     
+    logging.info("Fetching data from APIs")
     all_events = []
     
     current_utc_time = datetime.now(timezone.utc)
