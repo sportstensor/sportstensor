@@ -342,8 +342,30 @@ def get_app_match_predictions():
         cursor.close()
         conn.close()
         
+def get_prediction_by_id(app_id):
+    try:
+        # Log the received app_id
+        logging.info(f"Fetching prediction for app_request_id: {app_id}")
         
-
+        # Ensure app_id is a string
+        if not isinstance(app_id, str):
+            app_id = str(app_id)
+        
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute('SELECT * FROM AppMatchPredictions WHERE app_request_id = %s', (app_id,))
+        prediction = cursor.fetchone()
+        
+        return prediction
+    except Exception as e:
+        logging.error("Failed to retrieve prediction from the MySQL database", exc_info=True)
+        return None
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 def create_tables():
     c = None
@@ -399,7 +421,6 @@ def create_tables():
         if conn is not None:
             conn.close()
 
-
 def create_app_tables():
     c = None
     conn = None
@@ -447,28 +468,3 @@ def get_db_conn():
 
 create_tables()
 create_app_tables()
-
-def get_prediction_by_id(app_id):
-    try:
-        # Log the received app_id
-        logging.info(f"Fetching prediction for app_request_id: {app_id}")
-        
-        # Ensure app_id is a string
-        if not isinstance(app_id, str):
-            app_id = str(app_id)
-        
-        conn = get_db_conn()
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute('SELECT * FROM AppMatchPredictions WHERE app_request_id = %s', (app_id,))
-        prediction = cursor.fetchone()
-        
-        return prediction
-    except Exception as e:
-        logging.error("Failed to retrieve prediction from the MySQL database", exc_info=True)
-        return None
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
