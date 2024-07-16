@@ -18,6 +18,7 @@ from keras._tf_keras.keras.layers import Dense, Dropout, InputLayer
 from keras._tf_keras.keras.callbacks import EarlyStopping, ModelCheckpoint
 import keras._tf_keras.keras.optimizers as optimizers
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from matplotlib import pyplot as plt
 
@@ -49,8 +50,7 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
             self.prediction.awayTeamScore = random.randint(0, 10)
 
     def activate(self, matchDate, homeTeamName, awayTeamName):
-        scrape_more_data = False
-        data = self.get_data(scrape_more_data)
+        data = self.get_data()
 
         scalers, X_scaled, y_scaled = self.scale_data(data)
 
@@ -67,6 +67,18 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
         predictions = {(homeTeamName, awayTeamName): (predicted_outcome[0][0], predicted_outcome[0][1])}
 
         return predictions
+    
+    def get_data(self) -> pd.DataFrame:
+        # grab data from our base model on HF
+        file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mls_fixture_data_filepath)
+               
+        if os.path.exists(file_path):
+            fixtures = pd.read_excel(file_path)
+        else:
+            print('No file found, scrape data first.')
+            fixtures = pd.DataFrame()    
+
+        return fixtures
     
     def load_or_run_model(self, scalers: dict, X_scaled: np.ndarray, y_scaled: np.ndarray):
         X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2, random_state=42)
@@ -136,6 +148,7 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
     def prep_pred_input(self, date:str, home_team:str, away_team:str, scalers:dict) -> np.array:
 
         file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mls_combined_table_filepath)
+        fixture_data_file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mls_fixture_data_filepath)
 
         date_formatted = datetime.strptime(date, '%Y-%m-%d')
         home_val = self.get_team_sorted_val(home_team)
@@ -145,11 +158,11 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
 
         if date_formatted.date() < current_date:
             
-            if not os.path.exists(self.mls_fixture_data_filepath):
+            if not os.path.exists(fixture_data_file_path):
                 print('Data needed, scrape it and store it in order to get input')
                 input = 0
             else:
-                fixtures = pd.read_excel(self.mls_fixture_data_filepath)
+                fixtures = pd.read_excel(fixture_data_file_path)
 
                 try:
                     matching_input = fixtures[(fixtures['DATE'] == date_formatted) & (fixtures['HT'] == home_val) & (fixtures['AT'] == away_val)]
@@ -165,6 +178,8 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
                         input[:,index] = scalers[column].transform(input[:,index].reshape(-1,1)).reshape(1,-1)
                     index += 1
                 output = matching_input[['HT_SC', 'AT_SC']].values
+
+                return input, output
         else:        
 
             input = {}
@@ -174,8 +189,7 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
             # Fetch all tables from the CSV
             prem_table_current = pd.read_csv(file_path)
             return prem_table_current
-
-        return input, output
+        
 
     def get_team_sorted_val(self, team_name:str):
 

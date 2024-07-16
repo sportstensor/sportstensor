@@ -5,4 +5,5 @@ huggingface_hub
 tensorflow
 scikit-learn
 matplotlib
+openpyxl
 wandb
