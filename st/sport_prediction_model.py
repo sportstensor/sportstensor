@@ -25,6 +25,7 @@ def make_match_prediction(prediction: MatchPrediction):
     from st.models.cricket import CricketPredictionModel
     # Add new league classes here
     from st.models.soccer_mls import MLSSoccerPredictionModel
+    from st.models.baseball_mlb import MLBBaseballPredictionModel
 
     sport_classes = {
         Sport.SOCCER: SoccerPredictionModel,
@@ -34,10 +35,13 @@ def make_match_prediction(prediction: MatchPrediction):
         Sport.CRICKET: CricketPredictionModel
     }
     league_classes = {
-        League.MLS: MLSSoccerPredictionModel
+        League.MLS: MLSSoccerPredictionModel,
+        League.MLB: MLBBaseballPredictionModel
     }
 
     league_class = league_classes.get(prediction.league)
+    print(league_class)
+    print(prediction)
     sport_class = sport_classes.get(prediction.sport)
 
     # Check if we have a league-specific prediction model first
