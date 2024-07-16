@@ -4,7 +4,7 @@ from st.sport_prediction_model import make_match_prediction
 #from sportstensor.predictions import make_match_prediction
 
 def mls():
-  matchDate = "2024-06-25"
+  matchDate = "2024-07-20"
   match_prediction = MatchPrediction(
     matchId = 1234,
     matchDate = dt.datetime.strptime(matchDate, "%Y-%m-%d"),

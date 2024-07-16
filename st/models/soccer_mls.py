@@ -165,8 +165,7 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
                 fixtures = pd.read_excel(fixture_data_file_path)
 
                 try:
-                    #matching_input = fixtures[(fixtures['DATE'] == date_formatted) & (fixtures['HT'] == home_val) & (fixtures['AT'] == away_val)]
-                    matching_input = fixtures[(fixtures['HT'] == home_val) & (fixtures['AT'] == away_val)]
+                    matching_input = fixtures[(fixtures['DATE'] == date_formatted) & (fixtures['HT'] == home_val) & (fixtures['AT'] == away_val)]
                 except:
                     matching_input = 0
                     print('Match could not be found in data source, scrape more data or check inputs.')  
