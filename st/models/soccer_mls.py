@@ -34,7 +34,7 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
         self.mls_combined_table_filepath = "combined_table.csv"
 
     def make_prediction(self):
-        bt.logging.info("Predicting soccer match...")
+        bt.logging.info("Predicting MLS soccer match...")
         matchDate = self.prediction.matchDate.strftime("%Y-%m-%d")
         homeTeamName = self.prediction.homeTeamName
         awayTeamName = self.prediction.awayTeamName
