@@ -1,12 +1,12 @@
 <div align="center">
 
-# SportsTensor Bittensor Subnet: Sports insights through state-of-the-art & decentralized AI <!-- omit in toc -->
-[![Sportstensor](/docs/header_bg.jpg)](https://sportstensor.com)
+# Sportstensor Subnet: Sports insights through state-of-the-art & decentralized AI <!-- omit in toc -->
+[![Sportstensor](/docs/header_bg.jpg)](https://Sportstensor.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
 
-## SportsTensor redefines sports analytics, transforming raw data into valuable insights using cutting-edge machine learning technology.<!-- omit in toc -->
+## Sportstensor redefines sports analytics, transforming raw data into valuable insights using cutting-edge machine learning technology.<!-- omit in toc -->
 </div>
 
 ---
@@ -25,14 +25,14 @@
 ---
 ## Introduction
 
-Welcome to SportsTensor, a cutting-edge platform designed to transform sports analytics through the decentralized capabilities of the Bittensor network. Our platform tackles the challenges of data overload, complex data analysis, and limited access to actionable sports insights by leveraging competitive machine learning and AI to deliver real-time and highly accurate sports analytics to teams, leagues, and sports enthusiasts.
+Welcome to Sportstensor, a cutting-edge platform designed to transform sports analytics through the decentralized capabilities of the Bittensor network. Our platform tackles the challenges of data overload, complex data analysis, and limited access to actionable sports insights by leveraging competitive machine learning and AI to deliver real-time and highly accurate sports analytics to teams, leagues, and sports enthusiasts.
 
 
 ## Key Features
 
 - 💾 **Data-Driven Insights**: Provides actionable insights and predictions based on historical and real-time data for strategic planning and performance analysis.
-- ⛓️ **Decentralized and Reliable**: Utilizes the decentralized Bittensor network, enhancing the accuracy and reliability of data through community-verified contributions.
-- 💰 **Incentivized Data Collection**: Miners are rewarded to develop high-performance predictive models on our Bittensor-based subnet.
+- ⛓️ **Decentralized and Reliable**: Utilizes the decentralized Bit network, enhancing the accuracy and reliability of data through community-verified contributions.
+- 💰 **Incentivized Data Collection**: Miners are rewarded to develop high-performance predictive models on our Bit-based subnet.
 - 🔌 **Easy Access and Integration**: Offers convenient access via mobile and web platforms, with APIs for easy integration into existing systems.
 - 🏗️ **Scalable Solution**: Designed to seamlessly scale up and accommodate growing data needs without disrupting user experience.
 
@@ -49,7 +49,7 @@ Welcome to SportsTensor, a cutting-edge platform designed to transform sports an
 
 - Collects predictions from the Miner, which include the anticipated outcomes and relevant statistical analyses of sports events.
 - Compares the Miner's predictions with the actual outcomes of the matches, which are sourced from trusted sports databases and official results.
-- Logs the results of the validations for auditing and continuous improvement of the predictive system on the SportsTensor platform
+- Logs the results of the validations for auditing and continuous improvement of the predictive system on the Sportstensor platform
 
 ## Roadmap
 
@@ -77,11 +77,11 @@ git clone https://github.com/xzistance/sportstensor/
 cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
-3. Next, install the `sportstensor` package: `pip install -e .`
+3. Next, install the `Sportstensor` package: `pip install -e .`
 
 #### Run with PM2
 ```bash
-pm2 start neurons/miner.py --name sportstensor-miner -- \
+pm2 start neurons/miner.py --name Sportstensor-miner -- \
     --netuid {netuid} \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
@@ -123,11 +123,11 @@ git clone https://github.com/xzistance/sportstensor/
 cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
-3. Next, install the `sportstensor` package: `pip install -e .`
+3. Next, install the `Sportstensor` package: `pip install -e .`
 
 #### Run auto-updating validator with PM2 (recommended)
 ```bash
-pm2 start vali_auto_update.sh --name sportstensor-validator -- \
+pm2 start vali_auto_update.sh --name Sportstensor-validator -- \
     --netuid {netuid} \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
@@ -138,7 +138,7 @@ Note: you might need to adjust "python" to "python3" within the `vali_auto_updat
 
 #### Run basic validator with PM2
 ```bash
-pm2 start neurons/validator.py --name sportstensor-validator -- \
+pm2 start neurons/validator.py --name Sportstensor-validator -- \
     --netuid {netuid} \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
@@ -152,7 +152,7 @@ Join our vibrant community on [Discord](https://discord.gg/opentensor).
 
 ## License
 
-The Sportstensor Bittensor subnet is released under the [MIT License](./LICENSE).
+The Sportstensor subnet is released under the [MIT License](./LICENSE).
 
 ---
 
