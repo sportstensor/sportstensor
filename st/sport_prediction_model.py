@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 import bittensor as bt
 from common.data import MatchPrediction, Sport, League, get_league_from_string
-
+import logging
 
 class SportPredictionModel(ABC):
+    print('SportPredictionModel(ABC)')
     def __init__(self, prediction):
         self.prediction = prediction
         self.huggingface_model = None
@@ -15,6 +16,7 @@ class SportPredictionModel(ABC):
     def set_default_scores(self):
         self.prediction.homeTeamScore = 0
         self.prediction.awayTeamScore = 0
+
 
 def make_match_prediction(prediction: MatchPrediction):
     # Lazy import to avoid circular dependency
@@ -44,7 +46,7 @@ def make_match_prediction(prediction: MatchPrediction):
     if league_enum is None:
         bt.logging.error(f"Unknown league: {prediction.league}. Returning.")
         return prediction
-    
+
     league_class = league_classes.get(league_enum)
     sport_class = sport_classes.get(prediction.sport)
 
@@ -63,6 +65,7 @@ def make_match_prediction(prediction: MatchPrediction):
     # If we don't have a prediction model for the sport, return 0 for both scores
     else:
         bt.logging.info("Unknown sport, returning 0 for both scores")
+        print('unknown')
         prediction.homeTeamScore = 0
         prediction.awayTeamScore = 0
 
