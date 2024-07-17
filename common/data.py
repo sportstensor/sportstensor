@@ -21,7 +21,7 @@ class StrictBaseModel(BaseModel):
         # JSON serialization doesn't seem to work correctly without
         # enabling `use_enum_values`. It's possible this isn't an
         # issue with newer version of pydantic, which we can't use.
-        use_enum_values = False
+        use_enum_values = True
 
 class Sport(IntEnum):
     """The sport a prediction pertains to. This will be expanded over time as we increase the types of sports we predict."""
@@ -36,7 +36,7 @@ class Sport(IntEnum):
     UNKNOWN_7 = 7
 
 class League(Enum):
-    """Represents a sports league, mainly used for mapping and indicating active status to run predictiosn on."""
+    """Represents a sports league, mainly used for mapping and indicating active status to run predictions on."""
 
     MLB = "MLB"
     NFL = "NFL"
@@ -55,6 +55,13 @@ class League(Enum):
     sport: Sport
     isActive: bool = False
     """
+
+def get_league_from_string(league_str: str) -> Optional[League]:
+    """Utility function to get a League enum from a string."""
+    for league in League:
+        if league.value == league_str:
+            return league
+    return None
 
 class Match(StrictBaseModel):
     """Represents a match/game, sport agnostic."""

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import bittensor as bt
-from common.data import MatchPrediction, Sport, League
+from common.data import MatchPrediction, Sport, League, get_league_from_string
 
 
 class SportPredictionModel(ABC):
@@ -39,18 +39,24 @@ def make_match_prediction(prediction: MatchPrediction):
         League.MLB: MLBBaseballPredictionModel
     }
 
-    league_class = league_classes.get(prediction.league)
-    print(league_class)
-    print(prediction)
+    # Convert the league string back to the League enum
+    league_enum = get_league_from_string(prediction.league)
+    if league_enum is None:
+        bt.logging.error(f"Unknown league: {prediction.league}. Returning.")
+        return prediction
+    
+    league_class = league_classes.get(league_enum)
     sport_class = sport_classes.get(prediction.sport)
 
     # Check if we have a league-specific prediction model first
     if league_class:
+        bt.logging.info(f"Using league-specific prediction model: {league_class.__name__}")
         league_prediction = league_class(prediction)
         league_prediction.set_default_scores()
         league_prediction.make_prediction()
     # If not, check if we have a sport-specific prediction model
     elif sport_class:
+        bt.logging.info(f"Using sport-specific prediction model: {sport_class.__name__}")
         sport_prediction = sport_class(prediction)
         sport_prediction.set_default_scores()
         sport_prediction.make_prediction()
