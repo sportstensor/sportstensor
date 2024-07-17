@@ -19,9 +19,42 @@ from keras._tf_keras.keras.callbacks import EarlyStopping, ModelCheckpoint
 import keras._tf_keras.keras.optimizers as optimizers
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.preprocessing import StandardScaler, MinMaxScaler  # Added import for MinMaxScaler
 from matplotlib import pyplot as plt
 
+
 from st.models.baseball import BaseballPredictionModel
+
+def get_data() -> pd.DataFrame:       
+    
+        file_path = 'data_and_models/mlb_model_ready_data_comb.csv'
+        data = pd.read_csv(file_path)
+        print(f"Data loaded with shape: {data.shape}")
+    # column_names = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RF', 'AT_RF', 'HT_RA', 'AT_RA', 'HT_H', 'AT_H', 'HT_SC', 'AT_SC'] 
+    # column_names (ELO) = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RF', 'AT_RF', 'HT_RA', 'AT_RA', 'HT_ELO', 'AT_ELO', 'HT_SC', 'AT_SC'] 
+    # column_names (comb) = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RD', 'AT_RD', 'HT_ELO', 'AT_ELO', 'HT_HPG', 'AT_HPG', 'HT_PREV_SC', 'AT_PREV_SC', 'HT_WL_RATIO', 'AT_WL_RATIO', 'HT_AVG_SC', 'AT_AVG_SC', 'HT_SC', 'AT_SC']
+ 
+    # Removing outliers 
+        ht_sc_95 = np.percentile(data['HT_SC'], 95)
+        at_sc_95 = np.percentile(data['AT_SC'], 95)
+        print(f"Data percentiles before removing outliers: 95% HT_SC={np.percentile(data['HT_SC'], 95)}, AT_SC={np.percentile(data['AT_SC'], 95)}")
+        data = data[(data['HT_SC'] <= ht_sc_95) & (data['AT_SC'] <= at_sc_95)]
+        print(f"Data shape after removing outliers: {data.shape}")
+
+
+        return data
+
+def load_or_run_model(scalers:dict, X_scaled:np.ndarray, y_scaled:np.ndarray):
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2, random_state=42)
+
+        file_path = 'data_and_models/basic_model_mlb.keras'
+
+        model = load_model(file_path)
+        print(f"Model loaded from {file_path}")
+
+
+        return model
+
 
 
 class MLBBaseballPredictionModel(BaseballPredictionModel):
@@ -32,6 +65,49 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         self.mls_model_filepath = "basic_mls_model.keras"
         self.mls_combined_table_filepath = "combined_table.csv"
 
+
+    def activate(self, matchDate, homeTeamName, awayTeamName):
+        data = get_data()
+
+        scalers, X_scaled, y_scaled = self.scale_data(data)
+
+        model = load_or_run_model(scalers, X_scaled, y_scaled)
+
+        pred_input, hist_score = self.prep_pred_input(matchDate, homeTeamName, awayTeamName, scalers)
+
+        predicted_outcome = model.predict(pred_input)
+        print(f"Raw model output: {predicted_outcome}")
+
+            
+        home_pred_unrounded = scalers['HT_SC'].inverse_transform(predicted_outcome[:, 0].reshape(-1, 1))[0][0]
+        away_pred_unrounded = scalers['AT_SC'].inverse_transform(predicted_outcome[:, 1].reshape(-1, 1))[0][0]
+        print(f"Predicted scores before rounding: Home={home_pred_unrounded}, Away={away_pred_unrounded}")
+
+        print(f"Inputs to model for prediction: {pred_input}")
+
+        home_pred = round(home_pred_unrounded)
+        away_pred = round(away_pred_unrounded) 
+
+        print(f"Final predicted scores: Home={home_pred}, Away={away_pred}")
+
+        if home_pred == away_pred and home_pred_unrounded > away_pred_unrounded:
+            away_pred -= 1
+        elif home_pred == away_pred and home_pred_unrounded < away_pred_unrounded:
+            home_pred -= 1
+
+
+        print(f"debug predicted scores: Home={home_pred}, Away={away_pred}")
+
+              
+        # Ensure that predictions dictionary is always returned
+        predictions = {
+     homeTeamName : home_pred,
+     awayTeamName : away_pred
+}
+        print(predictions)
+
+        return predictions
+    
     def make_prediction(self):
         bt.logging.info("Predicting MLB match...")
         matchDate = self.prediction.matchDate.strftime("%Y-%m-%d")
@@ -39,67 +115,18 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         awayTeamName = self.prediction.awayTeamName
 
         predictions = self.activate(matchDate, homeTeamName, awayTeamName)
+        print(f"make_prediction",predictions)
 
-        if predictions is not None and (homeTeamName, awayTeamName) in predictions:
-            pred_scores = predictions[(homeTeamName, awayTeamName)]
-            self.prediction.homeTeamScore = int(pred_scores[0])
-            self.prediction.awayTeamScore = int(pred_scores[1])
-        else:
-            self.prediction.homeTeamScore = random.randint(0, 10)
-            self.prediction.awayTeamScore = random.randint(0, 10)
+        # if predictions is not None and (homeTeamName, awayTeamName) in predictions:
+        #     pred_scores = predictions[(homeTeamName, awayTeamName)]
+        #     self.prediction.homeTeamScore = int(pred_scores[0])
+        #     self.prediction.awayTeamScore = int(pred_scores[1])
+        #     print(f"Scores set immediately after calculation: Home={self.prediction.homeTeamScore}, Away={self.prediction.awayTeamScore}")
+        # else:
+        #     self.prediction.homeTeamScore = random.randint(0, 10)
+        #     self.prediction.awayTeamScore = random.randint(0, 10)
 
-    def activate(self, matchDate, homeTeamName, awayTeamName):
-        data = get_data()
-
-        scalers, X_scaled, y_scaled = scale_data(data)
-
-        model = load_or_run_model(scalers, X_scaled, y_scaled)
-
-        pred_input, hist_score = self.prep_pred_input(matchDate, homeTeamName, awayTeamName, scalers)
-
-        predicted_outcome = model.predict(pred_input)
-            
-        home_pred_unrounded = scalers['HT_SC'].inverse_transform(predicted_outcome[:, 0].reshape(-1, 1))[0][0]
-        away_pred_unrounded = scalers['AT_SC'].inverse_transform(predicted_outcome[:, 1].reshape(-1, 1))[0][0]
-
-        home_pred = round(home_pred_unrounded)
-        away_pred = round(away_pred_unrounded) 
-
-        if home_pred == away_pred and home_pred_unrounded > away_pred_unrounded:
-            away_pred -= 1
-        elif home_pred == away_pred and home_pred_unrounded < away_pred_unrounded:
-            home_pred -= 1
-
-        # Ensure that predictions dictionary is always returned
-        predictions = {(homeTeamName, awayTeamName): (predicted_outcome[0][0], predicted_outcome[0][1])}
-
-        return predictions
-    
-    def load_or_run_model(scalers:dict, X_scaled:np.ndarray, y_scaled:np.ndarray):
-        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2, random_state=42)
-
-        file_path = '../../data_and_models/basic_model_mlb.keras'
-
-        model = load_model(file_path)
-
-        return model
-    
-
-    def get_data() -> pd.DataFrame:       
-    
-        file_path = '../../data_and_models/mlb_model_ready_data_comb.csv'
-        data = pd.read_csv(file_path)
-    # column_names = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RF', 'AT_RF', 'HT_RA', 'AT_RA', 'HT_H', 'AT_H', 'HT_SC', 'AT_SC'] 
-    # column_names (ELO) = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RF', 'AT_RF', 'HT_RA', 'AT_RA', 'HT_ELO', 'AT_ELO', 'HT_SC', 'AT_SC'] 
-    # column_names (comb) = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RD', 'AT_RD', 'HT_ELO', 'AT_ELO', 'HT_HPG', 'AT_HPG', 'HT_PREV_SC', 'AT_PREV_SC', 'HT_WL_RATIO', 'AT_WL_RATIO', 'HT_AVG_SC', 'AT_AVG_SC', 'HT_SC', 'AT_SC']
- 
-    # Removing outliers 
-        ht_sc_95 = np.percentile(data['HT_SC'], 95)
-        at_sc_95 = np.percentile(data['AT_SC'], 95)
-        data = data[(data['HT_SC'] <= ht_sc_95) & (data['AT_SC'] <= at_sc_95)]
-
-        return data
-
+        print(f"Assigned final predictions: Home={predictions[homeTeamName]}, Away={predictions[awayTeamName]}")
     
     def scale_data(self, data:pd.DataFrame) -> Tuple[dict, np.ndarray, np.ndarray]:
 
@@ -112,7 +139,7 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         # Scale features
         scalers = {}
         index = 0
-        for column in columns_in_input:
+        for column in columns_for_model_input:
             scaler = MinMaxScaler(feature_range=(0, 1))
 
             if index < X_scaled.shape[1]:
@@ -121,28 +148,38 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
                 y_scaled[:,index-X_scaled.shape[1]] = scaler.fit_transform(y_scaled[:,index-X_scaled.shape[1]].reshape(-1,1)).reshape(1,-1)
 
             scalers[column] = scaler
+            print(f"Scaler for {column}: min={scaler.min_[0]}, scale={scaler.scale_[0]}")
             index += 1
 
         return scalers, X_scaled, y_scaled
 
-    def prep_pred_input(fixture:dict, scalers:dict) -> np.array:
 
-        date_formatted = datetime.strptime(fixture['DATE'], '%Y-%m-%d')
+
+    def prep_pred_input(self, date:str, home_team:str, away_team:str, scalers:dict) -> np.array:
+
+        date_formatted = datetime.strptime(date, '%Y-%m-%d')
         current_date = datetime.now().date()
 
-        current_team_stats = pd.read_excel('../../data_and_models/current_team_data.xlsx')
+        current_team_stats = pd.read_excel('data_and_models/current_team_data.xlsx')
 
-        home_abrv = current_team_stats[(current_team_stats['team'] == fixture['HT'])]['abrv'].values[0]
-        away_abrv = current_team_stats[(current_team_stats['team'] == fixture['HT'])]['abrv'].values[0]
+        home_abrv = current_team_stats[current_team_stats['team'] == home_team]['abrv'].values[0]
+        away_abrv = current_team_stats[current_team_stats['team'] == away_team]['abrv'].values[0]
 
         home_id = get_id_from_ABRV(home_abrv)
         away_id = get_id_from_ABRV(away_abrv)
+        
         home_val = get_teamcode_from_id(home_id)
         away_val = get_teamcode_from_id(away_id)
 
+        print(home_abrv, away_abrv)
+        print(home_team, away_team)
+        print(home_val, away_val)
+        print(date_formatted)
+        
+
         if date_formatted.date() < current_date:
         
-            file_path = '../../data_and_models/mlb_model_ready_data_comb.xlsx'
+            file_path = 'data_and_models/mlb_model_ready_data_comb.xlsx'
             if not os.path.exists(file_path):
                 print('Data needed, scrape it and store it in order to get input')
                 input = 0
@@ -203,7 +240,7 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         print('Database updated successfully')
 
 
-    def get_id_from_ABRV(ABRV:str):
+def get_id_from_ABRV(ABRV:str):
 
         team_id = {
     'SD' : 135278, 
@@ -240,7 +277,7 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
 
         return team_id[ABRV]
     
-    def get_teamcode_from_id(id:float):
+def get_teamcode_from_id(id:float):
 
         teamcode = {
     135260 : 30,
@@ -277,7 +314,7 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
 
         return teamcode[id]
 
-    def randomised_sleep_time(self, lower_bound, upper_bound):    
+def randomised_sleep_time(self, lower_bound, upper_bound):    
         delay = random.uniform(lower_bound, upper_bound)
         print(f" Sleeping for {delay:.2f} seconds...")
         time.sleep(delay)

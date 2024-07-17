@@ -36,5 +36,5 @@ def mlb():
   )
 
 if __name__ == "__main__":
-  #mlb()
-  mls()
+  mlb()
+  #mls()
