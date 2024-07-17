@@ -28,18 +28,14 @@ from st.models.baseball import BaseballPredictionModel
 def get_data() -> pd.DataFrame:
     file_path = 'data_and_models/mlb_model_ready_data_comb.csv'
     data = pd.read_csv(file_path)
-    print(f"Data loaded with shape: {data.shape}")
-    # column_names = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RF', 'AT_RF', 'HT_RA', 'AT_RA', 'HT_H', 'AT_H', 'HT_SC', 'AT_SC'] 
-    # column_names (ELO) = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RF', 'AT_RF', 'HT_RA', 'AT_RA', 'HT_ELO', 'AT_ELO', 'HT_SC', 'AT_SC'] 
-    # column_names (comb) = ['HT_AT_DATE', 'DATE', 'HT', 'AT', 'HT_RD', 'AT_RD', 'HT_ELO', 'AT_ELO', 'HT_HPG', 'AT_HPG', 'HT_PREV_SC', 'AT_PREV_SC', 'HT_WL_RATIO', 'AT_WL_RATIO', 'HT_AVG_SC', 'AT_AVG_SC', 'HT_SC', 'AT_SC']
+    #print(f"Data loaded with shape: {data.shape}")
 
     # Removing outliers 
     ht_sc_95 = np.percentile(data['HT_SC'], 95)
     at_sc_95 = np.percentile(data['AT_SC'], 95)
-    print(
-        f"Data percentiles before removing outliers: 95% HT_SC={np.percentile(data['HT_SC'], 95)}, AT_SC={np.percentile(data['AT_SC'], 95)}")
+    #print(f"Data percentiles before removing outliers: 95% HT_SC={np.percentile(data['HT_SC'], 95)}, AT_SC={np.percentile(data['AT_SC'], 95)}")
     data = data[(data['HT_SC'] <= ht_sc_95) & (data['AT_SC'] <= at_sc_95)]
-    print(f"Data shape after removing outliers: {data.shape}")
+    #print(f"Data shape after removing outliers: {data.shape}")
 
     return data
 
@@ -73,34 +69,24 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         pred_input, hist_score = self.prep_pred_input(matchDate, homeTeamName, awayTeamName, scalers)
 
         predicted_outcome = model.predict(pred_input)
-        print(f"Raw model output: {predicted_outcome}")
-
-        print('predicted_outcome', predicted_outcome)
 
         home_pred_unrounded = scalers['HT_SC'].inverse_transform(predicted_outcome[:, 0].reshape(-1, 1))[0][0]
         away_pred_unrounded = scalers['AT_SC'].inverse_transform(predicted_outcome[:, 1].reshape(-1, 1))[0][0]
-        print(f"Predicted scores before rounding: Home={home_pred_unrounded}, Away={away_pred_unrounded}")
-
-        print(f"Inputs to model for prediction: {pred_input}")
 
         home_pred = round(home_pred_unrounded)
         away_pred = round(away_pred_unrounded)
-
-        print(f"Final predicted scores: Home={home_pred}, Away={away_pred}")
+        #print(f"Final predicted scores: Home={home_pred}, Away={away_pred}")
 
         if home_pred == away_pred and home_pred_unrounded > away_pred_unrounded:
             away_pred -= 1
         elif home_pred == away_pred and home_pred_unrounded < away_pred_unrounded:
             home_pred -= 1
 
-        print(f"debug predicted scores: Home={home_pred}, Away={away_pred}")
-
         # Ensure that predictions dictionary is always returned
         predictions = {
             homeTeamName: home_pred,
             awayTeamName: away_pred
         }
-        print(predictions)
 
         return predictions
 
@@ -111,19 +97,19 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         awayTeamName = self.prediction.awayTeamName
         
         predictions = self.activate(matchDate, homeTeamName, awayTeamName)
-        
 
-        # if predictions is not None and (homeTeamName, awayTeamName) in predictions:
-        #     pred_scores = predictions[(homeTeamName, awayTeamName)]
-        #     self.prediction.homeTeamScore = int(pred_scores[0])
-        #     self.prediction.awayTeamScore = int(pred_scores[1])
-        #     print(f"Scores set immediately after calculation: Home={self.prediction.homeTeamScore}, Away={self.prediction.awayTeamScore}")
-        # else:
-        #     self.prediction.homeTeamScore = random.randint(0, 10)
-        #     self.prediction.awayTeamScore = random.randint(0, 10)
+        if predictions is not None and homeTeamName in predictions and awayTeamName in predictions:
+            # Set our final predictions
+            bt.logging.info("Setting final predictions from model...")
+            self.prediction.homeTeamScore = int(predictions[homeTeamName])
+            self.prediction.awayTeamScore = int(predictions[awayTeamName])
+        else:
+            bt.logging.warning("Failed to get predictions from model, setting random scores")
+            self.prediction.homeTeamScore = random.randint(0, 10)
+            self.prediction.awayTeamScore = random.randint(0, 10)
 
-        print(f"Assigned final predictions: Home={predictions[homeTeamName]}, Away={predictions[awayTeamName]}")
-        return predictions
+        #print(f"Assigned final predictions: Home={predictions[homeTeamName]}, Away={predictions[awayTeamName]}")
+        return True
 
     def scale_data(self, data: pd.DataFrame) -> Tuple[dict, np.ndarray, np.ndarray]:
 
@@ -150,7 +136,7 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
                     y_scaled[:, index - X_scaled.shape[1]].reshape(-1, 1)).reshape(1, -1)
 
             scalers[column] = scaler
-            print(f"Scaler for {column}: min={scaler.min_[0]}, scale={scaler.scale_[0]}")
+            #print(f"Scaler for {column}: min={scaler.min_[0]}, scale={scaler.scale_[0]}")
             index += 1
 
         return scalers, X_scaled, y_scaled
@@ -171,10 +157,10 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         home_val = get_teamcode_from_id(home_id)
         away_val = get_teamcode_from_id(away_id)
 
-        print(home_abrv, away_abrv)
-        print(home_team, away_team)
-        print(home_val, away_val)
-        print(date_formatted)
+        #print(home_abrv, away_abrv)
+        #print(home_team, away_team)
+        #print(home_val, away_val)
+        #print(date_formatted)
 
         if date_formatted.date() < current_date:
 
@@ -236,9 +222,7 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         return input, output
 
     def update_current_team_database():
-
         ### Update database for current statistics ###
-
         print('Database updated successfully')
 
 
