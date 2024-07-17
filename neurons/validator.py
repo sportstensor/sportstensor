@@ -69,6 +69,7 @@ class Validator(BaseValidatorNeuron):
         self.match_data_endpoint = f"{api_root}/matches"
         self.prediction_results_endpoint = f"{api_root}/predictionResults"
         self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictions"
+        self.app_prediction_responses_endpoint = f"{api_root}/AppMatchPredictionResponses"
 
         self.client_timeout_seconds = VALIDATOR_TIMEOUT
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
@@ -196,7 +197,7 @@ class Validator(BaseValidatorNeuron):
             # Check if we're ready to poll the API for prediction requests from the app
             if self.next_app_predictions_syncing_datetime <= dt.datetime.now(dt.timezone.utc):
                 bt.logging.info("*** Syncing the latest app prediction request data to local validator storage. ***")
-                process_result = await utils.process_app_prediction_requests(self, self.app_prediction_requests_endpoint)
+                process_result = await utils.process_app_prediction_requests(self, self.app_prediction_requests_endpoint, self.app_prediction_responses_endpoint)
                 if process_result:
                     bt.logging.info("Successfully processed app match prediction requests.")
                 else:

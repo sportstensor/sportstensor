@@ -1,4 +1,5 @@
 from aiohttp import ClientSession, BasicAuth
+import asyncio
 import bittensor as bt
 import torch
 import random
@@ -79,20 +80,23 @@ async def sync_match_data(match_data_endpoint) -> bool:
         bt.logging.error(f"Error getting match data: {e}")
         return False
     
-async def process_app_prediction_requests(vali: Validator, app_prediction_requests_endpoint: str) -> bool:
+async def process_app_prediction_requests(vali: Validator, app_prediction_requests_endpoint: str, app_prediction_responses_endpoint: str) -> bool:
+    keypair = vali.dendrite.keypair
+    hotkey = keypair.ss58_address
+    signature = f"0x{keypair.sign(hotkey).hex()}"
     try:
         async with ClientSession() as session:
-            # TODO: add in authentication
-            async with session.get(app_prediction_requests_endpoint) as response:
+            async with session.get(app_prediction_requests_endpoint, auth=BasicAuth(hotkey, signature)) as response:
                 response.raise_for_status()
                 prediction_requests = await response.json()
         
-        if not prediction_requests or 'matches' not in prediction_requests:
+        if not prediction_requests or 'requests' not in prediction_requests:
             bt.logging.info("No app prediction requests returned from API")
             return False
         
-        prediction_requests = prediction_requests['matches']
+        prediction_requests = prediction_requests['requests']
         
+        prediction_responses = []
         bt.logging.info(f"Sending {len(prediction_requests)} app requests to miners for predictions.")
         for pr in prediction_requests:
             match_prediction = MatchPrediction(
@@ -111,13 +115,67 @@ async def process_app_prediction_requests(vali: Validator, app_prediction_reques
             input_synapse = GetMatchPrediction(match_prediction=match_prediction)
             # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
             finished_responses, working_miner_uids = await send_predictions_to_miners(vali, input_synapse, miner_uids)
+            # Add the responses to the list of responses
+            prediction_responses += finished_responses
 
-            # Post the response back per prediction_request or batch? Probably batch.
+        if len(prediction_responses) > 0:
+            max_retries = 3
+            # Post the prediction responses back to API
+            for attempt in range(max_retries):
+                try:
+                    # Attempt to post the prediction responses
+                    post_result = await post_app_prediction_responses(
+                        vali, 
+                        app_prediction_responses_endpoint,
+                        finished_responses
+                    )
+                    return post_result
+                except Exception as e:
+                    bt.logging.error(f"Attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        # Wait before retrying
+                        await asyncio.sleep(2)
+                    else:
+                        # Raise the exception if the maximum number of retries is reached
+                        bt.logging.error(f"Failed to post app prediction responses after {max_retries} attempts.")
+                        # Todo: store the failed responses in the database to retry later? Try to notify API?
+                        # API may need logic to detect initialized requests that have not been responded to in X amount of time and reprocess.
+                        return False
 
         return True
 
     except Exception as e:
         bt.logging.error(f"Error syncing app prediction requests: {e}")
+        return False
+    
+async def post_app_prediction_responses(vali, prediction_responses_endpoint, predictions):
+    keypair = vali.dendrite.keypair
+    hotkey = keypair.ss58_address
+    signature = f"0x{keypair.sign(hotkey).hex()}"
+    try:
+        # Post the app prediction request responses back to the api
+        """
+        prediction_responses = {
+            'scores': prediction_scores,
+            'correct_winner_results': correct_winner_results,
+            'uids': prediction_rewards_uids,
+            'hotkeys': prediction_results_hotkeys,
+            'sports': prediction_sports,
+            'leagues': prediction_leagues,
+        }
+        """
+        async with ClientSession() as session:
+            async with session.post(
+                prediction_responses_endpoint,
+                auth=BasicAuth(hotkey, signature),
+                json=predictions
+            ) as response:
+                response.raise_for_status()
+                bt.logging.info("Successfully posted app prediction responses to API.")
+                return True
+
+    except Exception as e:
+        bt.logging.error(f"Error posting app prediction responses to API: {e}")
         return False
 
 def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
