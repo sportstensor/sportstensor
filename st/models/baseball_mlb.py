@@ -32,9 +32,9 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
     def __init__(self, prediction):
         super().__init__(prediction)
         self.huggingface_model = "sportstensor/basic_mls_model"
-        self.mlb_current_team_data_filepath = "base_models/mlb/fixture_data.xlsx"
-        self.mls_model_filepath = "base_models/mlb/basic_model.keras"
-        self.mlb_model_ready_data_comb_filepath = "base_models/mlb/combined_table.csv"
+        self.mlb_current_team_data_filepath = "mlb/fixture_data.xlsx"
+        self.mls_model_filepath = "mlb/basic_model.keras"
+        self.mlb_model_ready_data_comb_filepath = "mlb/combined_table.csv"
 
     def load_or_run_model(self, scalers: dict, X_scaled: np.ndarray, y_scaled: np.ndarray):
         

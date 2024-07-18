@@ -29,9 +29,9 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
     def __init__(self, prediction):
         super().__init__(prediction)
         self.huggingface_model = "sportstensor/basic_mls_model"
-        self.mls_fixture_data_filepath = "base_models/mls/fixture_data.xlsx"
-        self.mls_model_filepath = "base_models/mls/basic_model.keras"
-        self.mls_combined_table_filepath = "base_models/mls/combined_table.csv"
+        self.mls_fixture_data_filepath = "mls/fixture_data.xlsx"
+        self.mls_model_filepath = "mls/basic_model.keras"
+        self.mls_combined_table_filepath = "mls/combined_table.csv"
 
     def make_prediction(self):
         bt.logging.info("Predicting MLS soccer match...")
