@@ -1,6 +1,6 @@
 import os
 
-IS_PROD = os.environ.get("IS_PROD", "false").lower() == "true"
+IS_PROD = True
 
 NETWORK = "mainnet"
 NETUID = 41
