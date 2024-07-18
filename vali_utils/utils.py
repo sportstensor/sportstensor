@@ -1,4 +1,5 @@
 from aiohttp import ClientSession, BasicAuth
+import asyncio
 import bittensor as bt
 import torch
 import random
@@ -350,27 +351,36 @@ async def post_prediction_results(vali, prediction_results_endpoint, prediction_
     keypair = vali.dendrite.keypair
     hotkey = keypair.ss58_address
     signature = f"0x{keypair.sign(hotkey).hex()}"
-    try:
-        # Post the scoring results back to the api
-        scoring_results = {
-            'scores': prediction_scores,
-            'correct_winner_results': correct_winner_results,
-            'uids': prediction_rewards_uids,
-            'hotkeys': prediction_results_hotkeys,
-            'sports': prediction_sports,
-            'leagues': prediction_leagues,
-        }
-        async with ClientSession() as session:
-            async with session.post(
-                prediction_results_endpoint,
-                auth=BasicAuth(hotkey, signature),
-                json=scoring_results
-            ) as response:
-                response.raise_for_status()
-                bt.logging.info("Successfully posted prediction results to API.")
+    max_retries = 3
 
-    except Exception as e:
-        bt.logging.error(f"Error posting prediction results to API: {e}")
+    for attempt in range(max_retries):
+        try:
+            # Post the scoring results back to the api
+            scoring_results = {
+                'scores': prediction_scores,
+                'correct_winner_results': correct_winner_results,
+                'uids': prediction_rewards_uids,
+                'hotkeys': prediction_results_hotkeys,
+                'sports': prediction_sports,
+                'leagues': prediction_leagues,
+            }
+            async with ClientSession() as session:
+                async with session.post(
+                    prediction_results_endpoint,
+                    auth=BasicAuth(hotkey, signature),
+                    json=scoring_results
+                ) as response:
+                    response.raise_for_status()
+                    bt.logging.info("Successfully posted prediction results to API.")
+                    return response
+
+        except Exception as e:
+            bt.logging.error(f"Error posting prediction results to API, attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                # Wait before retrying
+                await asyncio.sleep(2)
+            else:
+                bt.logging.error(f"Max retries attempted posting prediction results to API. Contact a Sportstensor admin.")
 
 
 def get_single_successful_response(
