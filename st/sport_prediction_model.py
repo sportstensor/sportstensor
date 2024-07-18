@@ -4,7 +4,6 @@ from common.data import MatchPrediction, Sport, League, get_league_from_string
 import logging
 
 class SportPredictionModel(ABC):
-    print('SportPredictionModel(ABC)')
     def __init__(self, prediction):
         self.prediction = prediction
         self.huggingface_model = None
