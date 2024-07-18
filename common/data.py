@@ -36,7 +36,7 @@ class Sport(IntEnum):
     UNKNOWN_7 = 7
 
 class League(Enum):
-    """Represents a sports league, mainly used for mapping and indicating active status to run predictiosn on."""
+    """Represents a sports league, mainly used for mapping and indicating active status to run predictions on."""
 
     MLB = "MLB"
     NFL = "NFL"
@@ -55,6 +55,13 @@ class League(Enum):
     sport: Sport
     isActive: bool = False
     """
+
+def get_league_from_string(league_str: str) -> Optional[League]:
+    """Utility function to get a League enum from a string."""
+    for league in League:
+        if league.value == league_str:
+            return league
+    return None
 
 class Match(StrictBaseModel):
     """Represents a match/game, sport agnostic."""

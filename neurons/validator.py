@@ -40,7 +40,6 @@ from common.constants import (
     SCORING_INTERVAL_IN_MINUTES
 )
 import vali_utils.utils as utils
-from storage.sqlite_validator_storage import SqliteValidatorStorage
 
 # import base validator class which takes care of most of the boilerplate
 from base.validator import BaseValidatorNeuron
@@ -72,11 +71,11 @@ class Validator(BaseValidatorNeuron):
             bt.logging.warning("Running with --wandb.off. It is strongly recommended to run with W&B enabled.")
         
         api_root = (
-            #"https://dev-api.sportstensor.com"
-            "https://api.sportstensor.com"
+            "https://dev-api.sportstensor.com"
             if self.config.subtensor.network == "test" else
             "https://api.sportstensor.com"
         )
+        bt.logging.info(f"Using Sportstensor API: {api_root}")
         self.match_data_endpoint = f"{api_root}/matches"
         self.prediction_results_endpoint = f"{api_root}/predictionResults"
         self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictions"
