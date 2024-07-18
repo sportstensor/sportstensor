@@ -2,7 +2,7 @@ import os
 
 IS_PROD = True
 
-NETWORK = "mainnet"
+NETWORK = None
 NETUID = 41
 
 if not IS_PROD:
