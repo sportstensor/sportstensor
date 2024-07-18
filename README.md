@@ -112,6 +112,7 @@ pm2 start neurons/miner.py --name Sportstensor-miner -- \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
     --axon.port {port} \
+    --axon.external_ip {ip} \
     --blacklist.force_validator_permit
 ```
 
