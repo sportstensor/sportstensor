@@ -28,7 +28,7 @@ from st.models.soccer import SoccerPredictionModel
 class MLSSoccerPredictionModel(SoccerPredictionModel):
     def __init__(self, prediction):
         super().__init__(prediction)
-        self.huggingface_model = "sportstensor/basic_mls_model"
+        self.huggingface_model = "sportstensor/basic_model"
         self.mls_fixture_data_filepath = "mls/fixture_data.xlsx"
         self.mls_model_filepath = "mls/basic_model.keras"
         self.mls_combined_table_filepath = "mls/combined_table.csv"

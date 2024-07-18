@@ -31,7 +31,7 @@ from st.models.baseball import BaseballPredictionModel
 class MLBBaseballPredictionModel(BaseballPredictionModel):
     def __init__(self, prediction):
         super().__init__(prediction)
-        self.huggingface_model = "sportstensor/basic_mls_model"
+        self.huggingface_model = "sportstensor/basic_model"
         self.mlb_current_team_data_filepath = "mlb/fixture_data.xlsx"
         self.mls_model_filepath = "mlb/basic_model.keras"
         self.mlb_model_ready_data_comb_filepath = "mlb/combined_table.csv"
