@@ -16,7 +16,7 @@ import tensorflow as tf
 from keras._tf_keras.keras.models import load_model, Sequential
 from keras._tf_keras.keras.layers import Dense, Dropout, InputLayer
 from keras._tf_keras.keras.callbacks import EarlyStopping, ModelCheckpoint
-import keras._tf_keras.keras.optimizers as optimizers
+from keras._tf_keras.keras.optimizers import Adam
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -29,9 +29,9 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
     def __init__(self, prediction):
         super().__init__(prediction)
         self.huggingface_model = "sportstensor/basic_mls_model"
-        self.mls_fixture_data_filepath = "mls_fixture_data.xlsx"
-        self.mls_model_filepath = "basic_mls_model.keras"
-        self.mls_combined_table_filepath = "combined_table.csv"
+        self.mls_fixture_data_filepath = "base_models/mls/fixture_data.xlsx"
+        self.mls_model_filepath = "base_models/mls/basic_model.keras"
+        self.mls_combined_table_filepath = "base_models/mls/combined_table.csv"
 
     def make_prediction(self):
         bt.logging.info("Predicting MLS soccer match...")
@@ -56,10 +56,10 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
 
         model = self.load_or_run_model(scalers, X_scaled, y_scaled)
 
-        pred_input, hist_score = self.prep_pred_input(matchDate, homeTeamName, awayTeamName, scalers)
+        pred_input = self.prep_pred_input(matchDate, homeTeamName, awayTeamName, scalers)
 
         predicted_outcome = model.predict(pred_input)
-            
+
         predicted_outcome[:,0] = np.round(scalers['HT_SC'].inverse_transform(predicted_outcome[:, 0].reshape(-1, 1)).reshape(-1))
         predicted_outcome[:,1] = np.round(scalers['AT_SC'].inverse_transform(predicted_outcome[:, 1].reshape(-1, 1)).reshape(-1))
 
@@ -157,38 +157,42 @@ class MLSSoccerPredictionModel(SoccerPredictionModel):
         current_date = datetime.now().date()
 
         if date_formatted.date() < current_date:
-            
+
             if not os.path.exists(fixture_data_file_path):
                 print('Data needed, scrape it and store it in order to get input')
-                input = 0
+                return np.array([])
             else:
                 fixtures = pd.read_excel(fixture_data_file_path)
 
                 try:
                     matching_input = fixtures[(fixtures['DATE'] == date_formatted) & (fixtures['HT'] == home_val) & (fixtures['AT'] == away_val)]
                 except:
-                    matching_input = 0
-                    print('Match could not be found in data source, scrape more data or check inputs.')  
-                
+                    print('Match could not be found in data source, scrape more data or check inputs.')
+                    return np.array([])
+
                 input = matching_input[['HT', 'AT', 'HT_GD', 'AT_GD']].values.astype(float) #, 'HT_ELO', 'AT_ELO'
-                
+
                 index = 0
-                for column in scalers.keys():                
+                for column in scalers.keys():
                     if index < input.shape[1]:
                         input[:,index] = scalers[column].transform(input[:,index].reshape(-1,1)).reshape(1,-1)
                     index += 1
-                output = matching_input[['HT_SC', 'AT_SC']].values
 
-                return input, output
-        else:        
+                return input
+        else:
+            input = np.array([[
+                scalers['HT'].transform([[home_val]])[0][0],
+                scalers['AT'].transform([[away_val]])[0][0],
+                0,  # Placeholder for HT_GD
+                0   # Placeholder for AT_GD
+            ]])
 
-            input = {}
-            input['HT'] = home_val
-            input['AT'] = away_val
-    
             # Fetch all tables from the CSV
             prem_table_current = pd.read_csv(file_path)
-            return prem_table_current
+            # Here you might want to update the GD values based on the current table
+            # This is left as a TODO, as it depends on how you want to calculate these values
+
+            return input
         
 
     def get_team_sorted_val(self, team_name:str):

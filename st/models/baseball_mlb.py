@@ -25,46 +25,51 @@ from matplotlib import pyplot as plt
 from st.models.baseball import BaseballPredictionModel
 
 
-def get_data() -> pd.DataFrame:
-    file_path = 'data_and_models/mlb_model_ready_data_comb.csv'
-    data = pd.read_csv(file_path)
-    #print(f"Data loaded with shape: {data.shape}")
 
-    # Removing outliers 
-    ht_sc_95 = np.percentile(data['HT_SC'], 95)
-    at_sc_95 = np.percentile(data['AT_SC'], 95)
-    #print(f"Data percentiles before removing outliers: 95% HT_SC={np.percentile(data['HT_SC'], 95)}, AT_SC={np.percentile(data['AT_SC'], 95)}")
-    data = data[(data['HT_SC'] <= ht_sc_95) & (data['AT_SC'] <= at_sc_95)]
-    #print(f"Data shape after removing outliers: {data.shape}")
-
-    return data
-
-
-def load_or_run_model(scalers: dict, X_scaled: np.ndarray, y_scaled: np.ndarray):
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2, random_state=42)
-
-    file_path = 'data_and_models/basic_model_mlb.keras'
-
-    model = load_model(file_path)
-    print(f"Model loaded from {file_path}")
-
-    return model
 
 
 class MLBBaseballPredictionModel(BaseballPredictionModel):
     def __init__(self, prediction):
         super().__init__(prediction)
         self.huggingface_model = "sportstensor/basic_mls_model"
-        self.mls_fixture_data_filepath = "mls_fixture_data.xlsx"
-        self.mls_model_filepath = "basic_mls_model.keras"
-        self.mls_combined_table_filepath = "combined_table.csv"
+        self.mlb_current_team_data_filepath = "base_models/mlb/fixture_data.xlsx"
+        self.mls_model_filepath = "base_models/mlb/basic_model.keras"
+        self.mlb_model_ready_data_comb_filepath = "base_models/mlb/combined_table.csv"
+
+    def load_or_run_model(self, scalers: dict, X_scaled: np.ndarray, y_scaled: np.ndarray):
+        
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2, random_state=42)
+
+        file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mls_model_filepath)
+
+        model = load_model(file_path)
+        print(f"Model loaded from {file_path}")
+
+        return model
+
+
+    def get_data(self) -> pd.DataFrame:
+        
+        file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mlb_model_ready_data_comb_filepath)
+        
+        data = pd.read_csv(file_path)
+        #print(f"Data loaded with shape: {data.shape}")
+
+        # Removing outliers 
+        ht_sc_95 = np.percentile(data['HT_SC'], 95)
+        at_sc_95 = np.percentile(data['AT_SC'], 95)
+        #print(f"Data percentiles before removing outliers: 95% HT_SC={np.percentile(data['HT_SC'], 95)}, AT_SC={np.percentile(data['AT_SC'], 95)}")
+        data = data[(data['HT_SC'] <= ht_sc_95) & (data['AT_SC'] <= at_sc_95)]
+        #print(f"Data shape after removing outliers: {data.shape}")
+
+        return data
 
     def activate(self, matchDate, homeTeamName, awayTeamName):
-        data = get_data()
+        data = self.get_data()
 
         scalers, X_scaled, y_scaled = self.scale_data(data)
 
-        model = load_or_run_model(scalers, X_scaled, y_scaled)
+        model = self.load_or_run_model(scalers, X_scaled, y_scaled)
 
         pred_input, hist_score = self.prep_pred_input(matchDate, homeTeamName, awayTeamName, scalers)
 
@@ -146,7 +151,10 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
         date_formatted = datetime.strptime(date, '%Y-%m-%d')
         current_date = datetime.now().date()
 
-        current_team_stats = pd.read_excel('data_and_models/current_team_data.xlsx')
+        file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mlb_current_team_data_filepath)
+
+        current_team_stats = pd.read_excel(file_path)
+
 
         home_abrv = current_team_stats[current_team_stats['team'] == home_team]['abrv'].values[0]
         away_abrv = current_team_stats[current_team_stats['team'] == away_team]['abrv'].values[0]
@@ -164,7 +172,8 @@ class MLBBaseballPredictionModel(BaseballPredictionModel):
 
         if date_formatted.date() < current_date:
 
-            file_path = 'data_and_models/mlb_model_ready_data_comb.xlsx'
+            file_path = hf_hub_download(repo_id=self.huggingface_model, filename=self.mlb_model_ready_data_comb_filepath)
+
             if not os.path.exists(file_path):
                 print('Data needed, scrape it and store it in order to get input')
                 input = 0
