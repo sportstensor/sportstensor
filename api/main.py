@@ -13,6 +13,9 @@ from fastapi.responses import JSONResponse, FileResponse
 from starlette import status
 from substrateinterface import Keypair
 
+from fastapi import FastAPI
+import sentry_sdk
+
 # mysqlclient install issues: https://stackoverflow.com/a/77020207
 import mysql.connector
 from mysql.connector import Error
@@ -23,6 +26,20 @@ from api.config import (
     NETWORK, NETUID,
     IS_PROD
 )
+
+sentry_sdk.init(
+    dsn="https://d9cce5fe3664e00bf8857b2e425d9ec5@o4507644404236288.ingest.de.sentry.io/4507644429271120",
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for performance monitoring.
+    traces_sample_rate=1.0,
+    # Set profiles_sample_rate to 1.0 to profile 100%
+    # of sampled transactions.
+    # We recommend adjusting this value in production.
+    profiles_sample_rate=1.0,
+)
+
+app = FastAPI()
+
 
 security = HTTPBasic()
 
@@ -202,3 +219,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
