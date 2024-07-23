@@ -190,7 +190,8 @@ async def send_predictions_to_miners(
         finished_responses = []
         for response in responses:
             is_prediction_valid, error_msg = is_match_prediction_valid(
-                response.match_prediction
+                response.match_prediction,
+                input_synapse,
             )
             if IS_DEV:
                 uid = miner_uids.pop(random.randrange(len(miner_uids)))
@@ -228,7 +229,7 @@ async def send_predictions_to_miners(
             bt.logging.info("No miner responses available.")
             return (finished_responses, working_miner_uids)
 
-        bt.logging.info(f"Received responses: {responses}")
+        bt.logging.info(f"Received responses: {redact_scores(responses)}")
         # store miner predictions in validator database to be scored when applicable
         bt.logging.info(f"Storing predictions in validator database.")
         storage.insert_match_predictions(finished_responses)
@@ -367,7 +368,9 @@ def calculate_prediction_score(
     return total_score, correct_winner_score
 
 
-def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
+def is_match_prediction_valid(
+    prediction: MatchPrediction, input_synapse: GetMatchPrediction
+) -> Tuple[bool, str]:
     """Performs basic validation on a MatchPrediction.
 
     Returns a tuple of (is_valid, reason) where is_valid is True if the entities are valid,
@@ -395,6 +398,19 @@ def is_match_prediction_valid(prediction: MatchPrediction) -> Tuple[bool, str]:
         return (
             False,
             f"Away team score {prediction.awayTeamScore} is a negative integer",
+        )
+
+    # Check that the prediction response matches the prediction request
+    if (
+        str(prediction.matchDate) != str(input_synapse.match_prediction.matchDate)
+        or prediction.sport != input_synapse.match_prediction.sport
+        or prediction.league != input_synapse.match_prediction.league
+        or prediction.homeTeamName != input_synapse.match_prediction.homeTeamName
+        or prediction.awayTeamName != input_synapse.match_prediction.awayTeamName
+    ):
+        return (
+            False,
+            f"Prediction response does not match prediction request",
         )
 
     return (True, "")
@@ -477,6 +493,28 @@ def get_match_prediction_from_response(
         raise ValueError("GetMatchPrediction response has no MatchPrediction.")
 
     return response.match_prediction
+
+
+def redact_scores(responses):
+    redacted_responses = []
+    for response in responses:
+        # Create a copy of the response to avoid modifying the original
+        redacted_response = response.copy()
+
+        # Redact the homeTeamScore and awayTeamScore
+        if (
+            hasattr(redacted_response.match_prediction, "homeTeamScore")
+            and redacted_response.match_prediction.homeTeamScore is not None
+        ):
+            redacted_response.match_prediction.homeTeamScore = "REDACTED"
+        if (
+            hasattr(redacted_response.match_prediction, "awayTeamScore")
+            and redacted_response.match_prediction.awayTeamScore is not None
+        ):
+            redacted_response.match_prediction.awayTeamScore = "REDACTED"
+
+        redacted_responses.append(redacted_response)
+    return redacted_responses
 
 
 def check_uid_availability(
