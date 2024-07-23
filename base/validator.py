@@ -108,37 +108,38 @@ class BaseValidatorNeuron(BaseNeuron):
                 pass
 
         except Exception as e:
-            bt.logging.error(
-                f"Failed to create Axon initialize with exception: {e}"
-            )
+            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
             pass
 
     async def concurrent_forward(self):
         coroutines = [
-            self.forward()
-            for _ in range(self.config.neuron.num_concurrent_forwards)
+            self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)
         ]
         await asyncio.gather(*coroutines)
 
     def is_git_latest(self) -> bool:
-        p = Popen(['git', 'rev-parse', 'HEAD'], stdout=PIPE, stderr=PIPE)
+        p = Popen(["git", "rev-parse", "HEAD"], stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
         if err:
             return False
         current_commit = out.decode().strip()
-        p = Popen(['git', 'ls-remote', 'origin', 'HEAD'], stdout=PIPE, stderr=PIPE)
+        p = Popen(["git", "ls-remote", "origin", "HEAD"], stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
         if err:
             return False
         latest_commit = out.decode().split()[0]
-        bt.logging.info(f'Current commit: {current_commit}, Latest commit: {latest_commit}')
+        bt.logging.info(
+            f"Current commit: {current_commit}, Latest commit: {latest_commit}"
+        )
         return current_commit == latest_commit
 
     def should_restart(self) -> bool:
         # Check if enough time has elapsed since the last update check, if not assume we are up to date.
-        if (dt.datetime.now() - self.last_update_check).seconds < self.update_check_interval:
+        if (
+            dt.datetime.now() - self.last_update_check
+        ).seconds < self.update_check_interval:
             return False
-        
+
         self.last_update_check = dt.datetime.now()
 
         return not self.is_git_latest()
@@ -182,7 +183,7 @@ class BaseValidatorNeuron(BaseNeuron):
                     break
 
                 if self.config.neuron.auto_update and self.should_restart():
-                    bt.logging.info(f'Validator is out of date, quitting to restart.')
+                    bt.logging.info(f"Validator is out of date, quitting to restart.")
                     raise KeyboardInterrupt
 
                 # Sync metagraph and potentially set weights.
@@ -217,9 +218,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
             bt.logging.error("Error during validation", str(err))
-            bt.logging.debug(
-                print_exception(type(err), err, err.__traceback__)
-            )
+            bt.logging.debug(print_exception(type(err), err, err.__traceback__))
 
     def run_in_background_thread(self):
         """
@@ -351,9 +350,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # If so, we need to add new hotkeys and moving averages.
         if len(self.hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = torch.zeros((self.metagraph.n)).to(
-                self.device
-            )
+            new_moving_average = torch.zeros((self.metagraph.n)).to(self.device)
             min_len = min(len(self.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             self.scores = new_moving_average

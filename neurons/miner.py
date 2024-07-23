@@ -24,22 +24,20 @@ import base
 from base.miner import BaseMinerNeuron
 
 from common import constants
-from common.protocol import (
-    GetMatchPrediction
-)
+from common.protocol import GetMatchPrediction
 from st.sport_prediction_model import make_match_prediction
+
 
 class Miner(BaseMinerNeuron):
     """The Sports Tensor Miner."""
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
-        
 
-    async def forward(
-        self, synapse: GetMatchPrediction
-    ) -> GetMatchPrediction:
-        bt.logging.info(f"Received GetMatchPrediction request in forward() from {synapse.dendrite.hotkey}.")
+    async def forward(self, synapse: GetMatchPrediction) -> GetMatchPrediction:
+        bt.logging.info(
+            f"Received GetMatchPrediction request in forward() from {synapse.dendrite.hotkey}."
+        )
 
         # Make the match prediction based on the requested MatchPrediction object
         # TODO: does this need to by async?
@@ -52,9 +50,7 @@ class Miner(BaseMinerNeuron):
 
         return synapse
 
-    async def blacklist(
-        self, synapse: GetMatchPrediction
-    ) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: GetMatchPrediction) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -105,8 +101,13 @@ class Miner(BaseMinerNeuron):
                 return True, "Non-validator hotkey"
 
         stake = self.metagraph.S[uid].item()
-        if self.config.blacklist.validator_min_stake and stake < self.config.blacklist.validator_min_stake:
-            bt.logging.warning(f"Blacklisting request from {synapse.dendrite.hotkey} [uid={uid}], not enough stake -- {stake}")
+        if (
+            self.config.blacklist.validator_min_stake
+            and stake < self.config.blacklist.validator_min_stake
+        ):
+            bt.logging.warning(
+                f"Blacklisting request from {synapse.dendrite.hotkey} [uid={uid}], not enough stake -- {stake}"
+            )
             return True, "Stake below minimum"
 
         bt.logging.trace(
@@ -152,9 +153,10 @@ class Miner(BaseMinerNeuron):
         """
         pass
 
+
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
             time.sleep(60)
-            #time.sleep(5)
+            # time.sleep(5)

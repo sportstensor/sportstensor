@@ -6,6 +6,7 @@ from st.sport_prediction_model import make_match_prediction
 
 # from sportstensor.predictions import make_match_prediction
 
+
 def mls():
     matchDate = "2024-07-20"
     match_prediction = MatchPrediction(
@@ -15,15 +16,14 @@ def mls():
         league=League.MLS,
         homeTeamName="Inter Miami",
         awayTeamName="Miami Fusion",
-
     )
-    
+
     match_prediction = make_match_prediction(match_prediction)
 
-
-    print(f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
+    print(
+        f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
   {match_prediction.awayTeamName} {match_prediction.awayTeamScore}, {match_prediction.homeTeamName} {match_prediction.homeTeamScore}"
-          )
+    )
 
     return match_prediction
 
@@ -39,16 +39,14 @@ def mlb():
         awayTeamName="Oakland Athletics",
     )
 
-  
     match_prediction = make_match_prediction(match_prediction)
 
-    print('match_prediction', match_prediction)
+    print("match_prediction", match_prediction)
 
-
-
-    print(f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
+    print(
+        f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
   {match_prediction.awayTeamName} {match_prediction.awayTeamScore}, {match_prediction.homeTeamName} {match_prediction.homeTeamScore}"
-          )
+    )
 
 
 if __name__ == "__main__":

@@ -31,13 +31,13 @@ from common.protocol import GetMatchPrediction
 from common.data import MatchPrediction
 from common.constants import (
     ENABLE_APP,
-    DATA_SYNC_INTERVAL_IN_MINUTES, 
-    APP_DATA_SYNC_INTERVAL_IN_MINUTES, 
-    VALIDATOR_TIMEOUT, 
-    NUM_MINERS_TO_SEND_TO, 
-    BASE_MINER_PREDICTION_SCORE, 
-    MAX_BATCHSIZE_FOR_SCORING, 
-    SCORING_INTERVAL_IN_MINUTES
+    DATA_SYNC_INTERVAL_IN_MINUTES,
+    APP_DATA_SYNC_INTERVAL_IN_MINUTES,
+    VALIDATOR_TIMEOUT,
+    NUM_MINERS_TO_SEND_TO,
+    BASE_MINER_PREDICTION_SCORE,
+    MAX_BATCHSIZE_FOR_SCORING,
+    SCORING_INTERVAL_IN_MINUTES,
 )
 import vali_utils.utils as utils
 
@@ -65,15 +65,19 @@ class Validator(BaseValidatorNeuron):
             if os.getenv("WANDB_API_KEY"):
                 self.new_wandb_run()
             else:
-                bt.logging.exception("WANDB_API_KEY not found. Set it with `export WANDB_API_KEY=<your API key>`. Alternatively, you can disable W&B with --wandb.off, but it is strongly recommended to run with W&B enabled.")
+                bt.logging.exception(
+                    "WANDB_API_KEY not found. Set it with `export WANDB_API_KEY=<your API key>`. Alternatively, you can disable W&B with --wandb.off, but it is strongly recommended to run with W&B enabled."
+                )
                 self.config.wandb.off = True
         else:
-            bt.logging.warning("Running with --wandb.off. It is strongly recommended to run with W&B enabled.")
-        
+            bt.logging.warning(
+                "Running with --wandb.off. It is strongly recommended to run with W&B enabled."
+            )
+
         api_root = (
             "https://dev-api.sportstensor.com"
-            if self.config.subtensor.network == "test" else
-            "https://api.sportstensor.com"
+            if self.config.subtensor.network == "test"
+            else "https://api.sportstensor.com"
         )
         bt.logging.info(f"Using Sportstensor API: {api_root}")
         self.match_data_endpoint = f"{api_root}/matches"
@@ -119,7 +123,7 @@ class Validator(BaseValidatorNeuron):
         - Storing prediction responses
         - Validating past prediction responsess
         - Updating the scores
-       
+
         The forward function is called by the validator every time step.
 
         It is responsible for querying the network and scoring the responses.
@@ -130,13 +134,17 @@ class Validator(BaseValidatorNeuron):
 
         """ START MATCH SYNCING """
         if self.next_match_syncing_datetime <= dt.datetime.now(dt.timezone.utc):
-            bt.logging.info("*** Syncing the latest match data to local validator storage. ***")
+            bt.logging.info(
+                "*** Syncing the latest match data to local validator storage. ***"
+            )
             sync_result = await utils.sync_match_data(self.match_data_endpoint)
             if sync_result:
                 bt.logging.info("Successfully synced match data.")
             else:
                 bt.logging.warning("Issue syncing match data")
-            self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
+            self.next_match_syncing_datetime = dt.datetime.now(
+                dt.timezone.utc
+            ) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END MATCH SYNCING """
 
         """ START MATCH PREDICTION REQUESTS """
@@ -146,29 +154,43 @@ class Validator(BaseValidatorNeuron):
         if len(miner_uids) == 0:
             bt.logging.info("No miners available")
             return
-        
+
         # Get a prediction requests to send to miners
         match_prediction_requests = utils.get_match_prediction_requests()
 
-        if (len(match_prediction_requests) > 0):
+        if len(match_prediction_requests) > 0:
             # The dendrite client queries the network.
-            bt.logging.info(f"*** Sending {len(match_prediction_requests)} matches to miners {miner_uids} for predictions. ***")
+            bt.logging.info(
+                f"*** Sending {len(match_prediction_requests)} matches to miners {miner_uids} for predictions. ***"
+            )
             # Loop through predictions and send to miners
             for mpr in match_prediction_requests:
                 input_synapse = GetMatchPrediction(match_prediction=mpr)
                 # Send prediction requests to miners and store their responses
-                finished_responses, working_miner_uids = await utils.send_predictions_to_miners(self, input_synapse, miner_uids)
+                finished_responses, working_miner_uids = (
+                    await utils.send_predictions_to_miners(
+                        self, input_synapse, miner_uids
+                    )
+                )
 
                 # Adjust the scores based on responses from miners.
                 try:
-                    rewards = (await self.get_basic_match_prediction_rewards(input_synapse=input_synapse, responses=finished_responses)).to(self.device)
+                    rewards = (
+                        await self.get_basic_match_prediction_rewards(
+                            input_synapse=input_synapse, responses=finished_responses
+                        )
+                    ).to(self.device)
                 except Exception as e:
-                    bt.logging.error(f"Error in get_basic_match_prediction_rewards: {e}")
+                    bt.logging.error(
+                        f"Error in get_basic_match_prediction_rewards: {e}"
+                    )
                     return
-                
+
                 # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
                 if len(working_miner_uids) > 0:
-                    bt.logging.info(f"Rewarding miners {working_miner_uids} that returned a prediction.")
+                    bt.logging.info(
+                        f"Rewarding miners {working_miner_uids} that returned a prediction."
+                    )
                     self.update_scores(rewards, working_miner_uids)
 
                 # Update the scores of miner uids NOT working. Default to 0.
@@ -179,8 +201,13 @@ class Validator(BaseValidatorNeuron):
                         not_working_miner_uids.append(uid)
                         no_rewards.append(0.0)
                 if len(not_working_miner_uids) > 0:
-                    bt.logging.info(f"Penalizing miners {not_working_miner_uids} that did not respond.")
-                    self.update_scores(torch.FloatTensor(no_rewards).to(self.device), not_working_miner_uids)
+                    bt.logging.info(
+                        f"Penalizing miners {not_working_miner_uids} that did not respond."
+                    )
+                    self.update_scores(
+                        torch.FloatTensor(no_rewards).to(self.device),
+                        not_working_miner_uids,
+                    )
         else:
             bt.logging.info("No matches available to send for predictions.")
         """ END MATCH PREDICTION REQUESTS """
@@ -190,52 +217,77 @@ class Validator(BaseValidatorNeuron):
         if self.next_scoring_datetime <= dt.datetime.now(dt.timezone.utc):
             bt.logging.info(f"*** Checking if there are predictions to score. ***")
 
-            (normalized_rewards, 
-            normalized_rewards_uids, 
-            prediction_scores, 
-            correct_winner_results, 
-            prediction_rewards_uids, 
-            prediction_sports, 
-            prediction_leagues) = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
+            (
+                normalized_rewards,
+                normalized_rewards_uids,
+                prediction_scores,
+                correct_winner_results,
+                prediction_rewards_uids,
+                prediction_sports,
+                prediction_leagues,
+            ) = utils.find_and_score_match_predictions(MAX_BATCHSIZE_FOR_SCORING)
 
             if len(normalized_rewards) > 0:
-                bt.logging.info(f"Scoring {len(prediction_rewards_uids)} predictions for miners {prediction_rewards_uids}.")
-                bt.logging.info(f"Aggregated and normalized prediction rewards: {normalized_rewards}")
-                bt.logging.info(f"Aggregated and normalized prediction rewards UIDs: {normalized_rewards_uids}")
-                self.update_scores(torch.FloatTensor(normalized_rewards).to(self.device), normalized_rewards_uids)
+                bt.logging.info(
+                    f"Scoring {len(prediction_rewards_uids)} predictions for miners {prediction_rewards_uids}."
+                )
+                bt.logging.info(
+                    f"Aggregated and normalized prediction rewards: {normalized_rewards}"
+                )
+                bt.logging.info(
+                    f"Aggregated and normalized prediction rewards UIDs: {normalized_rewards_uids}"
+                )
+                self.update_scores(
+                    torch.FloatTensor(normalized_rewards).to(self.device),
+                    normalized_rewards_uids,
+                )
 
                 # Get hotkeys associated with returned prediction reward uids
-                prediction_rewards_hotkeys = [self.metagraph.axons[uid].hotkey for uid in prediction_rewards_uids]
+                prediction_rewards_hotkeys = [
+                    self.metagraph.axons[uid].hotkey for uid in prediction_rewards_uids
+                ]
 
                 # Post prediction scoring results to API for storage/analysis
                 post_result = await utils.post_prediction_results(
-                    self, 
-                    self.prediction_results_endpoint, 
-                    prediction_scores, 
-                    correct_winner_results, 
-                    prediction_rewards_uids, 
+                    self,
+                    self.prediction_results_endpoint,
+                    prediction_scores,
+                    correct_winner_results,
+                    prediction_rewards_uids,
                     prediction_rewards_hotkeys,
                     prediction_sports,
-                    prediction_leagues
+                    prediction_leagues,
                 )
 
             else:
                 bt.logging.info("No predictions to score.")
             # Update next sync time
-            self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=SCORING_INTERVAL_IN_MINUTES)
+            self.next_scoring_datetime = dt.datetime.now(
+                dt.timezone.utc
+            ) + dt.timedelta(minutes=SCORING_INTERVAL_IN_MINUTES)
         """ END MATCH PREDICTION SCORING """
 
         """ START APP PREDICTION FLOW """
         if ENABLE_APP:
             # Check if we're ready to poll the API for prediction requests from the app
-            if self.next_app_predictions_syncing_datetime <= dt.datetime.now(dt.timezone.utc):
-                bt.logging.info("*** Syncing the latest app prediction request data to local validator storage. ***")
-                process_result = await utils.process_app_prediction_requests(self, self.app_prediction_requests_endpoint)
+            if self.next_app_predictions_syncing_datetime <= dt.datetime.now(
+                dt.timezone.utc
+            ):
+                bt.logging.info(
+                    "*** Syncing the latest app prediction request data to local validator storage. ***"
+                )
+                process_result = await utils.process_app_prediction_requests(
+                    self, self.app_prediction_requests_endpoint
+                )
                 if process_result:
-                    bt.logging.info("Successfully processed app match prediction requests.")
+                    bt.logging.info(
+                        "Successfully processed app match prediction requests."
+                    )
                 else:
                     bt.logging.warning("Issue processing app prediction requests.")
-                self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
+                self.next_app_predictions_syncing_datetime = dt.datetime.now(
+                    dt.timezone.utc
+                ) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END APP PREDICTION FLOW """
 
     async def get_basic_match_prediction_rewards(
