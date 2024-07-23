@@ -94,7 +94,8 @@ async def main():
 
     @app.get("/")
     def healthcheck():
-        return datetime.utcnow()
+        return {"status": "ok", "message": datetime.utcnow()}
+
 
     @app.get("/matches")
     # def get_matches(hotkey: Annotated[str, Depends(get_hotkey)]):
