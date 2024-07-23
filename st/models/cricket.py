@@ -2,6 +2,7 @@ import random
 import bittensor as bt
 from st.sport_prediction_model import SportPredictionModel
 
+
 class CricketPredictionModel(SportPredictionModel):
     def make_prediction(self):
         bt.logging.info("Handling cricket...")
