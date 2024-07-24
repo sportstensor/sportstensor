@@ -7,6 +7,7 @@ import traceback
 from typing import List, Optional, Tuple, Type, Union
 import datetime as dt
 from collections import defaultdict
+import copy
 
 from common.data import Sport, Match, Prediction, MatchPrediction
 from common.protocol import GetMatchPrediction
@@ -499,7 +500,7 @@ def redact_scores(responses):
     redacted_responses = []
     for response in responses:
         # Create a copy of the response to avoid modifying the original
-        redacted_response = response.copy()
+        redacted_response = copy.deepcopy(response)
 
         # Redact the homeTeamScore and awayTeamScore
         if (
