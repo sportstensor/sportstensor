@@ -5,6 +5,7 @@ import bittensor as bt
 import sqlite3
 import threading
 import random
+from pydantic import ValidationError
 from typing import Any, Dict, Optional, Set, Tuple, List
 from common.data import (
     Sport,
@@ -368,13 +369,16 @@ class SqliteValidatorStorage(ValidatorStorage):
                         # row[12] is scoredDate
                         # row[13] is lastUpdated
                     }
-                    combined_predictions.append(
-                        MatchPredictionWithMatchData(
-                            prediction=MatchPrediction(**prediction_data),
-                            actualHomeTeamScore=row[14],
-                            actualAwayTeamScore=row[15],
+                    try:
+                        combined_predictions.append(
+                            MatchPredictionWithMatchData(
+                                prediction=MatchPrediction(**prediction_data),
+                                actualHomeTeamScore=row[14],
+                                actualAwayTeamScore=row[15],
+                            )
                         )
-                    )
+                    except ValidationError as e:
+                        bt.logging.error(f"Validation error for row {row}: {e}")
 
                 return combined_predictions
 
