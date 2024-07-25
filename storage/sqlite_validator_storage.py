@@ -86,6 +86,9 @@ class SqliteValidatorStorage(ValidatorStorage):
             # Lock to avoid concurrency issues on interacting with the database.
             self.lock = threading.RLock()
 
+        # Execute cleanup queries
+        self.cleanup()
+
     def _create_connection(self):
         # Create the database if it doesn't exist, defaulting to the local directory.
         # Use PARSE_DECLTYPES to convert accessed values into the appropriate type.
@@ -99,6 +102,20 @@ class SqliteValidatorStorage(ValidatorStorage):
         # connection.row_factory = sqlite3.Row
         connection.isolation_level = None
         return connection
+    
+    def cleanup(self):
+        """Cleanup the database."""
+        print("Cleaning up the database")
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                # Execute cleanup queries
+
+                # Clean up bug where we accidentally inserted 'REDACTED' as scores
+                cursor.execute(
+                    """DELETE FROM MatchPredictions WHERE homeTeamScore='REDACTED' OR awayTeamScore='REDACTED'"""
+                )
+                connection.commit()
 
     def insert_leagues(self, leagues: List[League]):
         """Stores leagues associated with sports. Indicates which leagues are active to run predictions on."""

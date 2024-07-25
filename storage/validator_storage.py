@@ -10,6 +10,11 @@ class ValidatorStorage(ABC):
     """An abstract class which defines the contract that all implementations of ValidatorStorage must fulfill."""
 
     @abstractmethod
+    def cleanup(self):
+        """Cleans up the database."""
+        raise NotImplemented
+
+    @abstractmethod
     def insert_leagues(self, leagues: List[League]):
         """Stores leagues associated with sports. Indicates which leagues are active to run predictions on."""
         raise NotImplemented
