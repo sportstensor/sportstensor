@@ -1,12 +1,9 @@
 <div align="center">
 
-# SportsTensor Bittensor Subnet: Sports insights through state-of-the-art & decentralized AI <!-- omit in toc -->
-[![Sportstensor](/docs/header_bg.jpg)](https://sportstensor.com)
+# Sportstensor: The world's most accurate sports prediction algorithm <!-- omit in toc -->
+[![Sportstensor](/docs/sportstensor_header.png)](https://sportstensor.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
----
-
-## SportsTensor redefines sports analytics, transforming raw data into valuable insights using cutting-edge machine learning technology.<!-- omit in toc -->
 </div>
 
 ---
@@ -19,22 +16,36 @@
 - [Running Miners and Validators](#running-miners-and-validators)
   - [Running a Miner](#running-a-miner)
   - [Running a Validator](#running-a-validator)
-- [Contributing](#contributing)
+- [Community](#community)
 - [License](#license)
 
 ---
 ## Introduction
 
-Welcome to SportsTensor, a cutting-edge platform designed to transform sports analytics through the decentralized capabilities of the Bittensor network. Our platform tackles the challenges of data overload, complex data analysis, and limited access to actionable sports insights by leveraging competitive machine learning and AI to deliver real-time and highly accurate sports analytics to teams, leagues, and sports enthusiasts.
+Welcome to Sportstensor, where cutting-edge technology meets sports analytics. We're pioneering the world's most accurate decentralized sports prediction algorithm, powered by the Bittensor network. Our subnet tackles the challenges of high-quality data sourcing, complex data analysis and limited access to advanced machine learning models.
 
+Traditionally, the most accurate sports prediction models have been proprietary, restricting innovation to isolated silos. Collectively, miners and validators are redefining what's possible in this field with the collaborative power of decentralization.
 
 ## Key Features
+🔑 **Open source model development**
+- Sportstensor continuously builds and develops base models for various sports
+- Available on HuggingFace for miners to train and improve on
 
-- 💾 **Data-Driven Insights**: Provides actionable insights and predictions based on historical and real-time data for strategic planning and performance analysis.
-- ⛓️ **Decentralized and Reliable**: Utilizes the decentralized Bittensor network, enhancing the accuracy and reliability of data through community-verified contributions.
-- 💰 **Incentivized Data Collection**: Miners are rewarded to develop high-performance predictive models on our Bittensor-based subnet.
-- 🔌 **Easy Access and Integration**: Offers convenient access via mobile and web platforms, with APIs for easy integration into existing systems.
-- 🏗️ **Scalable Solution**: Designed to seamlessly scale up and accommodate growing data needs without disrupting user experience.
+🏅 **Advanced sports analytics**
+- Strategic planning and performance analysis with predictions made
+- Insights and predictions based on historical and real-time data
+
+💰 **Performance-based incentives**
+- Rewards for comprehensive dataset sourcing
+- Incentives for developing high-performance predictive models
+
+🌐 **User-friendly integration**
+- Intuitive front-end application
+- Seamless access to miner predictions
+
+📈 **Scalable improvement**
+- Dashboard for miner rankings and proximity to target prediction accuracy
+- Designed to foster continous model enhancement for world class results
 
 ## Miner and Validator Functionality
 
@@ -49,18 +60,33 @@ Welcome to SportsTensor, a cutting-edge platform designed to transform sports an
 
 - Collects predictions from the Miner, which include the anticipated outcomes and relevant statistical analyses of sports events.
 - Compares the Miner's predictions with the actual outcomes of the matches, which are sourced from trusted sports databases and official results.
-- Logs the results of the validations for auditing and continuous improvement of the predictive system on the SportsTensor platform
+- Logs the results of the validations for auditing and continuous improvement of the predictive system on the Sportstensor platform
 
 ## Roadmap
 
 ### Phase 1: Foundation (Q3 2024)
-- [x] Launch on testnet, develop baseline models for soccer (Major Soccer League).
+- [x] Launch on testnet (172)
+- [x] Develop baseline model for soccer (Major League Soccer)
+- [x] Develop baseline model for baseball (Major League Baseball)
+- [x] Launch website (sportstensor.com)
+- [ ] Begin marketing for brand awareness and interest
 
-### Phase 2: Expansion (Q3 2024)
-- [ ] Introduce validation metrics, begin brand awareness campaigns, launch front-end.
+### Phase 2: Expansion (Q4 2024)
+- [ ] Launch front-end application
+- [ ] Introduce next level of prediction queries and validation metrics
+- [ ] Collaborations and partnerships with synergistic companies and subnets
+- [ ] Build our proprietary database for miners
+- [ ] Achieve competitive baseline prediction accuracy
+- [ ] Build proprietary LLM chatbot hooked up to miner predictions
+- [ ] Monetize predictions through front-end
 
-### Phase 3: Refinement (Q3 2024)
-- [ ] Market and sales expansion, further develop sports models, including for basketball and NFL.
+### Phase 3: Refinement (Q1 2025)
+- [ ] Market and sales expansion
+- [ ] Further develop baseline models
+- [ ] Expand to basketball and NFL to cover the whole year for sports
+- [ ] Explore niche sports such as eSports and UFC
+- [ ] Monetize API access to predictions and proprietary database
+- [ ] Build super secret Sportstensor tool 😉
 
 ## Running Miners and Validators
 ### Running a Miner
@@ -77,15 +103,16 @@ git clone https://github.com/xzistance/sportstensor/
 cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
-3. Next, install the `sportstensor` package: `pip install -e .`
+3. Next, install the `Sportstensor` package: `pip install -e .`
 
 #### Run with PM2
 ```bash
-pm2 start neurons/miner.py --name sportstensor-miner -- \
+pm2 start neurons/miner.py --name Sportstensor-miner -- \
     --netuid {netuid} \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
     --axon.port {port} \
+    --axon.external_ip {ip} \
     --blacklist.force_validator_permit
 ```
 
@@ -113,6 +140,9 @@ The maximum possible score is 1.0, achieved by perfectly predicting the home and
 - CPU
 - If running on runpod, `runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04` is a good base template.
 
+#### Recommended
+- Utilizing wandb. Set environment variable with `export WANDB_API_KEY=<your API key>`. Alternatively, you can disable wandb with --wandb.off
+
 #### Setup
 1. To start, clone the repository and `cd` to it:
 ```bash
@@ -120,22 +150,22 @@ git clone https://github.com/xzistance/sportstensor/
 cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
-3. Next, install the `sportstensor` package: `pip install -e .`
+3. Next, install the `Sportstensor` package: `pip install -e .`
 
 #### Run auto-updating validator with PM2 (recommended)
 ```bash
-pm2 start auto_updating_validator.sh --name sportstensor-validator -- \
+pm2 start vali_auto_update.sh --name Sportstensor-validator -- \
     --netuid {netuid} \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
     --axon.port {port} \
     --logging.trace
 ```
-Note: you might need to adjust "python" to "python3" within the `neurons/auto_updating_validator.sh` depending on your preferred system python.
+Note: you might need to adjust "python" to "python3" within the `vali_auto_update.sh` depending on your preferred system python.
 
 #### Run basic validator with PM2
 ```bash
-pm2 start neurons/validator.py --name sportstensor-validator -- \
+pm2 start neurons/validator.py --name Sportstensor-validator -- \
     --netuid {netuid} \
     --wallet.name {wallet} \
     --wallet.hotkey {hotkey} \
@@ -143,13 +173,13 @@ pm2 start neurons/validator.py --name sportstensor-validator -- \
     --logging.trace
 ```
 
-## Contributing
+## Community
 
-Join our vibrant community on [Discord](https://discord.gg/opentensor).
+Join the vibrant Bittensor community and find our channel `#פ • pe • 41` on [Discord](https://discord.gg/bittensor).
 
 ## License
 
-The Sportstensor Bittensor subnet is released under the [MIT License](./LICENSE).
+The Sportstensor subnet is released under the [MIT License](./LICENSE).
 
 ---
 
