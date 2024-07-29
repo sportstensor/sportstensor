@@ -2,7 +2,7 @@ import mysql.connector
 import logging
 import datetime as dt
 from datetime import timezone
-from api.config import IS_PROD
+from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
 
 
@@ -311,12 +311,13 @@ def upsert_app_match_prediction(prediction):
 
         c.execute(
             """
-            INSERT INTO AppMatchPredictions (app_request_id, matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated, miner_hotkey) 
+            INSERT INTO AppMatchPredictions (app_request_id, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated, miner_hotkey, vali_hotkey) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 matchId=VALUES(matchId), 
                 matchDate=VALUES(matchDate), 
                 sport=VALUES(sport),
+                league=VALUES(league),
                 homeTeamName=VALUES(homeTeamName), 
                 awayTeamName=VALUES(awayTeamName),
                 homeTeamScore=VALUES(homeTeamScore), 
@@ -324,12 +325,14 @@ def upsert_app_match_prediction(prediction):
                 isComplete=VALUES(isComplete), 
                 lastUpdated=VALUES(lastUpdated),
                 miner_hotkey=VALUES(miner_hotkey)
+                vali_hotkey=VALUES(vali_hotkey)
             """,
             (
                 prediction["app_request_id"],
                 prediction["matchId"],
                 prediction["matchDate"],
                 prediction["sport"],
+                prediction["league"],
                 prediction["homeTeamName"],
                 prediction["awayTeamName"],
                 prediction.get("homeTeamScore"),  # These can be None, hence using get
@@ -337,6 +340,7 @@ def upsert_app_match_prediction(prediction):
                 prediction.get("isComplete", 0),  # Default to 0 if not provided
                 current_utc_time,
                 prediction.get("miner_hotkey"),  # This can be None
+                prediction.get("vali_hotkey"),  # This can be None
             ),
         )
 
@@ -475,14 +479,15 @@ def create_app_tables():
             matchId VARCHAR(50) NOT NULL,
             matchDate TIMESTAMP NOT NULL,
             sport INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
             homeTeamName VARCHAR(30) NOT NULL,
             awayTeamName VARCHAR(30) NOT NULL,
             homeTeamScore INTEGER,
             awayTeamScore INTEGER,
-            matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
             lastUpdated TIMESTAMP NOT NULL,
-            miner_hotkey VARCHAR(64) NULL
+            miner_hotkey VARCHAR(64) NULL,
+            vali_hotkey VARCHAR(64) NULL
         )"""
         )
         conn.commit()
@@ -498,10 +503,10 @@ def create_app_tables():
 def get_db_conn():
     try:
         conn = mysql.connector.connect(
-            host="localhost",
-            database="sportstensor",
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
         )
         return conn
     except mysql.connector.Error as e:

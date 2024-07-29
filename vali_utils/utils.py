@@ -114,6 +114,7 @@ async def process_app_prediction_requests(
                 matchId=pr["matchId"],
                 matchDate=pr["matchDate"],
                 sport=pr["sport"],
+                league=pr["league"],
                 homeTeamName=pr["homeTeamName"],
                 awayTeamName=pr["awayTeamName"],
             )
@@ -121,17 +122,26 @@ async def process_app_prediction_requests(
             if IS_DEV:
                 miner_uids = [9999]
             else:
-                miner_uids = [
-                    ax.uid for ax in vali.metagraph.axons if ax.hotkey == miner_hotkey
-                ]
+                if miner_hotkey in vali.metagraph.hotkeys:
+                    miner_uids = [
+                        vali.metagraph.hotkeys.index(miner_hotkey) 
+                    ]
 
-            input_synapse = GetMatchPrediction(match_prediction=match_prediction)
-            # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
-            finished_responses, working_miner_uids = await send_predictions_to_miners(
-                vali, input_synapse, miner_uids
-            )
-            # Add the responses to the list of responses
-            prediction_responses += finished_responses
+            if len(miner_uids) > 0:
+                bt.logging.info(
+                    f"-- Sending match to miners {miner_uids} for predictions."
+                )
+                input_synapse = GetMatchPrediction(match_prediction=match_prediction)
+                # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
+                finished_responses, working_miner_uids = await send_predictions_to_miners(
+                    vali, input_synapse, miner_uids
+                )
+                # Add the responses to the list of responses
+                prediction_responses += finished_responses
+            else:
+                bt.logging.info(
+                    f"-- No miner uid found for {miner_hotkey}, skipping."
+                )
 
         if len(prediction_responses) > 0:
             max_retries = 3

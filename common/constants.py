@@ -2,7 +2,7 @@ import datetime
 
 IS_DEV = False
 # Controls if validators should process our SportsTensor App-based logic
-ENABLE_APP = False
+ENABLE_APP = True
 
 # The current protocol version (int)
 PROTOCOL_VERSION = 1

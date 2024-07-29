@@ -22,7 +22,7 @@ from mysql.connector import Error
 
 from datetime import datetime
 import api.db as db
-from api.config import NETWORK, NETUID, IS_PROD
+from api.config import NETWORK, NETUID, IS_PROD, API_KEYS
 
 sentry_sdk.init(
     dsn="https://d9cce5fe3664e00bf8857b2e425d9ec5@o4507644404236288.ingest.de.sentry.io/4507644429271120",
@@ -37,8 +37,19 @@ sentry_sdk.init(
 
 app = FastAPI()
 
-
+# define the APIKeyHeader for API authorization to our APP endpoints
+api_key_header = APIKeyHeader(name="ST_API_KEY", auto_error=False)
 security = HTTPBasic()
+
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    if api_key_header in API_KEYS:
+        return api_key_header
+    else:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API Key"
+        )
 
 
 def get_hotkey(credentials: Annotated[HTTPBasicCredentials, Depends(security)]) -> str:
@@ -134,20 +145,15 @@ async def main():
             return {"error": "Failed to retrieve prediction data."}
 
     @app.post("/AddAppPrediction")
-    # async def upsert_prediction(
-    #    prediction: dict = Body(...),
-    #    hotkey: Annotated[str, Depends(get_hotkey)]
-    # ):
-    async def upsert_app_prediction(prediction: dict = Body(...)):
+    async def upsert_app_prediction(api_key: str = Security(get_api_key), prediction: dict = Body(...)):
         result = db.upsert_app_match_prediction(prediction)
         return {"message": "Prediction upserted successfully"}
 
     @app.get("/AppMatchPredictions")
-    # def get_app_match_predictions(hotkey: Annotated[str, Depends(get_hotkey)]):
-    def get_app_match_predictions():
+    def get_app_match_predictions(api_key: str = Security(get_api_key)):
         predictions = db.get_app_match_predictions()
         if predictions:
-            return {"matches": predictions}
+            return {"requests": predictions}
         else:
             return {"error": "Failed to retrieve match predictions data."}
 
