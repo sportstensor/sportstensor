@@ -5,6 +5,7 @@ import bittensor
 import uvicorn
 import asyncio
 import logging
+import random
 from fastapi import FastAPI, HTTPException, Depends, Body, Path, Security
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi.security.api_key import APIKeyHeader
@@ -43,7 +44,7 @@ security = HTTPBasic()
 
 
 async def get_api_key(api_key_header: str = Security(api_key_header)):
-    if api_key_header in API_KEYS:
+    if api_key_header is not None and api_key_header in API_KEYS:
         return api_key_header
     else:
         raise HTTPException(
@@ -81,6 +82,25 @@ def authenticate_with_bittensor(hotkey, metagraph):
     return True
 
 
+# Get a random active validator hotkey with vTrust >= 0.9
+def get_active_vali_hotkey(metagraph):
+    avail_uids = []
+    for uid in range(metagraph.n.item()):
+        if metagraph.validator_permit[uid]:
+            avail_uids.append(uid)
+
+    vali_vtrusts = [(uid, metagraph.hotkeys[uid], metagraph.Tv[uid].item()) for uid in avail_uids if metagraph.Tv[uid] >= 0.8 and metagraph.active[uid] == 1]
+
+    if len(vali_vtrusts) == 0:
+        print("No active validators with vTrust >= 0.8 found.")
+        return None
+    
+    # Get the hotkey of a random validator with vTrust >= 0.8
+    random_vali_hotkey = random.choice(vali_vtrusts)[1]
+    
+    return random_vali_hotkey
+
+
 async def main():
     app = FastAPI()
 
@@ -106,7 +126,6 @@ async def main():
     @app.get("/")
     def healthcheck():
         return {"status": "ok", "message": datetime.utcnow()}
-
 
     @app.get("/matches")
     # def get_matches(hotkey: Annotated[str, Depends(get_hotkey)]):
@@ -146,7 +165,18 @@ async def main():
 
     @app.post("/AddAppPrediction")
     async def upsert_app_prediction(api_key: str = Security(get_api_key), prediction: dict = Body(...)):
-        result = db.upsert_app_match_prediction(prediction)
+        vali_hotkey = None
+        for attempt in range(10):
+            # Get a valid validator hotkey with vTrust >= 0.8
+            vali_hotkey = get_active_vali_hotkey(metagraph)
+            if vali_hotkey is not None:
+                print(f"Random active validator hotkey with vTrust >= 0.8: {vali_hotkey}")
+                break
+            print(f"Attempt {attempt + 1} failed to get a valid hotkey.")
+        else:
+            return {"message": "Failed to find a valid validator hotkey after 10 attempts"}
+
+        result = db.upsert_app_match_prediction(prediction, vali_hotkey)
         return {"message": "Prediction upserted successfully"}
 
     @app.get("/AppMatchPredictions")
@@ -156,6 +186,33 @@ async def main():
             return {"requests": predictions}
         else:
             return {"error": "Failed to retrieve match predictions data."}
+        
+    @app.get("/AppMatchPredictionsForValidators")
+    def get_app_match_predictions(hotkey: Annotated[str, Depends(get_hotkey)] = None,):
+        if not authenticate_with_bittensor(hotkey, metagraph):
+            print(f"Valid hotkey required, returning 403. hotkey: {hotkey}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Valid hotkey required.",
+            )
+        # Get a batch of 10 match predictions from the app for the calling validator
+        predictions = db.get_app_match_predictions(hotkey, 10)
+        if predictions:
+            return {"requests": predictions}
+        else:
+            return {"error": "Failed to retrieve match predictions data."}
+        
+    @app.post("/AppMatchPredictionsForValidators")
+    def upload_app_match_predictions(
+        hotkey: Annotated[str, Depends(get_hotkey)] = None,
+        predictions: List[dict] = Body(...),
+    ):
+        if not authenticate_with_bittensor(hotkey, metagraph):
+            print(f"Valid hotkey required, returning 403. hotkey: {hotkey}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Valid hotkey required.",
+            )
 
     @app.post("/predictionResults")
     async def upload_prediction_results(

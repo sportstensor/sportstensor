@@ -301,7 +301,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
         conn.close()
 
 
-def upsert_app_match_prediction(prediction):
+def upsert_app_match_prediction(prediction, vali_hotkey):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -340,7 +340,7 @@ def upsert_app_match_prediction(prediction):
                 prediction.get("isComplete", 0),  # Default to 0 if not provided
                 current_utc_time,
                 prediction.get("miner_hotkey"),  # This can be None
-                prediction.get("vali_hotkey"),  # This can be None
+                vali_hotkey,  # This can be None
             ),
         )
 
@@ -354,12 +354,22 @@ def upsert_app_match_prediction(prediction):
         conn.close()
 
 
-def get_app_match_predictions():
+def get_app_match_predictions(vali_hotkey=None, batch_size=-1):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM AppMatchPredictions")
+        query = "SELECT * FROM AppMatchPredictions WHERE isComplete = 0"
+        
+        params = []
+        if vali_hotkey is not None:
+            query += " AND vali_hotkey = %s"
+            params.append(vali_hotkey)
+        if batch_size > 0:
+            query += " LIMIT %s"
+            params.append(batch_size)
+            
+        cursor.execute(query, params)
         match_list = cursor.fetchall()
 
         return match_list

@@ -170,7 +170,7 @@ async def process_app_prediction_requests(
         return True
 
     except Exception as e:
-        bt.logging.error(f"Error syncing app prediction requests: {e}")
+        bt.logging.error(f"Error processing app prediction requests: {e}")
         return False
 
 
