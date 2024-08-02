@@ -175,7 +175,7 @@ pm2 start neurons/validator.py --name Sportstensor-validator -- \
 
 ## Community
 
-Join the vibrant Bittensor community and find our channel `#פ • pe • 41` on [Discord](https://discord.gg/bittensor).
+Join the vibrant Bittensor community and find our channel `#פ • nun • 41` on [Discord](https://discord.gg/bittensor).
 
 ## License
 
