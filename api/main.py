@@ -82,7 +82,7 @@ def authenticate_with_bittensor(hotkey, metagraph):
     return True
 
 
-# Get a random active validator hotkey with vTrust >= 0.9
+# Get a random active validator hotkey with vTrust >= 0.8
 def get_active_vali_hotkey(metagraph):
     avail_uids = []
     for uid in range(metagraph.n.item()):
@@ -203,7 +203,7 @@ async def main():
             return {"error": "Failed to retrieve match predictions data."}
         
     @app.post("/AppMatchPredictionsForValidators")
-    def upload_app_match_predictions(
+    def update_app_match_predictions(
         hotkey: Annotated[str, Depends(get_hotkey)] = None,
         predictions: List[dict] = Body(...),
     ):
@@ -213,6 +213,14 @@ async def main():
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Valid hotkey required.",
             )
+        # get uid of bittensor validator
+        uid = metagraph.hotkeys.index(hotkey)
+
+        result = db.update_app_match_predictions(predictions)
+        return {
+            "message": "Prediction results uploaded successfully from validator "
+            + str(uid)
+        }
 
     @app.post("/predictionResults")
     async def upload_prediction_results(

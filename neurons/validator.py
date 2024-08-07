@@ -153,8 +153,7 @@ class Validator(BaseValidatorNeuron):
         miner_uids = utils.get_random_uids(self, k=NUM_MINERS_TO_SEND_TO)
 
         if len(miner_uids) == 0:
-            bt.logging.info("No miners available")
-            return
+            bt.logging.info("No miners available to send requests to.")
 
         # Get a prediction requests to send to miners
         match_prediction_requests = utils.get_match_prediction_requests()

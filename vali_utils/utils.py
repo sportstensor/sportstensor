@@ -137,7 +137,13 @@ async def process_app_prediction_requests(
                     vali, input_synapse, miner_uids
                 )
                 # Add the responses to the list of responses
-                prediction_responses += finished_responses
+                for response in finished_responses:
+                    # Extract match_prediction and add app_request_id
+                    match_prediction = response.match_prediction
+                    match_prediction_dict = match_prediction.__dict__
+                    match_prediction_dict["app_request_id"] = pr["app_request_id"]
+                    match_prediction_dict["matchDate"] = str(match_prediction_dict["matchDate"]), # convert matchDate to string for serialization
+                    prediction_responses.append(match_prediction_dict)
             else:
                 bt.logging.info(
                     f"-- No miner uid found for {miner_hotkey}, skipping."
@@ -150,7 +156,7 @@ async def process_app_prediction_requests(
                 try:
                     # Attempt to post the prediction responses
                     post_result = await post_app_prediction_responses(
-                        vali, app_prediction_responses_endpoint, finished_responses
+                        vali, app_prediction_responses_endpoint, prediction_responses
                     )
                     return post_result
                 except Exception as e:
@@ -175,7 +181,7 @@ async def process_app_prediction_requests(
 
 
 async def post_app_prediction_responses(
-    vali, prediction_responses_endpoint, predictions
+    vali, prediction_responses_endpoint, prediction_responses
 ):
     keypair = vali.dendrite.keypair
     hotkey = keypair.ss58_address
@@ -183,20 +189,29 @@ async def post_app_prediction_responses(
     try:
         # Post the app prediction request responses back to the api
         """
-        prediction_responses = {
-            'scores': prediction_scores,
-            'correct_winner_results': correct_winner_results,
-            'uids': prediction_rewards_uids,
-            'hotkeys': prediction_results_hotkeys,
-            'sports': prediction_sports,
-            'leagues': prediction_leagues,
-        }
+        prediction_responses = [
+            {
+                "app_request_id": "frontend-12345",
+                "match_prediction":{
+                    "matchId": "TeamATeamB202408011530",
+                    "matchDate": "2024-08-01 15:30:00",
+                    "sport": "Baseball",
+                    "league": "MLB",
+                    "homeTeamName": "Team A",
+                    "awayTeamName": "Team B",
+                    "homeTeamScore": 2,
+                    "awayTeamScore": 3,
+                    "isComplete": 1,
+                    "miner_hotkey": "hotkey123"
+                }
+            }
+        ]
         """
         async with ClientSession() as session:
             async with session.post(
                 prediction_responses_endpoint,
                 auth=BasicAuth(hotkey, signature),
-                json=predictions,
+                json=prediction_responses,
             ) as response:
                 response.raise_for_status()
                 bt.logging.info("Successfully posted app prediction responses to API.")

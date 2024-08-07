@@ -353,6 +353,48 @@ def upsert_app_match_prediction(prediction, vali_hotkey):
         c.close()
         conn.close()
 
+def update_app_match_predictions(predictions):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        current_utc_time = dt.datetime.now(timezone.utc)
+        current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        predictions_to_update = []
+        for prediction in predictions:
+            if "homeTeamScore" not in prediction or "awayTeamScore" not in prediction:
+                logging.error("Missing homeTeamScore or awayTeamScore for prediction in update_app_match_predictions")
+                continue
+            
+            predictions_to_update.append(
+                (
+                    prediction["homeTeamScore"],
+                    prediction["awayTeamScore"],
+                    1,
+                    current_utc_time,
+                    prediction["app_request_id"],
+                )
+            )
+
+        c.executemany(
+            """
+            UPDATE AppMatchPredictions
+            SET homeTeamScore = %s, awayTeamScore = %s, isComplete = %s, lastUpdated = %s
+            WHERE app_request_id = %s
+            """,
+            predictions_to_update
+        )
+
+        conn.commit()
+        logging.info("Data inserted or updated in database")
+
+    except Exception as e:
+        logging.error("Failed to insert match in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
 
 def get_app_match_predictions(vali_hotkey=None, batch_size=-1):
     try:
