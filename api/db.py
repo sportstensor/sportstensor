@@ -540,6 +540,24 @@ def create_tables():
             UNIQUE (miner_hotkey, league)
         )"""
         )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MPRSnapshots (
+            snapshot_id INT AUTO_INCREMENT PRIMARY KEY,
+            snapshot_date DATE NOT NULL,
+            id INT,
+            miner_hotkey VARCHAR(64),
+            miner_uid INTEGER,
+            miner_is_registered TINYINT(1),
+            league VARCHAR(50),
+            sport INTEGER,
+            total_predictions INTEGER,
+            winner_predictions INTEGER,
+            avg_score FLOAT,
+            last_updated TIMESTAMP,
+            UNIQUE (snapshot_date, id)
+        )"""
+        )
         conn.commit()
     except Exception as e:
         logging.error("Failed to create matches table in MySQL database", exc_info=True)
