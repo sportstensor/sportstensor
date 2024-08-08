@@ -347,6 +347,46 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
         conn.close()
 
 
+def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+
+        query = f"""
+            SELECT *
+            FROM MPRSnapshots
+            WHERE 1=1
+        """
+
+        params = []
+        if sport:
+            query += " AND sport = %s"
+            params.append(sport)
+
+        if league:
+            query += " AND league = %s"
+            params.append(league)
+
+        if miner_hotkey:
+            query += " AND miner_hotkey = %s"
+            params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
+
+        query += " ORDER BY snapshot_date ASC"
+        
+        c.execute(query, params)
+        return c.fetchall()
+
+    except Exception as e:
+        logging.error(
+            "Failed to query match prediction snapshots from MySQL database", exc_info=True
+        )
+    finally:
+        c.close()
+        conn.close()
+
+
 def upsert_app_match_prediction(prediction):
     try:
         conn = get_db_conn()

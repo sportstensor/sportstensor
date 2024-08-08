@@ -222,6 +222,19 @@ async def main():
             return {"results": results}
         else:
             return {"error": "Failed to retrieve prediction results data."}
+        
+    @app.get("/predictionResultsSnapshots")
+    async def get_prediction_results_snapshots(
+        miner_hotkey: Optional[str] = None,
+        sport: Optional[str] = None,
+        league: Optional[str] = None,
+    ):
+        results = db.get_prediction_stat_snapshots(sport, league, miner_hotkey)
+
+        if results:
+            return {"results": results}
+        else:
+            return {"error": "Failed to retrieve prediction results snapshot data."}
 
     def serialize_datetime(value):
         """Serialize datetime to JSON-compatible format, if necessary."""
