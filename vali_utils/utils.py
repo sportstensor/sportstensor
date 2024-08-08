@@ -9,8 +9,8 @@ import datetime as dt
 from collections import defaultdict
 import copy
 
-from common.data import Sport, Match, Prediction, MatchPrediction
-from common.protocol import GetMatchPrediction
+from common.data import Sport, Match, MatchPrediction, PlayerStat, PlayerPrediction
+from common.protocol import GetMatchPrediction, GetPlayerPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
 
@@ -76,6 +76,58 @@ async def sync_match_data(match_data_endpoint) -> bool:
         if matches_to_update:
             storage.update_matches(matches_to_update)
             bt.logging.info(f"Updated {len(matches_to_update)} existing matches.")
+
+        return True
+
+    except Exception as e:
+        bt.logging.error(f"Error getting match data: {e}")
+        return False
+    
+
+async def sync_player_data(match_data_endpoint) -> bool:
+    try:
+        async with ClientSession() as session:
+            async with session.get(match_data_endpoint) as response:
+                response.raise_for_status()
+                player_stats = await response.json()
+
+        if not player_stats or "stats" not in player_stats:
+            bt.logging.info("No player stats returned from API")
+            return False
+
+        player_stats = player_stats["stats"]
+
+        # UPSERT logic
+        stats_to_insert = []
+        stats_to_update = []
+        for item in player_stats:
+            if "playerStatId" not in item:
+                bt.logging.error(f"Skipping player stat missing playerStatId: {item}")
+                continue
+
+            match = storage.get_match(item["matchId"])
+            # If the match doesn't exist, skip this player stat
+            if match is not None:
+                player_stat = PlayerStat(
+                    playerStatId=item["playerStatId"],
+                    match=match,
+                    playerName=item["playerName"],
+                    playerTeam=item["playerTeam"],
+                    playerPosition=item["playerPosition"],
+                    statType=item["statType"],
+                    statValue=item["statValue"],
+                )
+                if storage.check_player_data(item["playerDataId"]):
+                    stats_to_update.append(player_stat)
+                else:
+                    stats_to_insert.append(player_stat)
+
+        if stats_to_insert:
+            storage.insert_player_stats(stats_to_insert)
+            bt.logging.info(f"Inserted {len(stats_to_insert)} new player stats.")
+        if stats_to_update:
+            storage.update_player_stats(stats_to_update)
+            bt.logging.info(f"Updated {len(stats_to_update)} existing player stats.")
 
         return True
 

@@ -19,6 +19,7 @@ import bittensor as bt
 import pydantic
 from common.data import (
     MatchPrediction,
+    PlayerPrediction
 )
 from typing import Dict, List, Optional, Tuple
 import datetime as dt
@@ -51,5 +52,26 @@ class GetMatchPrediction(BaseProtocol):
 
     def __str__(self):
         return f"GetMatchPrediction(match_prediction={self.match_prediction}, axon={self.axon})"
+
+    __repr__ = __str__
+
+
+class GetPlayerPrediction(BaseProtocol):
+    """
+    Protocol by which Validators can retrieve a Player Prediction from a Miner.
+
+    Attributes:
+    - player_predicton: A single PlayerPrediction object that the Miner can serve.
+    """
+
+    player_prediction: PlayerPrediction = pydantic.Field(
+        description="The PlayerPrediction object being requested",
+        frozen=False,
+        repr=False,
+        default=None,
+    )
+
+    def __str__(self):
+        return f"GetPlayerPrediction(player_prediction={self.player_prediction}, axon={self.axon})"
 
     __repr__ = __str__

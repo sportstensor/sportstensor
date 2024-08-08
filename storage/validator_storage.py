@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List
 import datetime as dt
 
-from common.data import League, Match, Prediction, MatchPrediction
+from common.data import League, Match, MatchPrediction, PlayerStat, PlayerPrediction
 from common.protocol import GetMatchPrediction
 
 
@@ -38,6 +38,11 @@ class ValidatorStorage(ABC):
     def check_match(self, matchId: str) -> Match:
         """Check if a match with the given ID exists in the database."""
         return NotImplemented
+    
+    @abstractmethod
+    def get_match(self, matchId: str) -> Match:
+        """Gets a match with the given ID from the database."""
+        return NotImplemented
 
     @abstractmethod
     def get_matches_to_predict(self, batchsize: int) -> List[Match]:
@@ -67,6 +72,21 @@ class ValidatorStorage(ABC):
     ) -> Optional[List[MatchPrediction]]:
         """Gets a list of all predictions made by a miner."""
         raise NotImplemented
+    
+    @abstractmethod
+    def insert_player_stats(self, stats: List[PlayerStat]):
+        """Stores player stats to score predictions from miners on."""
+        raise NotImplemented
+
+    @abstractmethod
+    def update_player_stats(self, stats: List[PlayerStat]):
+        """Updates player stats. Typically only used when updating final stats."""
+        raise NotImplemented
+
+    @abstractmethod
+    def check_player_stat(self, playerStatId: str) -> PlayerStat:
+        """Check if a player stat with the given ID exists in the database."""
+        return NotImplemented
 
     @abstractmethod
     def delete_miner(self, miner_hotkey: str):

@@ -103,6 +103,35 @@ class Match(StrictBaseModel):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
         return v
+    
+
+class PlayerStat(StrictBaseModel):
+    """Represents a player's stat in a sports match."""
+
+    playerStatId: str = Field(description="Unique ID that represents a player's stat in a match.")
+    match: Match
+
+    playerName: str
+    playerTeam: str
+    playerPosition: Optional[str]
+
+    statType: str
+    statValue: Optional[float]
+
+    # Validators to ensure immutability
+    @validator(
+        "playerDataId",
+        "matchId",
+        "playerName",
+        "playerTeam",
+        pre=True,
+        always=True,
+        check_fields=False,
+    )
+    def player_fields_are_immutable(cls, v, values, field):
+        if field.name in values and v != values[field.name]:
+            raise ValueError(f"{field.name} is immutable and cannot be changed")
+        return v
 
 
 class Prediction(StrictBaseModel):
@@ -196,3 +225,35 @@ class MatchPredictionWithMatchData(BaseModel):
     prediction: MatchPrediction
     actualHomeTeamScore: int
     actualAwayTeamScore: int
+
+
+class PlayerPrediction(Prediction):
+    """Represents a prediction of a player's performance in a sports match."""
+    
+    playerName: str
+    playerTeam: str
+    playerPosition: Optional[str]
+
+    statType: str
+    statValue: Optional[float]
+
+    # Validators to ensure immutability
+    @validator(
+        "playerName",
+        "playerTeam",
+        pre=True,
+        always=True,
+        check_fields=False,
+    )
+    def player_fields_are_immutable(cls, v, values, field):
+        if field.name in values and v != values[field.name]:
+            raise ValueError(f"{field.name} is immutable and cannot be changed")
+        return v
+
+    def __str__(self):
+        base_str = super().__str__()
+        return (
+            f"{base_str[:-1]}, "  # Remove the closing parenthesis from the base string
+            f"playerName={self.playerName}, playerTeam={self.playerTeam}, "
+            f"playerPosition={self.playerPosition}, statType={self.statType}, statValue={self.statValue})"")"
+        )
