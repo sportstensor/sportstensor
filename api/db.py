@@ -321,12 +321,13 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
 
         query += f"""
             FROM {prediction_scores_table_name}
+            WHERE 1
         """
 
         params = []
 
         if miner_hotkey:
-            query += " WHERE miner_hotkey = %s"
+            query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
         else:
             query += " AND miner_is_registered = 1"
