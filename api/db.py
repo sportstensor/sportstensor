@@ -321,7 +321,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
 
         query += f"""
             FROM {prediction_scores_table_name}
-            WHERE 1
+            WHERE 1=1
         """
 
         params = []
