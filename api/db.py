@@ -161,6 +161,45 @@ def upload_prediction_results(prediction_results):
         conn.close()
 
 
+def update_miner_reg_statuses(active_hotkeys):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        prediction_scores_table_name = "MatchPredictionResults"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+
+        # mark hotkeys that are active in the metagraph as registered
+        c.execute(
+            f"""
+            UPDATE {prediction_scores_table_name}
+            SET miner_is_registered = 1
+            WHERE miner_hotkey IN ({','.join(['%s' for _ in active_hotkeys])})
+            """,
+            active_hotkeys,
+        )
+        conn.commit()
+
+        # mark hotkeys that are not active in the metagraph as unregistered
+        c.execute(
+            f"""
+            UPDATE {prediction_scores_table_name}
+            SET miner_is_registered = 0
+            WHERE miner_hotkey NOT IN ({','.join(['%s' for _ in active_hotkeys])})
+            """,
+            active_hotkeys,
+        )
+        conn.commit()
+        logging.info("Miner registration statuses updated in database")
+
+    except Exception as e:
+        logging.error("Failed to update miner registration statuses in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+
 def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=False):
     try:
         conn = get_db_conn()
@@ -191,6 +230,8 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
         if miner_hotkey:
             query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
 
         if group_by_miner:
             query += " GROUP BY league, miner_hotkey"
@@ -239,6 +280,8 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         if miner_hotkey:
             query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
 
         if group_by_miner:
             query += " GROUP BY sport, miner_hotkey"
@@ -285,6 +328,8 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
         if miner_hotkey:
             query += " WHERE miner_hotkey = %s"
             params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
 
         if group_by_miner:
             query += " GROUP BY miner_hotkey"
@@ -428,6 +473,7 @@ def create_tables():
             id INT AUTO_INCREMENT PRIMARY KEY,
             miner_hotkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
             league VARCHAR(50) NOT NULL,
             sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,
@@ -443,6 +489,7 @@ def create_tables():
             id INT AUTO_INCREMENT PRIMARY KEY,
             miner_hotkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
             league VARCHAR(50) NOT NULL,
             sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,

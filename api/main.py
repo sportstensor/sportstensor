@@ -92,6 +92,22 @@ async def main():
 
             await asyncio.sleep(90)
 
+    async def resync_miner_reg_statuses():
+        while True:
+            """Checks active hotkeys on the metagraph and updates our results table."""
+            print("resync_miner_reg_statuses()")
+
+            try:
+                active_hotkeys = [hotkey for hotkey in metagraph.hotkeys]
+                db.update_miner_reg_statuses(active_hotkeys)
+
+            # In case of unforeseen errors, the api will log the error and continue operations.
+            except Exception as err:
+                print("Error during miner reg statuses sync", str(err))
+                print_exception(type(err), err, err.__traceback__)
+
+            await asyncio.sleep(300)
+
     @app.get("/")
     def healthcheck():
         return {"status": "ok", "message": datetime.utcnow()}
@@ -215,6 +231,7 @@ async def main():
 
     await asyncio.gather(
         resync_metagraph(),
+        resync_miner_reg_statuses(),
         asyncio.to_thread(
             uvicorn.run,
             app,
