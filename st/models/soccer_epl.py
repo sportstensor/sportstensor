@@ -52,27 +52,22 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
             print(f"Using random scores: {homeTeamName} {self.prediction.homeTeamScore} - {self.prediction.awayTeamScore} {awayTeamName}")
 
     def activate(self, matchDate, homeTeamName, awayTeamName):
-        print(f"Activating prediction for {homeTeamName} vs {awayTeamName} on {matchDate}")
 
         data = self.get_data()
-        print(f"Data shape after get_data: {data.shape}")
 
         scalers, X_scaled, y_scaled = self.scale_data(data)
-        print(f"X_scaled shape: {X_scaled.shape}, y_scaled shape: {y_scaled.shape}")
 
         model = self.load_or_run_model(scalers, X_scaled, y_scaled)
-        print("Model loaded successfully")
 
         pred_input = self.prep_pred_input(
             matchDate, homeTeamName, awayTeamName, scalers
         )
-        
+
         if pred_input.size == 0:
             print("Error: Empty prediction input")
             return None
 
         predicted_outcome = model.predict(pred_input)
-        print(f"Raw predicted outcome: {predicted_outcome}")
 
         predicted_outcome[:, 0] = np.round(
             scalers["HT_SC"]
@@ -230,7 +225,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
         current_date = datetime.now().date()
 
         print(f"Preparing prediction input for {home_team} vs {away_team} on {date}")
-        print(f"Home team value: {home_val}, Away team value: {away_val}")
 
         if date_formatted.date() < current_date:
             if not os.path.exists(file_path):
@@ -286,7 +280,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
                 ]
             ])
 
-            print(f"Final input data: {input_data}")
             return input_data
 
     def get_team_sorted_val(self, team_name: str):
