@@ -5,7 +5,7 @@ import time
 # from . import utils
 import datetime as dt
 from enum import IntEnum, Enum
-from typing import Any, Dict, List, Type, Optional
+from typing import Any, Dict, List, Type, Optional, Union
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -105,6 +105,38 @@ class Match(StrictBaseModel):
         return v
     
 
+class StatType(Enum):
+    OFFENSE = "OFFENSE"
+    DEFENSE = "DEFENSE"
+    SPECIAL = "SPECIAL"
+    OTHER = "OTHER"
+
+
+class Stat(StrictBaseModel):
+    """
+    A class to represent a player's statistic in various sports.
+    
+    Attributes:
+    ----------
+    statName : str
+        The name of the stat (e.g., goals, assists, points, runs batted in).
+    statAbbr : Optional[str]
+        The abbreviation of the stat (e.g., G, A, PTS, RBI).
+    statDescription : Optional[str]
+        A description of the stat (e.g., goals scored, offensive assists).
+    statType : StatType
+        The type of the stat (e.g., OFFENSE, DEFENSE, SPECIAL, OTHER).
+    statValue : Optional[Union[int, float, str]]
+        The value of the stat (e.g., 2, 5.51, "A+", "Injured").
+    """
+    
+    statName: str
+    statAbbr: Optional[str] = None
+    statDescription: Optional[str] = None
+    statType: StatType
+    statValue: Optional[Union[int, float, str]] = None
+
+
 class PlayerStat(StrictBaseModel):
     """Represents a player's stat in a sports match."""
 
@@ -115,15 +147,15 @@ class PlayerStat(StrictBaseModel):
     playerTeam: str
     playerPosition: Optional[str]
 
-    statType: str
-    statValue: Optional[float]
+    stat: Stat
 
     # Validators to ensure immutability
     @validator(
         "playerDataId",
-        "matchId",
+        "match",
         "playerName",
         "playerTeam",
+        "stat",
         pre=True,
         always=True,
         check_fields=False,
@@ -229,18 +261,23 @@ class MatchPredictionWithMatchData(BaseModel):
 
 class PlayerPrediction(Prediction):
     """Represents a prediction of a player's performance in a sports match."""
-    
+
     playerName: str
     playerTeam: str
     playerPosition: Optional[str]
-
-    statType: str
-    statValue: Optional[float]
+    
+    statName: str
+    statAbbr: Optional[str] = None
+    statDescription: Optional[str] = None
+    statType: StatType
+    statValue: Optional[Union[int, float, str]] = None
 
     # Validators to ensure immutability
     @validator(
         "playerName",
         "playerTeam",
+        "statName",
+        "statType",
         pre=True,
         always=True,
         check_fields=False,
@@ -254,6 +291,6 @@ class PlayerPrediction(Prediction):
         base_str = super().__str__()
         return (
             f"{base_str[:-1]}, "  # Remove the closing parenthesis from the base string
-            f"playerName={self.playerName}, playerTeam={self.playerTeam}, "
-            f"playerPosition={self.playerPosition}, statType={self.statType}, statValue={self.statValue})"")"
+            f"playerName={self.playerStat.playerName}, playerTeam={self.playerStat.playerTeam}, "
+            f"playerPosition={self.playerStat.playerPosition}, stat={self.playerStat.stat})"")"
         )

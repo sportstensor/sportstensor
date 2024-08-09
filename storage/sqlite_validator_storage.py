@@ -67,32 +67,40 @@ class SqliteValidatorStorage(ValidatorStorage):
                             )"""
     
     PLAYERSTATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerStats (
-                            playerStatId  INTEGER         PRIMARY KEY,
-                            matchId       VARCHAR(50)     NOT NULL,
-                            playerName    VARCHAR(30)     NOT NULL,
-                            playerTeam    VARCHAR(30)     NOT NULL,
-                            playerPosition VARCHAR(30)    NOT NULL,
-                            statType      VARCHAR(30)     NOT NULL,
-                            statValue     REAL            NOT NULL,
-                            lastUpdated   TIMESTAMP(6)    NOT NULL
+                            playerStatId    INTEGER         PRIMARY KEY,
+                            matchId         VARCHAR(50)     NOT NULL,
+                            playerName      VARCHAR(30)     NOT NULL,
+                            playerTeam      VARCHAR(30)     NOT NULL,
+                            playerPosition  VARCHAR(30)     NULL,
+                            statName        VARCHAR(30)     NOT NULL,
+                            statAbbr        VARCHAR(10)     NULL,
+                            statDescription VARCHAR(100)    NULL,
+                            statType        VARCHAR(30)     NOT NULL,
+                            statValue       VARCHAR(30)     NOT NULL,
+                            statValueType   VARCHAR(10)     NOT NULL,
+                            lastUpdated     TIMESTAMP(6)    NOT NULL
                             )"""
     
     PLAYERPREDICTIONS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerPredictions (
-                            predictionId  INTEGER         PRIMARY KEY,
-                            minerId       INTEGER         NOT NULL,
-                            hotkey        VARCHAR(64)     NOT NULL,
-                            matchId       VARCHAR(50)     NOT NULL,
-                            matchDate     TIMESTAMP(6)    NOT NULL,
-                            sport         INTEGER         NOT NULL,
-                            league        VARCHAR(50)     NOT NULL,
-                            playerName    VARCHAR(30)     NOT NULL,
-                            playerTeam    VARCHAR(30)     NOT NULL,
-                            playerPosition VARCHAR(30)    NOT NULL,
-                            statType      VARCHAR(30)     NOT NULL,
-                            statValue     REAL            NOT NULL,
-                            isScored      INTEGER         DEFAULT 0,
-                            scoredDate    TIMESTAMP(6)    NULL,
-                            lastUpdated   TIMESTAMP(6)    NOT NULL
+                            predictionId    INTEGER         PRIMARY KEY,
+                            minerId         INTEGER         NOT NULL,
+                            hotkey          VARCHAR(64)     NOT NULL,
+                            matchId         VARCHAR(50)     NOT NULL,
+                            matchDate       TIMESTAMP(6)    NOT NULL,
+                            sport           INTEGER         NOT NULL,
+                            league          VARCHAR(50)     NOT NULL,
+                            playerName      VARCHAR(30)     NOT NULL,
+                            playerTeam      VARCHAR(30)     NOT NULL,
+                            playerPosition  VARCHAR(30)     NULL,
+                            statName        VARCHAR(30)     NOT NULL,
+                            statAbbr        VARCHAR(10)     NULL,
+                            statDescription VARCHAR(100)    NULL,
+                            statType        VARCHAR(30)     NOT NULL,
+                            statValue       VARCHAR(30)     NOT NULL,
+                            statValueType   VARCHAR(10)     NOT NULL,
+                            isScored        INTEGER         DEFAULT 0,
+                            scoredDate      TIMESTAMP(6)    NULL,
+                            lastUpdated     TIMESTAMP(6)    NOT NULL
                             )"""
 
     def __init__(self):
