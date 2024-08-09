@@ -46,7 +46,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
             pred_scores = predictions[(homeTeamName, awayTeamName)]
             self.prediction.homeTeamScore = int(pred_scores[0])
             self.prediction.awayTeamScore = int(pred_scores[1])
-            print(f"Predicted scores: {homeTeamName} {self.prediction.homeTeamScore} - {self.prediction.awayTeamScore} {awayTeamName}")
         else:
             self.prediction.homeTeamScore = random.randint(0, 10)
             self.prediction.awayTeamScore = random.randint(0, 10)
@@ -67,8 +66,7 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
         pred_input = self.prep_pred_input(
             matchDate, homeTeamName, awayTeamName, scalers
         )
-        print(f"Prepared input shape: {pred_input.shape}")
-
+        
         if pred_input.size == 0:
             print("Error: Empty prediction input")
             return None
@@ -86,7 +84,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
             .inverse_transform(predicted_outcome[:, 1].reshape(-1, 1))
             .reshape(-1)
         )
-        print(f"Scaled predicted outcome: {predicted_outcome}")
 
         # Ensure that predictions dictionary is always returned
         predictions = {
@@ -95,7 +92,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
                 predicted_outcome[0][1],
             )
         }
-        print(f"Final predictions: {predictions}")
 
         return predictions
 
@@ -107,9 +103,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
         try:
             if os.path.exists(file_path):
                 fixtures = pd.read_csv(file_path)
-                print("Loaded fixtures data:")
-                print(fixtures.head())
-                print(f"Shape of loaded data: {fixtures.shape}")
 
                 expected_columns = ['HT', 'AT', 'HT_ELO', 'AT_ELO', 'HT_GD', 'AT_GD', 'HT_SC', 'AT_SC']
                 missing_columns = set(expected_columns) - set(fixtures.columns)
@@ -131,7 +124,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
             X_scaled, y_scaled, test_size=0.2, random_state=42
         )
 
-        print("Training data shape:", X_train.shape, y_train.shape)
 
         file_path = hf_hub_download(
             repo_id=self.huggingface_model, filename=self.epl_model_filepath
@@ -246,8 +238,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
                 return np.array([])
 
             fixtures = pd.read_csv(file_path)
-            print(f"Loaded fixtures data, shape: {fixtures.shape}")
-            print(f"Fixtures columns: {fixtures.columns}")
 
             try:
                 matching_input = fixtures[
@@ -266,24 +256,17 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
                 return np.array([])
 
             input_data = matching_input[['HT', 'AT', 'HT_ELO', 'AT_ELO', 'HT_GD', 'AT_GD']].values.astype(float)
-            print(f"Input data before scaling: {input_data}")
 
             for i, column in enumerate(scalers.keys()):
                 if i < input_data.shape[1]:
                     input_data[:, i] = scalers[column].transform(input_data[:, i].reshape(-1, 1)).reshape(1, -1)
 
-            print(f"Input data after scaling: {input_data}")
             return input_data
         else:
             prem_table_current = pd.read_csv(file_path)
-            print(f"Loaded current table data, shape: {prem_table_current.shape}")
-            print(f"Current table columns: {prem_table_current.columns}")
 
             home_data = prem_table_current[prem_table_current['HT'] == home_val]
             away_data = prem_table_current[prem_table_current['AT'] == away_val]
-
-            print(f"Home team data: {home_data}")
-            print(f"Away team data: {away_data}")
 
             if home_data.empty or away_data.empty:
                 print(f"Data for {home_team} (value: {home_val}) or {away_team} (value: {away_val}) not found in the current table.")
@@ -291,9 +274,6 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
 
             home_elo, home_gd = home_data[['HT_ELO', 'HT_GD']].values[0]
             away_elo, away_gd = away_data[['AT_ELO', 'AT_GD']].values[0]
-
-            print(f"Home ELO: {home_elo}, Home GD: {home_gd}")
-            print(f"Away ELO: {away_elo}, Away GD: {away_gd}")
 
             input_data = np.array([
                 [
