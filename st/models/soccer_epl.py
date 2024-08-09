@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from bs4 import BeautifulSoup
+from huggingface_hub import hf_hub_download
 
 import tensorflow as tf
 from keras._tf_keras.keras.models import load_model, Sequential
@@ -27,9 +28,9 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
     def __init__(self, prediction):
         super().__init__(prediction)
         self.huggingface_model = "sportstensor/basic_model"
-        self.mls_fixture_data_filepath = "epl/fixture_data.xlsx"
-        self.mls_model_filepath = "epl/basic_model.keras"
-        self.mls_combined_table_filepath = "epl/combined_table.csv"
+        self.epl_fixture_data_filepath = "epl/fixture_data.csv"
+        self.epl_model_filepath = "epl/basic_model.keras"
+        self.epl_combined_table_filepath = "epl/combined_table.csv"
 
     def make_prediction(self):
         bt.logging.info("Predicting EPL soccer match...")
@@ -99,18 +100,29 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
         return predictions
 
     def get_data(self) -> pd.DataFrame:
-        file_path = "epl/fixture_data.csv"
+        file_path = hf_hub_download(
+            repo_id=self.huggingface_model, filename=self.epl_fixture_data_filepath
+        )
 
-        if os.path.exists(file_path):
-            fixtures = pd.read_csv(file_path)
-            print("Loaded fixtures data:")
-            print(fixtures.head())
-            print(f"Shape of loaded data: {fixtures.shape}")
-        else:
-            print("No file found, scrape data first.")
-            fixtures = pd.DataFrame()
+        try:
+            if os.path.exists(file_path):
+                fixtures = pd.read_csv(file_path)
+                print("Loaded fixtures data:")
+                print(fixtures.head())
+                print(f"Shape of loaded data: {fixtures.shape}")
 
-        return fixtures
+                expected_columns = ['HT', 'AT', 'HT_ELO', 'AT_ELO', 'HT_GD', 'AT_GD', 'HT_SC', 'AT_SC']
+                missing_columns = set(expected_columns) - set(fixtures.columns)
+                if missing_columns:
+                    print(f"Warning: Missing columns in fixture_data.csv: {missing_columns}")
+
+                return fixtures
+            else:
+                print(f"Error: File not found at {file_path}")
+                return pd.DataFrame()
+        except Exception as e:
+            print(f"Error reading fixture data: {str(e)}")
+            return pd.DataFrame()
 
     def load_or_run_model(
         self, scalers: dict, X_scaled: np.ndarray, y_scaled: np.ndarray
@@ -121,9 +133,13 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
 
         print("Training data shape:", X_train.shape, y_train.shape)
 
-        file_path = self.mls_model_filepath
+        file_path = hf_hub_download(
+            repo_id=self.huggingface_model, filename=self.epl_model_filepath
+        )
 
-        local_model_path = "epl/basic_model.keras"
+        local_model_path = hf_hub_download(
+            repo_id=self.huggingface_model, filename=self.epl_model_filepath
+        )
         if not os.path.exists(local_model_path):
             model = Sequential(
                 [
@@ -211,8 +227,9 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
     def prep_pred_input(
         self, date: str, home_team: str, away_team: str, scalers: dict
     ) -> np.array:
-        file_path = "epl/fixture_data.csv"
-        fixture_data_file_path = "epl/fixture_data.xlsx"
+        file_path = hf_hub_download(
+            repo_id=self.huggingface_model, filename=self.epl_fixture_data_filepath
+        )
 
         date_formatted = datetime.strptime(date, "%Y-%m-%d")
         home_val = self.get_team_sorted_val(home_team)
@@ -224,11 +241,11 @@ class EPLSoccerPredictionModel(SoccerPredictionModel):
         print(f"Home team value: {home_val}, Away team value: {away_val}")
 
         if date_formatted.date() < current_date:
-            if not os.path.exists(fixture_data_file_path):
+            if not os.path.exists(file_path):
                 print("Data needed, scrape it and store it in order to get input")
                 return np.array([])
 
-            fixtures = pd.read_excel(fixture_data_file_path)
+            fixtures = pd.read_csv(file_path)
             print(f"Loaded fixtures data, shape: {fixtures.shape}")
             print(f"Fixtures columns: {fixtures.columns}")
 

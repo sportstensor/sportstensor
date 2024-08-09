@@ -55,8 +55,8 @@ def epl():
         matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
         sport=Sport.SOCCER,
         league=League.EPL,
-        homeTeamName="Birmingham",
-        awayTeamName="Arsenal",
+        homeTeamName="Arsenal",
+        awayTeamName="Chelsea",
     )
 
     match_prediction = make_match_prediction(match_prediction)

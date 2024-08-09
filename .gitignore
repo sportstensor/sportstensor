@@ -161,3 +161,5 @@ cython_debug/
 
 testing/
 wandb/
+.DS_Store
+.DS_Store
