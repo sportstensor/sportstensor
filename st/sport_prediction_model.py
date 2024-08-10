@@ -72,7 +72,6 @@ def make_match_prediction(prediction: MatchPrediction):
     # If we don't have a prediction model for the sport, return 0 for both scores
     else:
         bt.logging.info("Unknown sport, returning 0 for both scores")
-        print("unknown")
         prediction.homeTeamScore = 0
         prediction.awayTeamScore = 0
 
