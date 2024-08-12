@@ -130,11 +130,12 @@ class Stat(StrictBaseModel):
         The value of the stat (e.g., 2, 5.51, "A+", "Injured").
     """
     
+    statId: str = Field(description="Unique ID that represents a stat.")
     statName: str
     statAbbr: Optional[str] = None
     statDescription: Optional[str] = None
     statType: StatType
-    statValue: Optional[Union[int, float, str]] = None
+    sport: Sport
 
 
 class PlayerStat(StrictBaseModel):
@@ -148,6 +149,8 @@ class PlayerStat(StrictBaseModel):
     playerPosition: Optional[str]
 
     stat: Stat
+    # represents the value of the stat the player achieved in the match
+    statValue: Optional[Union[int, float, str]] = None
 
     # Validators to ensure immutability
     @validator(

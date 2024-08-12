@@ -66,18 +66,39 @@ class SqliteValidatorStorage(ValidatorStorage):
                             lastUpdated   TIMESTAMP(6)    NOT NULL
                             )"""
     
+    STATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS Stats (
+                            statId              INTEGER         PRIMARY KEY,
+                            statName            VARCHAR(30)     NOT NULL,
+                            statAbbr            VARCHAR(10)     NULL,
+                            statDescription     VARCHAR(100)    NULL,
+                            statType            VARCHAR(30)     NOT NULL,
+                            sport               INTEGER         NOT NULL,
+                            )"""
+    
+    PLAYERS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS Players (
+                            playerId            INTEGER         PRIMARY KEY,
+                            playerName          VARCHAR(30)     NOT NULL,
+                            playerTeam          VARCHAR(30)     NOT NULL,
+                            playerPosition      VARCHAR(30)     NULL,
+                            sport               INTEGER         NOT NULL,
+                            league              VARCHAR(50)     NOT NULL,
+                            )"""
+    
     PLAYERSTATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerStats (
+                            playerId            INTEGER         NOT NULL,
+                            statId              INTEGER         NOT NULL,
+                            PRIMARY KEY (playerId, statId),
+                            FOREIGN KEY (playerId) REFERENCES Players(playerId),
+                            FOREIGN KEY (statId) REFERENCES Stats(statId)
+                            )"""
+    
+    PLAYERMATCHSTATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerMatchStats (
                             playerStatId    INTEGER         PRIMARY KEY,
                             matchId         VARCHAR(50)     NOT NULL,
-                            playerName      VARCHAR(30)     NOT NULL,
-                            playerTeam      VARCHAR(30)     NOT NULL,
-                            playerPosition  VARCHAR(30)     NULL,
-                            statName        VARCHAR(30)     NOT NULL,
-                            statAbbr        VARCHAR(10)     NULL,
-                            statDescription VARCHAR(100)    NULL,
-                            statType        VARCHAR(30)     NOT NULL,
-                            statValue       VARCHAR(30)     NOT NULL,
-                            statValueType   VARCHAR(10)     NOT NULL,
+                            playerId        INTEGER         NOT NULL,
+                            statId          INTEGER         NOT NULL,
+                            statValue       VARCHAR(30)     NULL,
+                            statValueType   VARCHAR(10)     NULL,
                             lastUpdated     TIMESTAMP(6)    NOT NULL
                             )"""
     
@@ -120,8 +141,17 @@ class SqliteValidatorStorage(ValidatorStorage):
             # Create the MatchPredictions table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
+            # Create the Stats table (if it does not already exist).
+            cursor.execute(SqliteValidatorStorage.STATS_TABLE_CREATE)
+
+            # Create the Players table (if it does not already exist).
+            cursor.execute(SqliteValidatorStorage.PLAYERS_TABLE_CREATE)
+
             # Create the PlayerStats table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.PLAYERSTATS_TABLE_CREATE)
+
+            # Create the PlayerMatchStats table (if it does not already exist).
+            cursor.execute(SqliteValidatorStorage.PLAYERMATCHSTATS_TABLE_CREATE)
 
             # Create the PlayerPredictions table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.PLAYERPREDICTIONS_TABLE_CREATE)
