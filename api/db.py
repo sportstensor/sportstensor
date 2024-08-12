@@ -312,7 +312,7 @@ def upsert_app_match_prediction(prediction, vali_hotkey):
         c.execute(
             """
             INSERT INTO AppMatchPredictions (app_request_id, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated, miner_hotkey, vali_hotkey) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 matchId=VALUES(matchId), 
                 matchDate=VALUES(matchDate), 
@@ -324,7 +324,7 @@ def upsert_app_match_prediction(prediction, vali_hotkey):
                 awayTeamScore=VALUES(awayTeamScore),
                 isComplete=VALUES(isComplete), 
                 lastUpdated=VALUES(lastUpdated),
-                miner_hotkey=VALUES(miner_hotkey)
+                miner_hotkey=VALUES(miner_hotkey),
                 vali_hotkey=VALUES(vali_hotkey)
             """,
             (
@@ -346,9 +346,11 @@ def upsert_app_match_prediction(prediction, vali_hotkey):
 
         conn.commit()
         logging.info("Data inserted or updated in database")
+        return True
 
     except Exception as e:
-        logging.error("Failed to insert match in MySQL database", exc_info=True)
+        logging.error("Failed to insert app match prediction in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()

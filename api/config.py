@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import json
 
 # Define the path to the api.env file
 env_path = os.path.join(os.path.dirname(__file__), 'api.env')
@@ -22,3 +23,5 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 API_KEYS = os.getenv('API_KEYS')
+
+TESTNET_VALI_HOTKEYS = json.loads(os.environ["TESTNET_VALI_HOTKEYS"])

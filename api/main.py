@@ -23,7 +23,7 @@ from mysql.connector import Error
 
 from datetime import datetime
 import api.db as db
-from api.config import NETWORK, NETUID, IS_PROD, API_KEYS
+from api.config import NETWORK, NETUID, IS_PROD, API_KEYS, TESTNET_VALI_HOTKEYS
 
 sentry_sdk.init(
     dsn="https://d9cce5fe3664e00bf8857b2e425d9ec5@o4507644404236288.ingest.de.sentry.io/4507644429271120",
@@ -85,6 +85,12 @@ def authenticate_with_bittensor(hotkey, metagraph):
 # Get a random active validator hotkey with vTrust >= 0.8
 def get_active_vali_hotkey(metagraph):
     avail_uids = []
+
+    if NETWORK == "test":
+        # Get the hotkeys of all testnet validators
+        avail_hotkeys = [hotkey for hotkey in TESTNET_VALI_HOTKEYS]
+        return random.choice(avail_hotkeys)
+
     for uid in range(metagraph.n.item()):
         if metagraph.validator_permit[uid]:
             avail_uids.append(uid)
@@ -177,7 +183,10 @@ async def main():
             return {"message": "Failed to find a valid validator hotkey after 10 attempts"}
 
         result = db.upsert_app_match_prediction(prediction, vali_hotkey)
-        return {"message": "Prediction upserted successfully"}
+        if result:
+            return {"message": "Prediction upserted successfully"}
+        else:
+            return {"error": "Failed to upsert app prediction data."}
 
     @app.get("/AppMatchPredictions")
     def get_app_match_predictions(api_key: str = Security(get_api_key)):
