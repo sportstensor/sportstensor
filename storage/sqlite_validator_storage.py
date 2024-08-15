@@ -10,6 +10,9 @@ from typing import Any, Dict, Optional, Set, Tuple, List
 from common.data import (
     Match,
     MatchPrediction,
+    Player,
+    Stat,
+    StatType,
     PlayerStat,
     PlayerPrediction,
     League,
@@ -72,7 +75,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             statAbbr            VARCHAR(10)     NULL,
                             statDescription     VARCHAR(100)    NULL,
                             statType            VARCHAR(30)     NOT NULL,
-                            sport               INTEGER         NOT NULL,
+                            sport               INTEGER         NOT NULL
                             )"""
     
     PLAYERS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS Players (
@@ -81,7 +84,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             playerTeam          VARCHAR(30)     NOT NULL,
                             playerPosition      VARCHAR(30)     NULL,
                             sport               INTEGER         NOT NULL,
-                            league              VARCHAR(50)     NOT NULL,
+                            league              VARCHAR(50)     NOT NULL
                             )"""
     
     PLAYERSTATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerStats (
@@ -534,6 +537,51 @@ class SqliteValidatorStorage(ValidatorStorage):
                     for row in results
                 ]
                 return predictions
+            
+    def get_stats(
+        self, statType: str = StatType.OFFENSE
+    ):
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection().cursor()
+                cursor.execute(
+                    "SELECT * FROM Stats where statType = ?",
+                    statType
+                )
+                results = cursor.fetchall()
+                if not results:
+                    return []
+                
+                stats = [
+                    Stat(
+                        **dict(zip([column[0] for column in cursor.description], row))
+                    )
+                    for row in results
+                ]
+                return stats
+            
+    def get_players_to_predict(
+        self, playerTeam: str, rating_threshold = 0.8, batchsize = 10
+    ):
+        """Gets a list of popular players to predict stats."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.execute(
+                    "SELECT * FROM Players WHERE PlayerTeam = ?",
+                    [playerTeam]
+                )
+                results = cursor.fetchall()
+                if not results:
+                    return []
+                
+                players = [
+                    Player(
+                        **dict(zip([column[0] for column in cursor.description], row))
+                    )
+                    for row in results
+                ]
+                return random.choices(players, k=batchsize)
 
     def insert_player_stats(self, stats: List[PlayerStat]):
         """Stores player stats to score predictions from miners on."""
