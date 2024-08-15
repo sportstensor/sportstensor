@@ -27,8 +27,8 @@ import torch
 import wandb
 
 # Bittensor Validator Template:
-from common.protocol import GetMatchPrediction
-from common.data import MatchPrediction
+from common.protocol import GetMatchPrediction, GetPlayerPrediction
+from common.data import MatchPrediction, PlayerPrediction
 from common.constants import (
     ENABLE_APP,
     DATA_SYNC_INTERVAL_IN_MINUTES,
@@ -156,7 +156,7 @@ class Validator(BaseValidatorNeuron):
             return
 
         # Get a prediction requests to send to miners
-        match_prediction_requests = utils.get_match_prediction_requests()
+        match_prediction_requests, player_prediction_requests = utils.get_match_prediction_requests()
 
         if len(match_prediction_requests) > 0:
             # The dendrite client queries the network.
@@ -185,6 +185,7 @@ class Validator(BaseValidatorNeuron):
                         f"Error in get_basic_match_prediction_rewards: {e}"
                     )
                     return
+                
 
                 # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
                 if len(working_miner_uids) > 0:
@@ -208,6 +209,58 @@ class Validator(BaseValidatorNeuron):
                         torch.FloatTensor(no_rewards).to(self.device),
                         not_working_miner_uids,
                     )
+
+        if len(player_prediction_requests) > 0:
+            # The dendrite client queries the network.
+            bt.logging.info(
+                f"*** Sending {len(player_prediction_requests)} player prediction requests to miners {miner_uids} ***"
+            )
+            for ppr in player_prediction_requests:
+                input_synapse = GetPlayerPrediction(player_prediction=ppr)
+                # Send prediction requests to miners and store their responses
+                finished_responses, working_miner_uids = (
+                    await utils.send_predictions_to_miners(
+                        self, input_synapse, miner_uids
+                    )
+                )
+
+                # Adjust the scores based on responses from miners.
+                try:
+                    rewards = (
+                        await self.get_basic_player_prediction_rewards(
+                            input_synapse=input_synapse, responses=finished_responses
+                        )
+                    ).to(self.device)
+                except Exception as e:
+                    bt.logging.error(
+                        f"Error in get_basic_match_prediction_rewards: {e}"
+                    )
+                    return
+                
+
+                # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
+                if len(working_miner_uids) > 0:
+                    bt.logging.info(
+                        f"Rewarding miners {working_miner_uids} that returned a prediction."
+                    )
+                    self.update_scores(rewards, working_miner_uids)
+
+                # Update the scores of miner uids NOT working. Default to 0.
+                not_working_miner_uids = []
+                no_rewards = []
+                for uid in miner_uids:
+                    if uid not in working_miner_uids:
+                        not_working_miner_uids.append(uid)
+                        no_rewards.append(0.0)
+                if len(not_working_miner_uids) > 0:
+                    bt.logging.info(
+                        f"Penalizing miners {not_working_miner_uids} that did not respond."
+                    )
+                    self.update_scores(
+                        torch.FloatTensor(no_rewards).to(self.device),
+                        not_working_miner_uids,
+                    )
+
         else:
             bt.logging.info("No matches available to send for predictions.")
         """ END MATCH PREDICTION REQUESTS """
@@ -301,7 +354,18 @@ class Validator(BaseValidatorNeuron):
         # Create a list of fixed rewards for all responses
         rewards = [BASE_MINER_PREDICTION_SCORE for _ in responses]
         return torch.FloatTensor(rewards).to(self.device)
-
+    
+    async def get_basic_player_prediction_rewards(
+        self,
+        input_synapse: GetPlayerPrediction,
+        responses: List[PlayerPrediction],
+    ) -> torch.FloatTensor:
+        """
+        Returns a tensor of rewards for the given query and responses.
+        """
+        # Create a list of fixed rewards for all responses
+        rewards = [BASE_MINER_PREDICTION_SCORE for _ in responses]
+        return torch.FloatTensor(rewards).to(self.device)
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
