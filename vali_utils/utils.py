@@ -9,7 +9,7 @@ import datetime as dt
 from collections import defaultdict
 import copy
 
-from common.data import Sport, Match, MatchPrediction, PlayerStat, PlayerPrediction
+from common.data import Sport, Match, MatchPrediction, PlayerStat, PlayerPrediction, StatType
 from common.protocol import GetMatchPrediction, GetPlayerPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
@@ -188,18 +188,61 @@ async def process_app_prediction_requests(
 
 def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
     matches = storage.get_matches_to_predict(batchsize)
-    match_predictions = [
-        MatchPrediction(
-            matchId=match.matchId,
-            matchDate=str(match.matchDate),
-            sport=match.sport,
-            league=match.league,
-            homeTeamName=match.homeTeamName,
-            awayTeamName=match.awayTeamName,
+
+    # match_predictions = [
+    #     MatchPrediction(
+    #         matchId=match.matchId,
+    #         matchDate=str(match.matchDate),
+    #         sport=match.sport,
+    #         league=match.league,
+    #         homeTeamName=match.homeTeamName,
+    #         awayTeamName=match.awayTeamName,
+    #     )
+    #     for match in matches
+    # ]
+
+    match_predictions = []
+    player_predictions = []
+    for match in matches:
+        match_predictions.append(
+            MatchPrediction(
+                matchId=match.matchId,
+                matchDate=str(match.matchDate),
+                sport=match.sport,
+                league=match.league,
+                homeTeamName=match.homeTeamName,
+                awayTeamName=match.awayTeamName,
+            )
         )
-        for match in matches
-    ]
-    return match_predictions
+        home_players = storage.get_players_to_predict(playerTeam=match.homeTeamName, batchsize=batchsize)
+        player_predictions.append(
+            PlayerPrediction(
+                matchId=match.matchId,
+                matchDate=str(match.matchDate),
+                sport=match.sport,
+                league=match.league,
+                playerName=player.playerName,
+                playerTeam=player.playerTeam,
+                playerPosition=player.playerPosition,
+            )
+            for player in home_players
+        )
+        away_players = storage.get_players_to_predict(playerTeam=match.homeTeamName, batchsize=batchsize)
+        stats = storage.get_stats(statType=StatType.OFFENSE)
+        player_predictions.append(
+            PlayerPrediction(
+                matchId=match.matchId,
+                matchDate=str(match.matchDate),
+                sport=match.sport,
+                league=match.league,
+                playerName=player.playerName,
+                playerTeam=player.playerTeam,
+                playerPosition=player.playerPosition,
+            )
+            for player in away_players
+        )
+    
+    return match_predictions, player_predictions
 
 
 async def send_predictions_to_miners(
