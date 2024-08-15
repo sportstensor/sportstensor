@@ -105,6 +105,17 @@ class Match(StrictBaseModel):
         return v
     
 
+class Player(StrictBaseModel):
+    """Represents a player."""
+
+    playerId: int = Field(description="Unique Id that represents an individual player.")
+    playerName: str
+    playerTeam: str
+    playerPosition: Optional[str]
+    sport: int
+    league: str
+
+
 class StatType(Enum):
     OFFENSE = "OFFENSE"
     DEFENSE = "DEFENSE"
