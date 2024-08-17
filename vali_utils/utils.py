@@ -17,6 +17,7 @@ from storage.sqlite_validator_storage import SqliteValidatorStorage
 from common.constants import (
     IS_DEV,
     CORRECT_MATCH_WINNER_SCORE,
+    TOTAL_SCORE_THRESHOLD,
     MAX_SCORE_DIFFERENCE,
     MAX_SCORE_DIFFERENCE_SOCCER,
     MAX_SCORE_DIFFERENCE_FOOTBALL,
@@ -386,8 +387,15 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
 
     # Aggregate rewards for each miner
     aggregated_rewards = defaultdict(float)
+    num_predictions_below_threshold = 0
     for uid, reward in zip(rewards_uids, rewards):
+        # Adjust the reward to 0 if it doesn't meat our threshold
+        if reward < TOTAL_SCORE_THRESHOLD:
+            num_predictions_below_threshold += 1
+            reward = 0
         aggregated_rewards[uid] += reward
+
+    bt.logging.debug(f"Total prediction scores below threshold of {TOTAL_SCORE_THRESHOLD}: {num_predictions_below_threshold} of {len(rewards)}")
 
     # Convert the aggregated rewards to a list of tuples (uid, aggregated_reward)
     aggregated_rewards_list = list(aggregated_rewards.items())

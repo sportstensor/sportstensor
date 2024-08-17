@@ -23,7 +23,7 @@ VALI_REFRESH_MATCHES = 60 * 30
 BASE_MINER_PREDICTION_SCORE = 0.01
 
 # Number of miners to send predictions to. -1 == all
-NUM_MINERS_TO_SEND_TO = 25
+NUM_MINERS_TO_SEND_TO = 20
 
 # Minimum time in seconds predictions are allowed before match begins
 MIN_PREDICTION_TIME_THRESHOLD = 60 * 30
@@ -35,7 +35,7 @@ MAX_PREDICTION_DAYS_THRESHOLD = 2
 MAX_BATCHSIZE_FOR_SCORING = 25
 
 # Cut off days to attempt to score predictions. i.e. Any predictions not scored with X days will be left behind
-SCORING_CUTOFF_IN_DAYS = 3
+SCORING_CUTOFF_IN_DAYS = 10
 
 # Interval in minutes that we attempt to score predictions
 SCORING_INTERVAL_IN_MINUTES = 1
@@ -45,6 +45,8 @@ MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
 CORRECT_MATCH_WINNER_SCORE = 0.5
+# The score a miner must achieve to earn weights
+TOTAL_SCORE_THRESHOLD = 0.4
 
 MAX_SCORE_DIFFERENCE = 10
 MAX_SCORE_DIFFERENCE_SOCCER = 10

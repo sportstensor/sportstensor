@@ -161,6 +161,45 @@ def upload_prediction_results(prediction_results):
         conn.close()
 
 
+def update_miner_reg_statuses(active_hotkeys):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        prediction_scores_table_name = "MatchPredictionResults"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+
+        # mark hotkeys that are active in the metagraph as registered
+        c.execute(
+            f"""
+            UPDATE {prediction_scores_table_name}
+            SET miner_is_registered = 1
+            WHERE miner_hotkey IN ({','.join(['%s' for _ in active_hotkeys])})
+            """,
+            active_hotkeys,
+        )
+        conn.commit()
+
+        # mark hotkeys that are not active in the metagraph as unregistered
+        c.execute(
+            f"""
+            UPDATE {prediction_scores_table_name}
+            SET miner_is_registered = 0
+            WHERE miner_hotkey NOT IN ({','.join(['%s' for _ in active_hotkeys])})
+            """,
+            active_hotkeys,
+        )
+        conn.commit()
+        logging.info("Miner registration statuses updated in database")
+
+    except Exception as e:
+        logging.error("Failed to update miner registration statuses in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+
 def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=False):
     try:
         conn = get_db_conn()
@@ -191,6 +230,8 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
         if miner_hotkey:
             query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
 
         if group_by_miner:
             query += " GROUP BY league, miner_hotkey"
@@ -239,6 +280,8 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         if miner_hotkey:
             query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
 
         if group_by_miner:
             query += " GROUP BY sport, miner_hotkey"
@@ -278,13 +321,16 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
 
         query += f"""
             FROM {prediction_scores_table_name}
+            WHERE 1=1
         """
 
         params = []
 
         if miner_hotkey:
-            query += " WHERE miner_hotkey = %s"
+            query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
 
         if group_by_miner:
             query += " GROUP BY miner_hotkey"
@@ -295,6 +341,86 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
     except Exception as e:
         logging.error(
             "Failed to query total prediction stats from MySQL database", exc_info=True
+        )
+    finally:
+        c.close()
+        conn.close()
+
+
+def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+
+        query = f"""
+            SELECT *
+            FROM MPRSnapshots
+            WHERE 1=1
+        """
+
+        params = []
+        if sport:
+            query += " AND sport = %s"
+            params.append(sport)
+
+        if league:
+            query += " AND league = %s"
+            params.append(league)
+
+        if miner_hotkey:
+            query += " AND miner_hotkey = %s"
+            params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
+
+        query += " ORDER BY snapshot_date ASC"
+        
+        c.execute(query, params)
+        return c.fetchall()
+
+    except Exception as e:
+        logging.error(
+            "Failed to query match prediction snapshots from MySQL database", exc_info=True
+        )
+    finally:
+        c.close()
+        conn.close()
+
+
+def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+
+        query = f"""
+            SELECT *
+            FROM MPRSnapshots
+            WHERE 1=1
+        """
+
+        params = []
+        if sport:
+            query += " AND sport = %s"
+            params.append(sport)
+
+        if league:
+            query += " AND league = %s"
+            params.append(league)
+
+        if miner_hotkey:
+            query += " AND miner_hotkey = %s"
+            params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
+
+        query += " ORDER BY snapshot_date ASC"
+        
+        c.execute(query, params)
+        return c.fetchall()
+
+    except Exception as e:
+        logging.error(
+            "Failed to query match prediction snapshots from MySQL database", exc_info=True
         )
     finally:
         c.close()
@@ -486,6 +612,7 @@ def create_tables():
             id INT AUTO_INCREMENT PRIMARY KEY,
             miner_hotkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
             league VARCHAR(50) NOT NULL,
             sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,
@@ -501,6 +628,7 @@ def create_tables():
             id INT AUTO_INCREMENT PRIMARY KEY,
             miner_hotkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
             league VARCHAR(50) NOT NULL,
             sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,
@@ -508,6 +636,24 @@ def create_tables():
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL,
             UNIQUE (miner_hotkey, league)
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MPRSnapshots (
+            snapshot_id INT AUTO_INCREMENT PRIMARY KEY,
+            snapshot_date DATE NOT NULL,
+            id INT,
+            miner_hotkey VARCHAR(64),
+            miner_uid INTEGER,
+            miner_is_registered TINYINT(1),
+            league VARCHAR(50),
+            sport INTEGER,
+            total_predictions INTEGER,
+            winner_predictions INTEGER,
+            avg_score FLOAT,
+            last_updated TIMESTAMP,
+            UNIQUE (snapshot_date, id)
         )"""
         )
         conn.commit()
