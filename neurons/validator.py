@@ -156,7 +156,7 @@ class Validator(BaseValidatorNeuron):
             return
 
         # Get a prediction requests to send to miners
-        match_prediction_requests, player_prediction_requests = utils.get_match_prediction_requests()
+        match_prediction_requests = utils.get_match_prediction_requests()
 
         if len(match_prediction_requests) > 0:
             # The dendrite client queries the network.
@@ -165,7 +165,7 @@ class Validator(BaseValidatorNeuron):
             )
             # Loop through predictions and send to miners
             for mpr in match_prediction_requests:
-                input_synapse = GetMatchPrediction(match_prediction=mpr)
+                input_synapse = GetMatchPrediction(match_prediction=mpr["match_prediction"], player_predictions=mpr["player_predictions"])
                 # Send prediction requests to miners and store their responses
                 finished_responses, working_miner_uids = (
                     await utils.send_predictions_to_miners(
@@ -177,57 +177,6 @@ class Validator(BaseValidatorNeuron):
                 try:
                     rewards = (
                         await self.get_basic_match_prediction_rewards(
-                            input_synapse=input_synapse, responses=finished_responses
-                        )
-                    ).to(self.device)
-                except Exception as e:
-                    bt.logging.error(
-                        f"Error in get_basic_match_prediction_rewards: {e}"
-                    )
-                    return
-                
-
-                # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-                if len(working_miner_uids) > 0:
-                    bt.logging.info(
-                        f"Rewarding miners {working_miner_uids} that returned a prediction."
-                    )
-                    self.update_scores(rewards, working_miner_uids)
-
-                # Update the scores of miner uids NOT working. Default to 0.
-                not_working_miner_uids = []
-                no_rewards = []
-                for uid in miner_uids:
-                    if uid not in working_miner_uids:
-                        not_working_miner_uids.append(uid)
-                        no_rewards.append(0.0)
-                if len(not_working_miner_uids) > 0:
-                    bt.logging.info(
-                        f"Penalizing miners {not_working_miner_uids} that did not respond."
-                    )
-                    self.update_scores(
-                        torch.FloatTensor(no_rewards).to(self.device),
-                        not_working_miner_uids,
-                    )
-
-        if len(player_prediction_requests) > 0:
-            # The dendrite client queries the network.
-            bt.logging.info(
-                f"*** Sending {len(player_prediction_requests)} player prediction requests to miners {miner_uids} ***"
-            )
-            for ppr in player_prediction_requests:
-                input_synapse = GetPlayerPrediction(player_prediction=ppr)
-                # Send prediction requests to miners and store their responses
-                finished_responses, working_miner_uids = (
-                    await utils.send_predictions_to_miners(
-                        self, input_synapse, miner_uids
-                    )
-                )
-
-                # Adjust the scores based on responses from miners.
-                try:
-                    rewards = (
-                        await self.get_basic_player_prediction_rewards(
                             input_synapse=input_synapse, responses=finished_responses
                         )
                     ).to(self.device)

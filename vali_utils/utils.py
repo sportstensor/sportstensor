@@ -186,7 +186,7 @@ async def process_app_prediction_requests(
         return False
 
 
-def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
+def get_match_prediction_requests(batchsize: int = 1):
     matches = storage.get_matches_to_predict(batchsize)
 
     # match_predictions = [
@@ -200,49 +200,58 @@ def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
     #     )
     #     for match in matches
     # ]
-
-    match_predictions = []
-    player_predictions = []
+    prediction_requests = []
     for match in matches:
-        match_predictions.append(
-            MatchPrediction(
-                matchId=match.matchId,
-                matchDate=str(match.matchDate),
-                sport=match.sport,
-                league=match.league,
-                homeTeamName=match.homeTeamName,
-                awayTeamName=match.awayTeamName,
-            )
-        )
+        player_predictions = []
+
         home_players = storage.get_players_to_predict(playerTeam=match.homeTeamName, batchsize=batchsize)
-        player_predictions.append(
-            PlayerPrediction(
-                matchId=match.matchId,
-                matchDate=str(match.matchDate),
-                sport=match.sport,
-                league=match.league,
-                playerName=player.playerName,
-                playerTeam=player.playerTeam,
-                playerPosition=player.playerPosition,
+        away_players = storage.get_players_to_predict(playerTeam=match.awayTeamName, batchsize=batchsize)
+
+        for player in home_players:
+            player_stats = storage.get_player_stats(playerId=player.playerId)
+            player_predictions.append(
+                PlayerPrediction(
+                    matchId=match.matchId,
+                    matchDate=str(match.matchDate),
+                    sport=match.sport,
+                    league=match.league,
+                    playerName=player.playerName,
+                    playerTeam=player.playerTeam,
+                    playerPosition=player.playerPosition,
+                    statNames=[player_stat.statName for player_stat in player_stats]
+                )
             )
-            for player in home_players
-        )
-        away_players = storage.get_players_to_predict(playerTeam=match.homeTeamName, batchsize=batchsize)
-        stats = storage.get_stats(statType=StatType.OFFENSE)
-        player_predictions.append(
-            PlayerPrediction(
-                matchId=match.matchId,
-                matchDate=str(match.matchDate),
-                sport=match.sport,
-                league=match.league,
-                playerName=player.playerName,
-                playerTeam=player.playerTeam,
-                playerPosition=player.playerPosition,
+        for player in away_players:
+            player_stats = storage.get_player_stats(playerId=player.playerId)
+            player_predictions.append(
+                PlayerPrediction(
+                    matchId=match.matchId,
+                    matchDate=str(match.matchDate),
+                    sport=match.sport,
+                    league=match.league,
+                    playerName=player.playerName,
+                    playerTeam=player.playerTeam,
+                    playerPosition=player.playerPosition,
+                    statNames=[player_stat.statName for player_stat in player_stats]
+                )
             )
-            for player in away_players
+
+        # Returning a list of object holding prediction requests
+        prediction_requests.append(
+            {
+                "match_prediction": MatchPrediction(
+                    matchId=match.matchId,
+                    matchDate=str(match.matchDate),
+                    sport=match.sport,
+                    league=match.league,
+                    homeTeamName=match.homeTeamName,
+                    awayTeamName=match.awayTeamName,
+                ),
+                "player_predictions": player_predictions
+            }
         )
     
-    return match_predictions, player_predictions
+    return prediction_requests
 
 
 async def send_predictions_to_miners(

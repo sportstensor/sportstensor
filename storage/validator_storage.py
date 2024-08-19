@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List
 import datetime as dt
 
-from common.data import League, Match, MatchPrediction, PlayerStat, PlayerPrediction
+from common.data import League, Match, MatchPrediction, Player, Stat, PlayerStat, PlayerPrediction
 from common.protocol import GetMatchPrediction
 
 
@@ -96,4 +96,19 @@ class ValidatorStorage(ABC):
     @abstractmethod
     def read_miner_last_prediction(self, miner_hotkey: str) -> Optional[dt.datetime]:
         """Gets when a specific miner last returned a prediction."""
+        raise NotImplemented
+    
+    @abstractmethod
+    def get_stats(self, statType: str) -> List[Stat]:
+        """Gets a list of all the stats, given stats type"""
+        raise NotImplemented
+    
+    @abstractmethod
+    def get_player_stats(self, playerId: str, statType: str) -> List[Stat]:
+        """Gets a player's stats that need to be predicted"""
+        raise NotImplemented
+    
+    @abstractmethod
+    def get_players_to_predict(self, playerTeam: str, rating_threshold: float, batchsize: int) -> List[Player]:
+        """Gets a certain number of players in a team"""
         raise NotImplemented

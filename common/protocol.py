@@ -50,6 +50,13 @@ class GetMatchPrediction(BaseProtocol):
         default=None,
     )
 
+    player_predictions: List[PlayerPrediction] = pydantic.Field(
+        description="The PlayerPrediction object being requested",
+        frozen=False,
+        repr=False,
+        default=None,
+    )
+
     def __str__(self):
         return f"GetMatchPrediction(match_prediction={self.match_prediction}, axon={self.axon})"
 

@@ -540,13 +540,41 @@ class SqliteValidatorStorage(ValidatorStorage):
             
     def get_stats(
         self, statType: str = StatType.OFFENSE
-    ):
+    ) -> List[Stat]:
+        """Gets a list of all the stats, given stats type"""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection().cursor()
                 cursor.execute(
                     "SELECT * FROM Stats where statType = ?",
                     statType
+                )
+                results = cursor.fetchall()
+                if not results:
+                    return []
+                
+                stats = [
+                    Stat(
+                        **dict(zip([column[0] for column in cursor.description], row))
+                    )
+                    for row in results
+                ]
+                return stats
+            
+    def get_player_stats(
+        self, playerId: str, statType: str = StatType.OFFENSE
+    ):
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection().cursor()
+                cursor.execute(
+                    """
+                    SELECT s.*
+                    FROM PlayerStats ps
+                    JOIN Stats s ON ps.statId = s.statId
+                    WHERE ps.playerId = ? AND s.statType = ?;
+                    """,
+                    playerId, statType
                 )
                 results = cursor.fetchall()
                 if not results:

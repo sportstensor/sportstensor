@@ -25,7 +25,7 @@ from base.miner import BaseMinerNeuron
 
 from common import constants
 from common.protocol import GetMatchPrediction
-from st.sport_prediction_model import make_match_prediction
+from st.sport_prediction_model import make_match_prediction, make_player_predictions
 
 
 class Miner(BaseMinerNeuron):
@@ -42,6 +42,7 @@ class Miner(BaseMinerNeuron):
         # Make the match prediction based on the requested MatchPrediction object
         # TODO: does this need to by async?
         synapse.match_prediction = make_match_prediction(synapse.match_prediction)
+        synapse.player_predictions = make_player_predictions(synapse.player_predictions)
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
