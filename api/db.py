@@ -153,9 +153,11 @@ def upload_prediction_results(prediction_results):
 
         conn.commit()
         logging.info("Prediction results data inserted or updated in database")
+        return True
 
     except Exception as e:
         logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()
@@ -192,9 +194,11 @@ def update_miner_reg_statuses(active_hotkeys):
         )
         conn.commit()
         logging.info("Miner registration statuses updated in database")
+        return True
 
     except Exception as e:
         logging.error("Failed to update miner registration statuses in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()
@@ -245,6 +249,7 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
         logging.error(
             "Failed to query league prediction stats from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -295,6 +300,7 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         logging.error(
             "Failed to query sport prediction stats from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -342,6 +348,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
         logging.error(
             "Failed to query total prediction stats from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -382,6 +389,7 @@ def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
         logging.error(
             "Failed to query match prediction snapshots from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -422,6 +430,7 @@ def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
         logging.error(
             "Failed to query match prediction snapshots from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -516,9 +525,11 @@ def update_app_match_predictions(predictions):
 
         conn.commit()
         logging.info("Data inserted or updated in database")
+        return True
 
     except Exception as e:
         logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()

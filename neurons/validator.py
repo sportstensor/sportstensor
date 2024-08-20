@@ -285,8 +285,6 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.info(
                         "Successfully processed app match prediction requests."
                     )
-                else:
-                    bt.logging.warning("Issue processing app prediction requests.")
                 self.next_app_predictions_syncing_datetime = dt.datetime.now(
                     dt.timezone.utc
                 ) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
