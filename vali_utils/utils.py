@@ -16,6 +16,7 @@ from storage.sqlite_validator_storage import SqliteValidatorStorage
 
 from common.constants import (
     IS_DEV,
+    VALIDATOR_TIMEOUT,
     CORRECT_MATCH_WINNER_SCORE,
     TOTAL_SCORE_THRESHOLD,
     MAX_SCORE_DIFFERENCE,
@@ -274,7 +275,7 @@ async def send_predictions_to_miners(
                 axons=axons,
                 synapse=input_synapse,
                 deserialize=True,
-                timeout=120,
+                timeout=VALIDATOR_TIMEOUT,
             )
 
         working_miner_uids = []

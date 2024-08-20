@@ -24,6 +24,7 @@ from mysql.connector import Error
 from datetime import datetime
 import api.db as db
 from api.config import NETWORK, NETUID, IS_PROD, API_KEYS, TESTNET_VALI_HOTKEYS
+from common.constants import ENABLE_APP, APP_PREDICTIONS_UNFULFILLED_THRESHOLD
 
 sentry_sdk.init(
     dsn="https://d9cce5fe3664e00bf8857b2e425d9ec5@o4507644404236288.ingest.de.sentry.io/4507644429271120",
@@ -83,7 +84,7 @@ def authenticate_with_bittensor(hotkey, metagraph):
 
 
 # Get a random active validator hotkey with vTrust >= 0.8
-def get_active_vali_hotkey(metagraph):
+def get_active_vali_hotkey(metagraph, exclude_hotkeys=[]):
     avail_uids = []
 
     if NETWORK == "test":
@@ -92,7 +93,7 @@ def get_active_vali_hotkey(metagraph):
         return random.choice(avail_hotkeys)
 
     for uid in range(metagraph.n.item()):
-        if metagraph.validator_permit[uid]:
+        if metagraph.validator_permit[uid] and metagraph.hotkeys[uid] not in exclude_hotkeys:
             avail_uids.append(uid)
 
     vali_vtrusts = [(uid, metagraph.hotkeys[uid], metagraph.Tv[uid].item()) for uid in avail_uids if metagraph.Tv[uid] >= 0.8 and metagraph.active[uid] == 1]
@@ -144,6 +145,42 @@ async def main():
                 print_exception(type(err), err, err.__traceback__)
 
             await asyncio.sleep(300)
+
+    async def check_vali_app_match_prediction_requests():
+        if not ENABLE_APP:
+            return
+        while True:
+            """Checks if any AppMatchPredictions have NOT been picked up by a validator within APP_PREDICTIONS_UNFULFILLED_THRESHOLD minutes."""
+            print("check_vali_app_match_prediction_requests()")
+
+            try:
+                requests = db.get_app_match_predictions_unfulfilled(APP_PREDICTIONS_UNFULFILLED_THRESHOLD)
+                if requests:
+                    print(f"Unfulfilled app match prediction requests: {requests}")
+                    for request in requests:
+                        vali_hotkey = None
+                        for attempt in range(10):
+                            # Get a valid validator hotkey with vTrust >= 0.8
+                            vali_hotkey = get_active_vali_hotkey(metagraph, exclude_hotkeys=[request["vali_hotkey"]])
+                            if vali_hotkey is not None:
+                                print(f"Random active validator hotkey with vTrust >= 0.8: {vali_hotkey}")
+                                break
+                            print(f"Attempt {attempt + 1} failed to get a valid hotkey.")
+                        else:
+                            return {"message": "Failed to find a valid validator hotkey after 10 attempts"}
+                        
+                        if vali_hotkey is not None:
+                            print(f"Random active validator hotkey with vTrust >= 0.8: {vali_hotkey}")
+                            db.upsert_app_match_prediction(request, vali_hotkey)
+                        else:
+                            print("Failed to find a valid validator hotkey.")
+
+            # In case of unforeseen errors, the api will log the error and continue operations.
+            except Exception as err:
+                print("Error checking unfulfilled app match predictions", str(err))
+                print_exception(type(err), err, err.__traceback__)
+
+            await asyncio.sleep(10)
 
     @app.get("/")
     def healthcheck():
@@ -375,6 +412,7 @@ async def main():
     await asyncio.gather(
         resync_metagraph(),
         resync_miner_reg_statuses(),
+        check_vali_app_match_prediction_requests(),
         asyncio.to_thread(
             uvicorn.run,
             app,

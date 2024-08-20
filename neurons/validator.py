@@ -84,8 +84,7 @@ class Validator(BaseValidatorNeuron):
         self.prediction_results_endpoint = f"{api_root}/predictionResults"
         self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictionsForValidators"
         self.app_prediction_responses_endpoint = f"{api_root}/AppMatchPredictionsForValidators"
-
-        self.client_timeout_seconds = VALIDATOR_TIMEOUT
+        
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)

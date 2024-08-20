@@ -566,6 +566,29 @@ def get_app_match_predictions(vali_hotkey=None, batch_size=-1):
         conn.close()
 
 
+def get_app_match_predictions_unfulfilled(unfulfilled_threshold=5):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            f"SELECT * FROM AppMatchPredictions WHERE isComplete = 0 AND lastUpdated < NOW() - INTERVAL {unfulfilled_threshold} MINUTE"
+        )
+        match_list = cursor.fetchall()
+
+        return match_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve unfulfilled app match predictions from the MySQL database",
+            exc_info=True,
+        )
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def get_prediction_by_id(app_id):
     try:
         # Log the received app_id
