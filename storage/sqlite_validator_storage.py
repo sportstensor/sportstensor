@@ -1,3 +1,4 @@
+import os
 import contextlib
 import datetime as dt
 import time
@@ -105,17 +106,59 @@ class SqliteValidatorStorage(ValidatorStorage):
     
     def cleanup(self):
         """Cleanup the database."""
-        print("Cleaning up the database")
+        print("========================== Database status checks and cleanup ==========================")
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
-                # Execute cleanup queries
+                
+                db_size_bytes = os.path.getsize("SportsTensor.db")
+                db_size_gb = db_size_bytes / (1024 ** 3)
+                db_size_mb = db_size_bytes / (1024 ** 2)
+                print(f"SportsTensor.db size: {db_size_gb:.2f} GB ({db_size_mb:.2f} MB)")
+                
+                # Print the total number of rows in the MatchPredictions table
+                cursor.execute("SELECT COUNT(*) FROM MatchPredictions")
+                total_rows = cursor.fetchone()[0]
+                print(f"Total number of rows in MatchPredictions: {total_rows}")
 
-                # Clean up bug where we accidentally inserted 'REDACTED' as scores
-                cursor.execute(
-                    """DELETE FROM MatchPredictions WHERE homeTeamScore='REDACTED' OR awayTeamScore='REDACTED'"""
-                )
-                connection.commit()
+                # Print the total number of rows in the MatchPredictions table
+                cursor.execute(f"SELECT COUNT(*) FROM MatchPredictions WHERE isScored = 0 AND lastUpdated < DATETIME('now', '-{SCORING_CUTOFF_IN_DAYS} day')")
+                total_unscored_rows = cursor.fetchone()[0]
+                print(f"Total number of MatchPredictions {SCORING_CUTOFF_IN_DAYS}+ days old that haven't been scored: {total_unscored_rows}")
+                
+                try:
+                    # Execute cleanup queries
+                    if total_unscored_rows > 0:
+                        # Clean up old predictions that haven't been scored (for whatever reason) and never will be
+                        print(f"Deleting abandoned predictions older than {SCORING_CUTOFF_IN_DAYS} days...")
+                        cursor.execute(
+                            f"DELETE FROM MatchPredictions WHERE isScored = 0 AND lastUpdated < DATETIME('now', '-{SCORING_CUTOFF_IN_DAYS} day')"
+                        )
+                        connection.commit()
+
+                    # Clean up bug where we accidentally inserted 'REDACTED' as scores
+                    cursor.execute(
+                        """DELETE FROM MatchPredictions WHERE homeTeamScore='REDACTED' OR awayTeamScore='REDACTED'"""
+                    )
+                    connection.commit()
+
+                    # Run VACUUM to reclaim unused space
+                    #print("Running VACUUM to reclaim unused space...")
+                    #cursor.execute("VACUUM")
+                    
+                    # Check database integrity
+                    print("Checking database integrity...")
+                    cursor.execute("PRAGMA integrity_check")
+                    integrity_result = cursor.fetchone()[0]
+                    if integrity_result != "ok":
+                        print("*** ERROR: Database integrity check failed! Contact Sportstensor admin. ***")
+                    else:
+                        print("Database integrity check passed.")
+                
+                except Exception as e:
+                    print(f"An error occurred during cleanup: {e}")
+                    raise e
+        print("========================================================================================")
 
     def insert_leagues(self, leagues: List[League]):
         """Stores leagues associated with sports. Indicates which leagues are active to run predictions on."""
