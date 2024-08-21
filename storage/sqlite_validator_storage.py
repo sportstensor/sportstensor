@@ -151,7 +151,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     cursor.execute("PRAGMA integrity_check")
                     integrity_result = cursor.fetchone()[0]
                     if integrity_result != "ok":
-                        raise("Database integrity check failed! Contact Sportstensor admin.")
+                        print("*** ERROR: Database integrity check failed! Contact Sportstensor admin. ***")
                     else:
                         print("Database integrity check passed.")
                 
