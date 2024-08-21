@@ -146,6 +146,15 @@ async def process_app_prediction_requests(
                     match_prediction_dict["app_request_id"] = pr["app_request_id"]
                     match_prediction_dict["matchDate"] = str(match_prediction_dict["matchDate"]), # convert matchDate to string for serialization
                     prediction_responses.append(match_prediction_dict)
+
+                # Loop through miners not responding and add them to the response list with a flag
+                for uid in miner_uids:
+                    if uid not in working_miner_uids:
+                        match_prediction_not_working = pr
+                        match_prediction_not_working["minerHasIssue"] = True
+                        match_prediction_not_working["minerIssueMessage"] = "Miner did not respond with a prediction."
+                        prediction_responses.append(match_prediction_not_working)
+
             else:
                 bt.logging.info(
                     f"-- No miner uid found for {miner_hotkey}, skipping."
@@ -171,8 +180,7 @@ async def process_app_prediction_requests(
                         bt.logging.error(
                             f"Failed to post app prediction responses after {max_retries} attempts."
                         )
-                        # Todo: store the failed responses in the database to retry later? Try to notify API?
-                        # API may need logic to detect initialized requests that have not been responded to in X amount of time and reprocess.
+                        # Return False to indicate that the post failed
                         return False
 
         return True

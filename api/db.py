@@ -499,7 +499,19 @@ def update_app_match_predictions(predictions):
         current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
 
         predictions_to_update = []
+        predictions_with_issues = []
         for prediction in predictions:
+            if "minerHasIssue" in prediction and (prediction["minerHasIssue"] == 1 or prediction["minerHasIssue"] == True):
+                predictions_with_issues.append(
+                    (
+                        current_utc_time,
+                        1,
+                        prediction["minerIssueMessage"],
+                        prediction["app_request_id"],
+                    )
+                )
+                continue
+
             if "homeTeamScore" not in prediction or "awayTeamScore" not in prediction:
                 logging.error("Missing homeTeamScore or awayTeamScore for prediction in update_app_match_predictions")
                 continue
@@ -514,14 +526,24 @@ def update_app_match_predictions(predictions):
                 )
             )
 
-        c.executemany(
-            """
-            UPDATE AppMatchPredictions
-            SET homeTeamScore = %s, awayTeamScore = %s, isComplete = %s, lastUpdated = %s
-            WHERE app_request_id = %s
-            """,
-            predictions_to_update
-        )
+        if predictions_to_update:
+            c.executemany(
+                """
+                UPDATE AppMatchPredictions
+                SET homeTeamScore = %s, awayTeamScore = %s, isComplete = %s, lastUpdated = %s
+                WHERE app_request_id = %s
+                """,
+                predictions_to_update
+            )
+        if predictions_with_issues:
+            c.executemany(
+                """
+                UPDATE AppMatchPredictions
+                SET valiLastUpdated = %s, minerHasIssue = %s, minerIssueMessage = %s
+                WHERE app_request_id = %s
+                """,
+                predictions_with_issues
+            )
 
         conn.commit()
         logging.info("Data inserted or updated in database")
@@ -553,6 +575,15 @@ def get_app_match_predictions(vali_hotkey=None, batch_size=-1):
         cursor.execute(query, params)
         match_list = cursor.fetchall()
 
+        # if results, we need to update the valiLastUpdated field
+        if match_list and vali_hotkey is not None:
+            cursor.execute(
+                "UPDATE AppMatchPredictions SET valiLastUpdated = NOW() WHERE app_request_id IN (%s)"
+                % ",".join(["%s"] * len(match_list)),
+                [match["app_request_id"] for match in match_list],
+            )
+            conn.commit()
+
         return match_list
 
     except Exception as e:
@@ -572,7 +603,7 @@ def get_app_match_predictions_unfulfilled(unfulfilled_threshold=5):
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute(
-            f"SELECT * FROM AppMatchPredictions WHERE isComplete = 0 AND lastUpdated < NOW() - INTERVAL {unfulfilled_threshold} MINUTE"
+            f"SELECT * FROM AppMatchPredictions WHERE isComplete = 0 AND valiLastUpdated IS NULL AND lastUpdated < NOW() - INTERVAL {unfulfilled_threshold} MINUTE"
         )
         match_list = cursor.fetchall()
 
@@ -721,7 +752,10 @@ def create_app_tables():
             isComplete BOOLEAN DEFAULT FALSE,
             lastUpdated TIMESTAMP NOT NULL,
             miner_hotkey VARCHAR(64) NULL,
-            vali_hotkey VARCHAR(64) NULL
+            vali_hotkey VARCHAR(64) NULL,
+            valiLastUpdated TIMESTAMP NULL,
+            minerHasIssue BOOLEAN DEFAULT FALSE,
+            minerIssueMessage VARCHAR(255) NULL
         )"""
         )
         conn.commit()
