@@ -101,18 +101,19 @@ async def main():
                 active_hotkeys = [hotkey for hotkey in metagraph.hotkeys]
                 db.update_miner_reg_statuses(active_hotkeys)
                 
-                """
                 active_hotkeys = []
                 active_coldkeys = []
                 ages = []
-                current_block = metagraph.block
+                current_block = subtensor.get_current_block()
                 # Assuming an average block time of 12 seconds (adjust as necessary)
                 block_time_seconds = 12
                 for uid in range(metagraph.n.item()):
                     active_hotkeys.append(metagraph.hotkeys[uid])
                     active_coldkeys.append(metagraph.coldkeys[uid])
+                    
                     # calculate the age of the miner in hours
-                    registration_block = metagraph.hotkeys[uid].block
+                    # query the subtensor for the block at registration
+                    registration_block = subtensor.query_module('SubtensorModule','BlockAtRegistration',None,[NETUID,uid]).value
                     duration_in_blocks = current_block - registration_block
                     duration_seconds = duration_in_blocks * block_time_seconds
                     duration_hours = duration_seconds / 3600
@@ -121,7 +122,6 @@ async def main():
                 # Combine the data into a list of tuples
                 data_to_update = list(zip(active_coldkeys, ages, active_hotkeys))
                 db.update_miner_coldkeys_and_ages(data_to_update)
-                """
 
             # In case of unforeseen errors, the api will log the error and continue operations.
             except Exception as err:

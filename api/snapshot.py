@@ -70,6 +70,7 @@ def take_snapshot():
         SELECT 
             id, 
             miner_hotkey,
+            miner_coldkey,
             miner_uid, 
             miner_is_registered,
             miner_age,
@@ -78,9 +79,7 @@ def take_snapshot():
             total_predictions, 
             winner_predictions, 
             avg_score, 
-            last_updated,
-            miner_coldkey,
-            miner_age
+            last_updated
         FROM {prediction_scores_table_name}
         """
         c.execute(fetch_query)
@@ -90,15 +89,14 @@ def take_snapshot():
         modified_results = []
         for row in results:
             miner_hotkey = row[1]
-            miner_coldkey = metagraph.coldkeys[row[2]]
             incentive = hotkey_incentives.get(miner_hotkey, None)
-            modified_row = row + (incentive, miner_coldkey, None)
+            modified_row = row + (incentive,)
             modified_results.append((current_date,) + modified_row)
         
         # Insert modified data into the snapshot table
         insert_snapshot_query = """
         INSERT INTO MPRSnapshots (
-            snapshot_date, id, miner_hotkey, miner_uid, miner_is_registered, league, sport, total_predictions, winner_predictions, avg_score, last_updated, incentive, miner_coldkey, miner_age
+            snapshot_date, id, miner_hotkey, miner_coldkey, miner_uid, miner_is_registered, miner_age, league, sport, total_predictions, winner_predictions, avg_score, last_updated, incentive
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         c.executemany(insert_snapshot_query, modified_results)
