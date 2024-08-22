@@ -156,7 +156,7 @@ class Validator(BaseValidatorNeuron):
             return
 
         # Get a prediction requests to send to miners
-        match_prediction_requests = utils.get_match_prediction_requests()
+        match_prediction_requests, player_prediction_requests = utils.get_match_prediction_requests()
 
         if len(match_prediction_requests) > 0:
             # The dendrite client queries the network.
@@ -165,7 +165,7 @@ class Validator(BaseValidatorNeuron):
             )
             # Loop through predictions and send to miners
             for mpr in match_prediction_requests:
-                input_synapse = GetMatchPrediction(match_prediction=mpr["match_prediction"], player_predictions=mpr["player_predictions"])
+                input_synapse = GetMatchPrediction(match_prediction=mpr)
                 # Send prediction requests to miners and store their responses
                 finished_responses, working_miner_uids = (
                     await utils.send_predictions_to_miners(

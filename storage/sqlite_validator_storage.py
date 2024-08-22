@@ -87,7 +87,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             league              VARCHAR(50)     NOT NULL
                             )"""
     
-    PLAYERSTATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerStats (
+    PLAYERELIGIBLESTATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerEligibleStats (
                             playerId            INTEGER         NOT NULL,
                             statId              INTEGER         NOT NULL,
                             PRIMARY KEY (playerId, statId),
@@ -150,8 +150,8 @@ class SqliteValidatorStorage(ValidatorStorage):
             # Create the Players table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.PLAYERS_TABLE_CREATE)
 
-            # Create the PlayerStats table (if it does not already exist).
-            cursor.execute(SqliteValidatorStorage.PLAYERSTATS_TABLE_CREATE)
+            # Create the PlayerEligibleStats table (if it does not already exist).
+            cursor.execute(SqliteValidatorStorage.PLAYERELIGIBLESTATS_TABLE_CREATE)
 
             # Create the PlayerMatchStats table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.PLAYERMATCHSTATS_TABLE_CREATE)
@@ -539,15 +539,15 @@ class SqliteValidatorStorage(ValidatorStorage):
                 return predictions
             
     def get_stats(
-        self, statType: str = StatType.OFFENSE
+        self, sport: int, statType: str = StatType.OFFENSE
     ) -> List[Stat]:
         """Gets a list of all the stats, given stats type"""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection().cursor()
                 cursor.execute(
-                    "SELECT * FROM Stats where statType = ?",
-                    statType
+                    "SELECT * FROM Stats where statType = ? AND sport = ?",
+                    statType, sport
                 )
                 results = cursor.fetchall()
                 if not results:
@@ -561,18 +561,18 @@ class SqliteValidatorStorage(ValidatorStorage):
                 ]
                 return stats
             
-    def get_player_stats(
-        self, playerId: str, statType: str = StatType.OFFENSE
-    ):
+    def get_player_eligible_stats(
+        self, playerId: str, statType: str = StatType.OFFENSE, sample_size: int = 3
+    ) -> List[Stat]:
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection().cursor()
                 cursor.execute(
                     """
                     SELECT s.*
-                    FROM PlayerStats ps
-                    JOIN Stats s ON ps.statId = s.statId
-                    WHERE ps.playerId = ? AND s.statType = ?;
+                    FROM PlayerEligibleStats pes
+                    JOIN Stats s ON pes.statId = s.statId
+                    WHERE pes.playerId = ? AND s.statType = ?;
                     """,
                     playerId, statType
                 )
@@ -586,7 +586,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     )
                     for row in results
                 ]
-                return stats
+                return stats[:sample_size] if len(stats) > sample_size else stats
             
     def get_players_to_predict(
         self, playerTeam: str, rating_threshold = 0.8, batchsize = 10

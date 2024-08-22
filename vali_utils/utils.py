@@ -200,16 +200,27 @@ def get_match_prediction_requests(batchsize: int = 1):
     #     )
     #     for match in matches
     # ]
-    prediction_requests = []
+
+    match_prediction_requests = []
+    player_prediction_requests = []
     for match in matches:
-        player_predictions = []
+        match_prediction_requests.append(
+            MatchPrediction(
+                matchId=match.matchId,
+                matchDate=str(match.matchDate),
+                sport=match.sport,
+                league=match.league,
+                homeTeamName=match.homeTeamName,
+                awayTeamName=match.awayTeamName,
+            )
+        )
 
         home_players = storage.get_players_to_predict(playerTeam=match.homeTeamName, batchsize=batchsize)
         away_players = storage.get_players_to_predict(playerTeam=match.awayTeamName, batchsize=batchsize)
 
         for player in home_players:
-            player_stats = storage.get_player_stats(playerId=player.playerId)
-            player_predictions.append(
+            player_stats = storage.get_player_eligible_stats(playerId=player.playerId)
+            player_prediction_requests.append(
                 PlayerPrediction(
                     matchId=match.matchId,
                     matchDate=str(match.matchDate),
@@ -222,8 +233,8 @@ def get_match_prediction_requests(batchsize: int = 1):
                 )
             )
         for player in away_players:
-            player_stats = storage.get_player_stats(playerId=player.playerId)
-            player_predictions.append(
+            player_stats = storage.get_player_eligible_stats(playerId=player.playerId)
+            player_prediction_requests.append(
                 PlayerPrediction(
                     matchId=match.matchId,
                     matchDate=str(match.matchDate),
@@ -235,23 +246,8 @@ def get_match_prediction_requests(batchsize: int = 1):
                     statNames=[player_stat.statName for player_stat in player_stats]
                 )
             )
-
-        # Returning a list of object holding prediction requests
-        prediction_requests.append(
-            {
-                "match_prediction": MatchPrediction(
-                    matchId=match.matchId,
-                    matchDate=str(match.matchDate),
-                    sport=match.sport,
-                    league=match.league,
-                    homeTeamName=match.homeTeamName,
-                    awayTeamName=match.awayTeamName,
-                ),
-                "player_predictions": player_predictions
-            }
-        )
     
-    return prediction_requests
+    return match_prediction_requests, player_prediction_requests
 
 
 async def send_predictions_to_miners(

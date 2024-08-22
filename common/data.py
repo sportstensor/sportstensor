@@ -108,7 +108,7 @@ class Match(StrictBaseModel):
 class Player(StrictBaseModel):
     """Represents a player."""
 
-    playerId: int = Field(description="Unique Id that represents an individual player.")
+    playerId: str = Field(description="Unique Id that represents an individual player.")
     playerName: str
     playerTeam: str
     playerPosition: Optional[str]

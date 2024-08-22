@@ -104,7 +104,7 @@ class ValidatorStorage(ABC):
         raise NotImplemented
     
     @abstractmethod
-    def get_player_stats(self, playerId: str, statType: str) -> List[Stat]:
+    def get_player_eligible_stats(self, playerId: str, statType: str) -> List[Stat]:
         """Gets a player's stats that need to be predicted"""
         raise NotImplemented
     
