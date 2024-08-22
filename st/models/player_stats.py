@@ -51,7 +51,7 @@ class PlayerStatsPredictionModel(SportPredictionModel):
 
         return data
 
-    def activate(self, matchDate, sport, league, homeTeamName, awayTeamName, playerName, statNames):
+    def activate(self, matchDate, sport, league, playerName, playerTeam, playerPosition, statName, statType):
         data = self.get_data()
 
         scalers, X_scaled, y_scaled = self.scale_data(data)
@@ -59,60 +59,38 @@ class PlayerStatsPredictionModel(SportPredictionModel):
         model = self.load_or_run_model(scalers, X_scaled, y_scaled)
 
         pred_input = self.prep_pred_input(
-            matchDate, sport, league, homeTeamName, awayTeamName, playerName, statNames, scalers
+            matchDate, sport, league, playerName, playerTeam, playerPosition, statName, statType, scalers
         )
 
         predicted_outcome = model.predict(pred_input)
 
-        home_pred_unrounded = scalers["HT_SC"].inverse_transform(
-            predicted_outcome[:, 0].reshape(-1, 1)
-        )[0][0]
-        away_pred_unrounded = scalers["AT_SC"].inverse_transform(
-            predicted_outcome[:, 1].reshape(-1, 1)
-        )[0][0]
+        # TODO: model outcome
 
-        home_pred = round(home_pred_unrounded)
-        away_pred = round(away_pred_unrounded)
-        # print(f"Final predicted scores: Home={home_pred}, Away={away_pred}")
+        prediction = predicted_outcome
 
-        if home_pred == away_pred and home_pred_unrounded > away_pred_unrounded:
-            away_pred -= 1
-        elif home_pred == away_pred and home_pred_unrounded < away_pred_unrounded:
-            home_pred -= 1
-
-        # Ensure that predictions dictionary is always returned
-        predictions = {homeTeamName: home_pred, awayTeamName: away_pred}
-
-        return predictions
+        return prediction
 
     def make_prediction(self):
-        bt.logging.info("Predicting MLB match...")
+        bt.logging.info("Predicting an individual player's stat...")
         matchDate = self.prediction.matchDate.strftime("%Y-%m-%d")
-        homeTeamName = self.prediction.homeTeamName
-        awayTeamName = self.prediction.awayTeamName
-        statNames = self.prediction.statNames
+        playerName = self.prediction.playerName
+        playerTeam = self.prediction.playerTeam
+        playerPosition = self.prediction.playerPosition
         sport = self.prediction.sport
         league = self.prediction.league
-        playerName = self.prediction.playerName
+        statName = self.prediction.statName
+        statType = self.prediction.statType
 
-        predictions = self.activate(matchDate, sport, league, homeTeamName, awayTeamName, playerName, statNames)
+        predictions = self.activate(matchDate, sport, league, playerName, playerTeam, playerPosition, statName, statType)
 
-        if (
-            predictions is not None
-            and homeTeamName in predictions
-            and awayTeamName in predictions
-        ):
-            # Set our final predictions
-            bt.logging.info("Setting final predictions from model...")
-            self.prediction.statValues = int(predictions[homeTeamName])
+        if predictions:
+            self.prediction.statValue = predictions
         else:
             bt.logging.warning(
-                "Failed to get predictions from model, setting random scores"
+                "Failed to get predictions from model, setting random value"
             )
-            self.prediction.homeTeamScore = random.randint(0, 10)
-            self.prediction.awayTeamScore = random.randint(0, 10)
+            self.prediction.statValue = 0
 
-        # print(f"Assigned final predictions: Home={predictions[homeTeamName]}, Away={predictions[awayTeamName]}")
         return True
 
     def scale_data(self, data: pd.DataFrame) -> Tuple[dict, np.ndarray, np.ndarray]:

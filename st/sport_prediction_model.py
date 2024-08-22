@@ -77,12 +77,12 @@ def make_match_prediction(prediction: MatchPrediction):
     return prediction
 
 
-def make_player_predictions(predictions: PlayerPrediction):
+def make_player_prediction(prediction: PlayerPrediction):
     # Add individual player prediction model class
     from st.models.player_stats import PlayerStatsPredictionModel
 
-    for prediction in predictions:
-        player_prediction = PlayerStatsPredictionModel(prediction)
-        player_prediction.make_prediction()
+    result = prediction
+    player_prediction = PlayerStatsPredictionModel(result)
+    player_prediction.make_prediction()
 
-    return prediction
+    return result

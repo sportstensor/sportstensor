@@ -24,8 +24,8 @@ import base
 from base.miner import BaseMinerNeuron
 
 from common import constants
-from common.protocol import GetMatchPrediction
-from st.sport_prediction_model import make_match_prediction, make_player_predictions
+from common.protocol import GetMatchPrediction, GetPlayerPrediction
+from st.sport_prediction_model import make_match_prediction, make_player_prediction
 
 
 class Miner(BaseMinerNeuron):
@@ -34,15 +34,17 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-    async def forward(self, synapse: GetMatchPrediction) -> GetMatchPrediction:
+    async def forward(self, synapse: GetMatchPrediction | GetPlayerPrediction) -> GetMatchPrediction:
         bt.logging.info(
             f"Received GetMatchPrediction request in forward() from {synapse.dendrite.hotkey}."
         )
 
         # Make the match prediction based on the requested MatchPrediction object
         # TODO: does this need to by async?
-        synapse.match_prediction = make_match_prediction(synapse.match_prediction)
-        synapse.player_predictions = make_player_predictions(synapse.player_predictions)
+        if isinstance(synapse, GetMatchPrediction):
+            synapse.match_prediction = make_match_prediction(synapse.match_prediction)
+        if isinstance(synapse, GetPlayerPrediction):
+            synapse.player_prediction = make_player_prediction(synapse.player_prediction)
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
