@@ -245,7 +245,7 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
         """
 
         if group_by_miner:
-            query += ", miner_hotkey"
+            query += ", miner_hotkey, miner_coldkey, miner_age"
 
         query += f"""
             FROM {prediction_scores_table_name}
@@ -261,7 +261,7 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
             query += " AND miner_is_registered = 1"
 
         if group_by_miner:
-            query += " GROUP BY league, miner_hotkey"
+            query += " GROUP BY league, miner_hotkey, miner_coldkey, miner_age"
         else:
             query += " GROUP BY league"
 
@@ -295,7 +295,7 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         """
 
         if group_by_miner:
-            query += ", miner_hotkey"
+            query += ", miner_hotkey, miner_coldkey, miner_age"
 
         query += f"""
             FROM {prediction_scores_table_name}
@@ -311,7 +311,7 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
             query += " AND miner_is_registered = 1"
 
         if group_by_miner:
-            query += " GROUP BY sport, miner_hotkey"
+            query += " GROUP BY sport, miner_hotkey, miner_coldkey, miner_age"
         else:
             query += " GROUP BY sport"
 
@@ -344,7 +344,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
         """
 
         if group_by_miner:
-            query += ", miner_hotkey"
+            query += ", miner_hotkey, miner_coldkey, miner_age"
 
         query += f"""
             FROM {prediction_scores_table_name}
@@ -360,7 +360,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
             query += " AND miner_is_registered = 1"
 
         if group_by_miner:
-            query += " GROUP BY miner_hotkey"
+            query += " GROUP BY miner_hotkey, miner_coldkey, miner_age"
 
         c.execute(query, params)
         return c.fetchall()

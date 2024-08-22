@@ -266,7 +266,6 @@ async def main():
 
     await asyncio.gather(
         resync_metagraph(),
-        resync_miner_statuses(),
         asyncio.to_thread(
             uvicorn.run,
             app,
@@ -275,6 +274,7 @@ async def main():
             ssl_certfile="/root/origin-cert.pem",
             ssl_keyfile="/root/origin-key.key",
         ),
+        resync_miner_statuses(),
     )
 
 
