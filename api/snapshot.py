@@ -1,5 +1,7 @@
+import os
 from mysql.connector import Error
 import datetime as dt
+from datetime import timezone
 import time
 import logging
 
@@ -57,7 +59,7 @@ def take_snapshot():
         conn = db.get_db_conn()
         c = conn.cursor()
 
-        current_date = dt.datetime.now().date()
+        current_date = dt.datetime.now(timezone.utc)
 
         prediction_scores_table_name = "MatchPredictionResults"
         if not IS_PROD:
@@ -67,9 +69,11 @@ def take_snapshot():
         fetch_query = f"""
         SELECT 
             id, 
-            miner_hotkey, 
+            miner_hotkey,
+            miner_coldkey,
             miner_uid, 
-            miner_is_registered, 
+            miner_is_registered,
+            miner_age,
             league, 
             sport, 
             total_predictions, 
@@ -92,8 +96,8 @@ def take_snapshot():
         # Insert modified data into the snapshot table
         insert_snapshot_query = """
         INSERT INTO MPRSnapshots (
-            snapshot_date, id, miner_hotkey, miner_uid, miner_is_registered, league, sport, total_predictions, winner_predictions, avg_score, last_updated, incentive
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            snapshot_date, id, miner_hotkey, miner_coldkey, miner_uid, miner_is_registered, miner_age, league, sport, total_predictions, winner_predictions, avg_score, last_updated, incentive
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         c.executemany(insert_snapshot_query, modified_results)
         conn.commit()
