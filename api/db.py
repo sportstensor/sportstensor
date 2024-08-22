@@ -200,6 +200,33 @@ def update_miner_reg_statuses(active_hotkeys):
         conn.close()
 
 
+def update_miner_coldkeys_and_ages(data_to_update):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        prediction_scores_table_name = "MatchPredictionResults"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+
+        c.executemany(
+            f"""
+            UPDATE {prediction_scores_table_name}
+            SET miner_coldkey = %s, miner_age = %s
+            WHERE miner_hotkey = %s
+            """,
+            [(coldkey, age, hotkey) for coldkey, age, hotkey in data_to_update],
+        )
+        conn.commit()
+        logging.info("Miner coldkeys and ages updated in database")
+
+    except Exception as e:
+        logging.error("Failed to update miner coldkeys and ages in MySQL database", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
+
 def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=False):
     try:
         conn = get_db_conn()
@@ -544,7 +571,7 @@ def create_tables():
             """
         CREATE TABLE IF NOT EXISTS MPRSnapshots (
             snapshot_id INT AUTO_INCREMENT PRIMARY KEY,
-            snapshot_date DATE NOT NULL,
+            snapshot_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             id INT,
             miner_hotkey VARCHAR(64),
             miner_uid INTEGER,
@@ -554,8 +581,7 @@ def create_tables():
             total_predictions INTEGER,
             winner_predictions INTEGER,
             avg_score FLOAT,
-            last_updated TIMESTAMP,
-            UNIQUE (snapshot_date, id)
+            last_updated TIMESTAMP
         )"""
         )
         conn.commit()
