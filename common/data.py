@@ -280,8 +280,15 @@ class PlayerPrediction(Prediction):
     playerTeam: str
     playerPosition: Optional[str]
     
-    statNames: List[str]
-    statValues: Optional[List[Union[int, float, str]]] = None
+    # Commenting out for further discussion
+    # statNames: List[str]
+    # statValues: Optional[List[Union[int, float, str]]] = None
+
+    statName: str
+    statAbbr: Optional[str] = None
+    statDescription: Optional[str] = None
+    statType: StatType
+    statValue: Optional[Union[int, float, str]] = None
 
     # Validators to ensure immutability
     @validator(

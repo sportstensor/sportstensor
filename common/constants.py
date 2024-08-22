@@ -43,6 +43,12 @@ SCORING_INTERVAL_IN_MINUTES = 1
 # The maximum number of characters a team name can have.
 MAX_TEAM_NAME_LENGTH = 32
 
+# Sample size of picking players in a team
+PLAYERS_COUNT = 3
+
+# Number of eligible stats of a player for prediction
+STATS_COUNT = 3
+
 ########## SCORING CONSTANTS ##############
 CORRECT_MATCH_WINNER_SCORE = 0.5
 # The score a miner must achieve to earn weights

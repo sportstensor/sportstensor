@@ -24,6 +24,8 @@ from common.constants import (
     MAX_SCORE_DIFFERENCE_BASEBALL,
     MAX_SCORE_DIFFERENCE_BASKETBALL,
     MAX_SCORE_DIFFERENCE_CRICKET,
+    PLAYERS_COUNT,
+    STATS_COUNT
 )
 
 from neurons.validator import Validator
@@ -215,71 +217,89 @@ def get_match_prediction_requests(batchsize: int = 1):
             )
         )
 
-        home_players = storage.get_players_to_predict(playerTeam=match.homeTeamName, batchsize=batchsize)
-        away_players = storage.get_players_to_predict(playerTeam=match.awayTeamName, batchsize=batchsize)
+        home_players = storage.get_players_to_predict(playerTeam=match.homeTeamName, batchsize=PLAYERS_COUNT)
+        away_players = storage.get_players_to_predict(playerTeam=match.awayTeamName, batchsize=PLAYERS_COUNT)
 
         for player in home_players:
-            player_stats = storage.get_player_eligible_stats(playerId=player.playerId)
-            player_prediction_requests.append(
-                PlayerPrediction(
-                    matchId=match.matchId,
-                    matchDate=str(match.matchDate),
-                    sport=match.sport,
-                    league=match.league,
-                    playerName=player.playerName,
-                    playerTeam=player.playerTeam,
-                    playerPosition=player.playerPosition,
-                    statNames=[player_stat.statName for player_stat in player_stats]
+            player_stats = storage.get_player_eligible_stats(playerId=player.playerId, sample_size=STATS_COUNT)
+            for stat in player_stats:
+                player_prediction_requests.append(
+                    PlayerPrediction(
+                        matchId=match.matchId,
+                        matchDate=str(match.matchDate),
+                        sport=match.sport,
+                        league=match.league,
+                        playerName=player.playerName,
+                        playerTeam=player.playerTeam,
+                        playerPosition=player.playerPosition,
+                        statName=stat.statName,
+                        statType=stat.statType
+                    )
                 )
-            )
         for player in away_players:
-            player_stats = storage.get_player_eligible_stats(playerId=player.playerId)
-            player_prediction_requests.append(
-                PlayerPrediction(
-                    matchId=match.matchId,
-                    matchDate=str(match.matchDate),
-                    sport=match.sport,
-                    league=match.league,
-                    playerName=player.playerName,
-                    playerTeam=player.playerTeam,
-                    playerPosition=player.playerPosition,
-                    statNames=[player_stat.statName for player_stat in player_stats]
+            player_stats = storage.get_player_eligible_stats(playerId=player.playerId, sample_size=STATS_COUNT)
+            for stat in player_stats:
+                player_prediction_requests.append(
+                    PlayerPrediction(
+                        matchId=match.matchId,
+                        matchDate=str(match.matchDate),
+                        sport=match.sport,
+                        league=match.league,
+                        playerName=player.playerName,
+                        playerTeam=player.playerTeam,
+                        playerPosition=player.playerPosition,
+                        statName=stat.statName,
+                        statType=stat.statType
+                    )
                 )
-            )
     
     return match_prediction_requests, player_prediction_requests
 
 
 async def send_predictions_to_miners(
-    vali: Validator, input_synapse: GetMatchPrediction, miner_uids: List[int]
+    vali: Validator, input_synapse: GetMatchPrediction | GetPlayerPrediction, miner_uids: List[int]
 ) -> Tuple[List[MatchPrediction], List[int]]:
     try:
         if IS_DEV:
             # For now, just return a list of random MatchPrediction responses
-            responses = [
-                GetMatchPrediction(
-                    match_prediction=MatchPrediction(
-                        matchId=input_synapse.match_prediction.matchId,
-                        matchDate=input_synapse.match_prediction.matchDate,
-                        sport=input_synapse.match_prediction.sport,
-                        league=input_synapse.match_prediction.league,
-                        homeTeamName=input_synapse.match_prediction.homeTeamName,
-                        awayTeamName=input_synapse.match_prediction.awayTeamName,
-                        homeTeamScore=random.randint(0, 10),
-                        awayTeamScore=random.randint(0, 10),
+            if isinstance(input_synapse, GetMatchPrediction):
+                responses = [
+                    GetMatchPrediction(
+                        match_prediction=MatchPrediction(
+                            matchId=input_synapse.match_prediction.matchId,
+                            matchDate=input_synapse.match_prediction.matchDate,
+                            sport=input_synapse.match_prediction.sport,
+                            league=input_synapse.match_prediction.league,
+                            homeTeamName=input_synapse.match_prediction.homeTeamName,
+                            awayTeamName=input_synapse.match_prediction.awayTeamName,
+                            homeTeamScore=random.randint(0, 10),
+                            awayTeamScore=random.randint(0, 10),
+                        )
                     )
-                )
-                for uid in miner_uids
-            ]
+                    for uid in miner_uids
+                ]
+            if isinstance(input_synapse, GetPlayerPrediction):
+                responses = [
+                    GetPlayerPrediction(
+                        player_prediction=PlayerPrediction(
+                            matchId=input_synapse.player_prediction.matchId,
+                            matchDate=input_synapse.player_prediction.matchDate,
+                            sport=input_synapse.player_prediction.sport,
+                            league=input_synapse.player_prediction.league,
+                            playerName=input_synapse.player_prediction.playerName,
+                            playerTeam=input_synapse.player_prediction.playerTeam,
+                            playerPosition=input_synapse.player_prediction.playerPosition,
+                            statName=input_synapse.player_prediction.statName,
+                            statType=input_synapse.player_prediction.statType,
+                            statValue=0
+                        )
+                    )
+                ]
         else:
 
             random.shuffle(miner_uids)
             axons = [vali.metagraph.axons[uid] for uid in miner_uids]
 
-            # convert matchDate to string for serialization
-            input_synapse.match_prediction.matchDate = str(
-                input_synapse.match_prediction.matchDate
-            )
             responses = await vali.dendrite(
                 # Send the query to selected miner axons in the network.
                 axons=axons,
@@ -291,10 +311,16 @@ async def send_predictions_to_miners(
         working_miner_uids = []
         finished_responses = []
         for response in responses:
-            is_prediction_valid, error_msg = is_match_prediction_valid(
-                response.match_prediction,
-                input_synapse,
-            )
+            if isinstance(input_synapse, GetMatchPrediction):
+                is_prediction_valid, error_msg = is_match_prediction_valid(
+                    response.match_prediction,
+                    input_synapse,
+                )
+            elif isinstance(input_synapse, GetPlayerPrediction):
+                is_prediction_valid, error_msg = is_player_prediction_valid(
+                    response.player_prediction,
+                    input_synapse,
+                )
             if IS_DEV:
                 uid = miner_uids.pop(random.randrange(len(miner_uids)))
                 working_miner_uids.append(uid)
@@ -516,6 +542,41 @@ def is_match_prediction_valid(
         or prediction.league != input_synapse.match_prediction.league
         or prediction.homeTeamName != input_synapse.match_prediction.homeTeamName
         or prediction.awayTeamName != input_synapse.match_prediction.awayTeamName
+    ):
+        return (
+            False,
+            f"Prediction response does not match prediction request",
+        )
+
+    return (True, "")
+
+
+def is_player_prediction_valid(
+        prediction: PlayerPrediction, input_synapse: GetPlayerPrediction
+) -> Tuple[bool, str]:
+    """Performs basic validation on a PlayerPrediction.
+
+    Returns a tuple of (is_valid, reason) where is_valid is True if the entities are valid,
+    and reason is a string describing why they are not valid.
+    """
+
+    # Check the validity of the scores
+    if not isinstance(prediction.statValue, Union[int, float, str]):
+        return (
+            False,
+            f"Stat value {prediction.statValue} is not acceptible.",
+        )
+
+    # Check that the prediction response matches the prediction request
+    if (
+        str(prediction.matchDate) != str(input_synapse.player_prediction.matchDate)
+        or prediction.playerName != input_synapse.player_prediction.playerName
+        or prediction.playerTeam != input_synapse.player_prediction.playerTeam
+        or prediction.playerPosition != input_synapse.player_prediction.playerPosition
+        or prediction.sport != input_synapse.player_prediction.sport
+        or prediction.league != input_synapse.player_prediction.league
+        or prediction.statName != input_synapse.player_prediction.statName
+        or prediction.statType != input_synapse.player_prediction.statType
     ):
         return (
             False,
