@@ -632,8 +632,13 @@ def get_prediction_by_id(app_id):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(
-            "SELECT * FROM AppMatchPredictions WHERE app_request_id = %s", (app_id,)
+        cursor.execute("""
+            SELECT m.*, apm.isComplete AS predictionIsComplete, apm.homeTeamScore AS predictedHomeTeamScore, apm.awayTeamScore AS predictedAwayTeamScore, apm.lastUpdated AS predictionLastUpdated,
+                       apm.miner_hotkey, apm.vali_hotkey, apm.valiLastUpdated, apm.minerHasIssue, apm.minerIssueMessage
+            FROM AppMatchPredictions apm 
+            LEFT JOIN matches m ON (m.matchId = apm.matchId) 
+            WHERE app_request_id = %s
+        """, (app_id,)
         )
         prediction = cursor.fetchone()
 
