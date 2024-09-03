@@ -370,6 +370,78 @@ class SqliteValidatorStorage(ValidatorStorage):
                 ]
                 return matches
 
+    def get_players_to_predict(self, match: MatchPrediction, batchsize: int) -> List[Player]:
+        """Gets batchsize number of players eligible to be predicted."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                # Get players from home team
+                cursor.execute(
+                    """
+                    SELECT * 
+                    FROM Players
+                    WHERE playerTeam = ?
+                    ORDER BY RANDOM() LIMIT ?
+                    """,
+                    (match.homeTeamName, batchsize),
+                )
+                home_players = cursor.fetchall()
+
+                # Get players from away team
+                cursor.execute(
+                    """
+                    SELECT * 
+                    FROM Players
+                    WHERE playerTeam = ?
+                    ORDER BY RANDOM() LIMIT ?
+                    """,
+                    (match.awayTeamName, batchsize),
+                )
+                away_players = cursor.fetchall()
+
+                results = home_players + away_players
+
+                if not results:
+                    return []
+
+                # Convert the raw database results into Pydantic models
+                players = [
+                    Player(
+                        **dict(zip([column[0] for column in cursor.description], row))
+                    )
+                    for row in results
+                ]
+                return players
+
+    def get_eligible_player_stats(self, player: Player, batchsize: int) -> List[Stat]:
+        """Gets a list of stats that a player is eligible to be predicted on."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.execute(
+                    """
+                    SELECT s.* 
+                    FROM Stats s
+                    JOIN PlayerEligibleStats pes ON s.statId = pes.statId
+                    WHERE pes.playerId = ?
+                    AND s.sport = ?
+                    ORDER BY RANDOM() LIMIT ?
+                    """,
+                    (player.playerId, player.sport, batchsize),
+                )
+                results = cursor.fetchall()
+                if not results:
+                    return []
+
+                # Convert the raw database results into Pydantic models
+                stats = [
+                    Stat(
+                        **dict(zip([column[0] for column in cursor.description], row))
+                    )
+                    for row in results
+                ]
+                return stats
+    
     def insert_match_predictions(self, predictions: List[GetMatchPrediction]):
         """Stores unscored match predictions returned from miners."""
         values = []
