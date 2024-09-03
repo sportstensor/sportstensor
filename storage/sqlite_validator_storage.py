@@ -149,8 +149,8 @@ class SqliteValidatorStorage(ValidatorStorage):
             # Create the Players table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.PLAYERS_TABLE_CREATE)
 
-            # Create the PlayerStats table (if it does not already exist).
-            cursor.execute(SqliteValidatorStorage.PLAYERSTATS_TABLE_CREATE)
+            # Create the PlayerEligibleStats table (if it does not already exist).
+            cursor.execute(SqliteValidatorStorage.PLAYER_ELIGIBLE_STATS_TABLE_CREATE)
 
             # Create the PlayerMatchStats table (if it does not already exist).
             cursor.execute(SqliteValidatorStorage.PLAYERMATCHSTATS_TABLE_CREATE)
