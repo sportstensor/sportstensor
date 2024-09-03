@@ -170,6 +170,15 @@ def update_miner_reg_statuses(active_uids, active_hotkeys):
         if not IS_PROD:
             prediction_scores_table_name += "_test"
 
+        # mark all as unregistered first as we'll update only the active ones next
+        c.execute(
+            f"""
+            UPDATE {prediction_scores_table_name}
+            SET miner_is_registered = 0
+            """,
+        )
+        conn.commit()
+
         # loop through zipped uids and hotkeys and update the miner_is_registered status
         for uid, hotkey in zip(active_uids, active_hotkeys):
             c.execute(
@@ -181,17 +190,7 @@ def update_miner_reg_statuses(active_uids, active_hotkeys):
                 (uid, hotkey),
             )
             conn.commit()
-
-        # mark hotkeys that are not active in the metagraph as unregistered
-        c.execute(
-            f"""
-            UPDATE {prediction_scores_table_name}
-            SET miner_is_registered = 0
-            WHERE miner_hotkey NOT IN ({','.join(['%s' for _ in active_hotkeys])})
-            """,
-            active_hotkeys,
-        )
-        conn.commit()
+        
         logging.info("Miner registration statuses updated in database")
 
     except Exception as e:
