@@ -98,9 +98,7 @@ async def main():
             print("resync_miner_statuses()")
 
             try:
-                active_hotkeys = [hotkey for hotkey in metagraph.hotkeys]
-                db.update_miner_reg_statuses(active_hotkeys)
-                
+                active_uids = []
                 active_hotkeys = []
                 active_coldkeys = []
                 ages = []
@@ -108,6 +106,7 @@ async def main():
                 # Assuming an average block time of 12 seconds (adjust as necessary)
                 block_time_seconds = 12
                 for uid in range(metagraph.n.item()):
+                    active_uids.append(uid)
                     active_hotkeys.append(metagraph.hotkeys[uid])
                     active_coldkeys.append(metagraph.coldkeys[uid])
                     
@@ -118,6 +117,9 @@ async def main():
                     duration_seconds = duration_in_blocks * block_time_seconds
                     duration_hours = duration_seconds / 3600
                     ages.append(duration_hours)
+
+                # Update the miner registration statuses
+                db.update_miner_reg_statuses(active_uids, active_hotkeys)
 
                 # Combine the data into a list of tuples
                 data_to_update = list(zip(active_coldkeys, ages, active_hotkeys))
