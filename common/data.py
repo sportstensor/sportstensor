@@ -104,6 +104,31 @@ class Match(StrictBaseModel):
             raise ValueError(f"{field.name} is immutable and cannot be changed")
         return v
     
+class Player(StrictBaseModel):
+    """Represents a player."""
+
+    playerId: str = Field(description="Unique Id that represents an individual player.")
+    playerName: str
+    playerTeam: str
+    playerPosition: Optional[str]
+    sport: int
+    league: str
+
+    # Validators to ensure immutability
+    @validator(
+        "playerId",
+        "playerName",
+        "playerTeam",
+        "sport",
+        "league",
+        pre=True,
+        always=True,
+        check_fields=False,
+    )
+    def match_fields_are_immutable(cls, v, values, field):
+        if field.name in values and v != values[field.name]:
+            raise ValueError(f"{field.name} is immutable and cannot be changed")
+        return v
 
 class StatType(Enum):
     OFFENSE = "OFFENSE"
@@ -228,7 +253,6 @@ class Prediction(StrictBaseModel):
             f"sport={sport_name}, league={league_name}, "
             f"isScored={self.isScored}, scoredDate={self.scoredDate})"
         )
-
 
 class MatchPrediction(Prediction):
     """Represents a prediction of a sports match."""

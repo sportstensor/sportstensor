@@ -6,16 +6,18 @@ import sqlite3
 import threading
 import random
 from pydantic import ValidationError
-from typing import Any, Dict, Optional, Set, Tuple, List
+from typing import Any, Dict, Optional, Set, Tuple, List, Union
 from common.data import (
     Match,
+    Player,
     MatchPrediction,
     PlayerStat,
+    Stat,
     PlayerPrediction,
     League,
     MatchPredictionWithMatchData,
 )
-from common.protocol import GetMatchPrediction
+from common.protocol import GetMatchPrediction, GetPlayerPrediction
 from common.constants import (
     IS_DEV,
     MIN_PREDICTION_TIME_THRESHOLD,
@@ -84,7 +86,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             league              VARCHAR(50)     NOT NULL,
                             )"""
     
-    PLAYERSTATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerStats (
+    PLAYER_ELIGIBLE_STATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerEligibleStats (
                             playerId            INTEGER         NOT NULL,
                             statId              INTEGER         NOT NULL,
                             PRIMARY KEY (playerId, statId),
@@ -369,7 +371,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 return matches
 
     def insert_match_predictions(self, predictions: List[GetMatchPrediction]):
-        """Stores unscored predictions returned from miners."""
+        """Stores unscored match predictions returned from miners."""
         values = []
         for prediction in predictions:
             """
@@ -413,6 +415,53 @@ class SqliteValidatorStorage(ValidatorStorage):
                 cursor = connection.cursor()
                 cursor.executemany(
                     """INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    values,
+                )
+                connection.commit()
+    
+    def insert_player_predictions(self, predictions: List[list[GetPlayerPrediction]]):
+        """Stores unscored player predictions returned from miners."""
+        values = []
+        for prediction in predictions:
+
+            now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+            if IS_DEV:
+                random_uid = random.randint(
+                    1, 16
+                )  # Generate a random integer between 1 and 16
+
+            # Parse every MatchPrediction into a list of values to insert.
+            for player_prediction in prediction:
+                values.append(
+                    [
+                        player_prediction.player_prediction.minerId if not IS_DEV else random_uid,
+                        (
+                            player_prediction.player_prediction.hotkey
+                            if not IS_DEV
+                            else f"DEV_{str(random_uid)}"
+                        ),
+                        player_prediction.player_prediction.matchId,
+                        player_prediction.player_prediction.matchDate,
+                        player_prediction.player_prediction.sport,
+                        player_prediction.player_prediction.league,
+                        player_prediction.player_prediction.playerName,
+                        player_prediction.player_prediction.playerTeam,
+                        player_prediction.player_prediction.playerPosition,
+                        player_prediction.player_prediction.statName,
+                        player_prediction.player_prediction.statAbbr,
+                        player_prediction.player_prediction.statDescription,
+                        player_prediction.player_prediction.statType,
+                        player_prediction.player_prediction.statValue,
+                        now_str,
+                    ]
+                )
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO PlayerPredictions (minerId, hotkey, matchId, matchDate, sport, league, playerName, playerTeam, playerPosition, statName, statAbbr, statDescription, statType, statValue, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()

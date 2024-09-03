@@ -25,6 +25,12 @@ BASE_MINER_PREDICTION_SCORE = 0.01
 # Number of miners to send predictions to. -1 == all
 NUM_MINERS_TO_SEND_TO = 20
 
+# Number of players picked for player prediction reqeusts
+NUM_PLAYERS_TO_PICK = 5
+
+# Number of player-eligible stats to predict
+NUM_ELIGIBLE_PLAYER_STATS = 3
+
 # Minimum time in seconds predictions are allowed before match begins
 MIN_PREDICTION_TIME_THRESHOLD = 60 * 30
 

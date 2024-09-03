@@ -27,8 +27,8 @@ import torch
 import wandb
 
 # Bittensor Validator Template:
-from common.protocol import GetMatchPrediction
-from common.data import MatchPrediction
+from common.protocol import GetMatchPrediction, GetPlayerPrediction
+from common.data import MatchPrediction, PlayerPrediction
 from common.constants import (
     ENABLE_APP,
     DATA_SYNC_INTERVAL_IN_MINUTES,
@@ -165,9 +165,15 @@ class Validator(BaseValidatorNeuron):
             )
             # Loop through predictions and send to miners
             for mpr in match_prediction_requests:
-                input_synapse = GetMatchPrediction(match_prediction=mpr)
+                player_prediction_requests = utils.get_player_prediction_requests(mpr)
+                input_synapse_for_match_prediction = GetMatchPrediction(match_prediction=mpr)
+                input_synapse_for_player_prediction = [
+                    GetPlayerPrediction(player_prediction=ppr)
+                    for ppr in player_prediction_requests
+                ]
+                input_synapse = { "mp": input_synapse_for_match_prediction, "ipp": input_synapse_for_player_prediction }
                 # Send prediction requests to miners and store their responses
-                finished_responses, working_miner_uids = (
+                finished_mp_responses, finished_pp_responses, working_miner_uids = (
                     await utils.send_predictions_to_miners(
                         self, input_synapse, miner_uids
                     )
@@ -176,9 +182,7 @@ class Validator(BaseValidatorNeuron):
                 # Adjust the scores based on responses from miners.
                 try:
                     rewards = (
-                        await self.get_basic_match_prediction_rewards(
-                            input_synapse=input_synapse, responses=finished_responses
-                        )
+                        await self.get_basic_match_prediction_rewards(responses=finished_mp_responses)
                     ).to(self.device)
                 except Exception as e:
                     bt.logging.error(
@@ -292,8 +296,7 @@ class Validator(BaseValidatorNeuron):
 
     async def get_basic_match_prediction_rewards(
         self,
-        input_synapse: GetMatchPrediction,
-        responses: List[MatchPrediction],
+        responses: List[GetMatchPrediction],
     ) -> torch.FloatTensor:
         """
         Returns a tensor of rewards for the given query and responses.
