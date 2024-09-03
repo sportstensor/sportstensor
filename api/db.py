@@ -161,7 +161,7 @@ def upload_prediction_results(prediction_results):
         conn.close()
 
 
-def update_miner_reg_statuses(active_hotkeys):
+def update_miner_reg_statuses(active_uids, active_hotkeys):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -170,16 +170,17 @@ def update_miner_reg_statuses(active_hotkeys):
         if not IS_PROD:
             prediction_scores_table_name += "_test"
 
-        # mark hotkeys that are active in the metagraph as registered
-        c.execute(
-            f"""
-            UPDATE {prediction_scores_table_name}
-            SET miner_is_registered = 1
-            WHERE miner_hotkey IN ({','.join(['%s' for _ in active_hotkeys])})
-            """,
-            active_hotkeys,
-        )
-        conn.commit()
+        # loop through zipped uids and hotkeys and update the miner_is_registered status
+        for uid, hotkey in zip(active_uids, active_hotkeys):
+            c.execute(
+                f"""
+                UPDATE {prediction_scores_table_name}
+                SET miner_is_registered = 1
+                WHERE miner_uid = %s AND miner_hotkey = %s
+                """,
+                (uid, hotkey),
+            )
+            conn.commit()
 
         # mark hotkeys that are not active in the metagraph as unregistered
         c.execute(
