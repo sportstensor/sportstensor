@@ -130,14 +130,38 @@ async def main():
 
             await asyncio.sleep(90)
 
-    async def resync_miner_reg_statuses():
+    async def resync_miner_statuses():
         while True:
-            """Checks active hotkeys on the metagraph and updates our results table."""
-            print("resync_miner_reg_statuses()")
+            """Checks active hotkeys on the metagraph and updates our results table. Also updates the miner coldkey and age of miner on the subnet."""
+            print("resync_miner_statuses()")
 
             try:
-                active_hotkeys = [hotkey for hotkey in metagraph.hotkeys]
-                db.update_miner_reg_statuses(active_hotkeys)
+                active_uids = []
+                active_hotkeys = []
+                active_coldkeys = []
+                ages = []
+                current_block = subtensor.get_current_block()
+                # Assuming an average block time of 12 seconds (adjust as necessary)
+                block_time_seconds = 12
+                for uid in range(metagraph.n.item()):
+                    active_uids.append(uid)
+                    active_hotkeys.append(metagraph.hotkeys[uid])
+                    active_coldkeys.append(metagraph.coldkeys[uid])
+                    
+                    # calculate the age of the miner in hours
+                    # query the subtensor for the block at registration
+                    registration_block = subtensor.query_module('SubtensorModule','BlockAtRegistration',None,[NETUID,uid]).value
+                    duration_in_blocks = current_block - registration_block
+                    duration_seconds = duration_in_blocks * block_time_seconds
+                    duration_hours = duration_seconds / 3600
+                    ages.append(duration_hours)
+
+                # Update the miner registration statuses
+                db.update_miner_reg_statuses(active_uids, active_hotkeys)
+
+                # Combine the data into a list of tuples
+                data_to_update = list(zip(active_coldkeys, ages, active_hotkeys))
+                db.update_miner_coldkeys_and_ages(data_to_update)
 
             # In case of unforeseen errors, the api will log the error and continue operations.
             except Exception as err:
@@ -411,8 +435,6 @@ async def main():
 
     await asyncio.gather(
         resync_metagraph(),
-        resync_miner_reg_statuses(),
-        check_vali_app_match_prediction_requests(),
         asyncio.to_thread(
             uvicorn.run,
             app,
@@ -421,6 +443,8 @@ async def main():
             ssl_certfile="/root/origin-cert.pem",
             ssl_keyfile="/root/origin-key.key",
         ),
+        resync_miner_statuses(),
+        check_vali_app_match_prediction_requests(),
     )
 
 

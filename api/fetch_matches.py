@@ -13,17 +13,26 @@ logging.basicConfig(
 from api.config import NETWORK
 
 # Define sport mapping
-sport_mapping = {"SOCCER": 1, "FOOTBALL": 2, "BASEBALL": 3, "BASKETBALL": 4}
+sport_mapping = {"SOCCER": 1, "AMERICAN FOOTBALL": 2, "BASEBALL": 3, "BASKETBALL": 4}
 
 
 def parse_datetime_with_optional_timezone(timestamp):
+    if isinstance(timestamp, (int, float)) or timestamp.isdigit():
+        # Handle Unix timestamp (seconds since epoch)
+        return datetime.fromtimestamp(float(timestamp), tz=timezone.utc)
+    
     try:
-        # First, try parsing with timezone
+        # Try parsing with timezone
         return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
     except ValueError:
-        # If that fails, parse without the timezone and assume UTC
-        dt_naive = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
-        return dt_naive.replace(tzinfo=timezone.utc)
+        try:
+            # Try parsing without timezone and assume UTC
+            dt_naive = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
+            return dt_naive.replace(tzinfo=timezone.utc)
+        except ValueError:
+            # If all else fails, raise an informative error
+            raise ValueError(f"Unable to parse timestamp: {timestamp}. "
+                             "Expected format: YYYY-MM-DDTHH:MM:SS[±HHMM] or Unix timestamp.")
 
 
 def create_match_id(home_team, away_team, match_date):
@@ -117,6 +126,12 @@ def fetch_and_store_events():
             sport_type = sport_mapping.get(
                 event.get("strSport").upper(), 0
             )  # Default to 0 if sport is unknown
+            
+            if isinstance(event.get("strTimestamp"), (int, float)) or event.get("strTimestamp").isdigit():
+                # Handle Unix timestamp (seconds since epoch)
+                matchTimestamp = datetime.fromtimestamp(float(event.get("strTimestamp")), tz=timezone.utc)
+                matchTimestampStr = matchTimestamp.strftime("%Y-%m-%d %H:%M:%S")
+                event.update({"strTimestamp": matchTimestampStr})
 
             dbresult = db.insert_match(
                 match_id, event, sport_type, is_complete, current_utc_time

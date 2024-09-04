@@ -163,7 +163,7 @@ def upload_prediction_results(prediction_results):
         conn.close()
 
 
-def update_miner_reg_statuses(active_hotkeys):
+def update_miner_reg_statuses(active_uids, active_hotkeys):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -172,33 +172,60 @@ def update_miner_reg_statuses(active_hotkeys):
         if not IS_PROD:
             prediction_scores_table_name += "_test"
 
-        # mark hotkeys that are active in the metagraph as registered
-        c.execute(
-            f"""
-            UPDATE {prediction_scores_table_name}
-            SET miner_is_registered = 1
-            WHERE miner_hotkey IN ({','.join(['%s' for _ in active_hotkeys])})
-            """,
-            active_hotkeys,
-        )
-        conn.commit()
-
-        # mark hotkeys that are not active in the metagraph as unregistered
+        # mark all as unregistered first as we'll update only the active ones next
         c.execute(
             f"""
             UPDATE {prediction_scores_table_name}
             SET miner_is_registered = 0
-            WHERE miner_hotkey NOT IN ({','.join(['%s' for _ in active_hotkeys])})
             """,
-            active_hotkeys,
         )
         conn.commit()
+
+        # loop through zipped uids and hotkeys and update the miner_is_registered status
+        for uid, hotkey in zip(active_uids, active_hotkeys):
+            c.execute(
+                f"""
+                UPDATE {prediction_scores_table_name}
+                SET miner_is_registered = 1
+                WHERE miner_uid = %s AND miner_hotkey = %s
+                """,
+                (uid, hotkey),
+            )
+            conn.commit()
+        
         logging.info("Miner registration statuses updated in database")
         return True
 
     except Exception as e:
         logging.error("Failed to update miner registration statuses in MySQL database", exc_info=True)
         return False
+    finally:
+        c.close()
+        conn.close()
+
+
+def update_miner_coldkeys_and_ages(data_to_update):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        prediction_scores_table_name = "MatchPredictionResults"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+
+        c.executemany(
+            f"""
+            UPDATE {prediction_scores_table_name}
+            SET miner_coldkey = %s, miner_age = %s
+            WHERE miner_hotkey = %s
+            """,
+            [(coldkey, age, hotkey) for coldkey, age, hotkey in data_to_update],
+        )
+        conn.commit()
+        logging.info("Miner coldkeys and ages updated in database")
+
+    except Exception as e:
+        logging.error("Failed to update miner coldkeys and ages in MySQL database", exc_info=True)
     finally:
         c.close()
         conn.close()
@@ -222,7 +249,7 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
         """
 
         if group_by_miner:
-            query += ", miner_hotkey"
+            query += ", miner_hotkey, miner_coldkey, miner_uid, miner_age"
 
         query += f"""
             FROM {prediction_scores_table_name}
@@ -238,7 +265,7 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
             query += " AND miner_is_registered = 1"
 
         if group_by_miner:
-            query += " GROUP BY league, miner_hotkey"
+            query += " GROUP BY league, miner_hotkey, miner_coldkey, miner_uid, miner_age"
         else:
             query += " GROUP BY league"
 
@@ -273,7 +300,7 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         """
 
         if group_by_miner:
-            query += ", miner_hotkey"
+            query += ", miner_hotkey, miner_coldkey, miner_uid, miner_age"
 
         query += f"""
             FROM {prediction_scores_table_name}
@@ -289,7 +316,7 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
             query += " AND miner_is_registered = 1"
 
         if group_by_miner:
-            query += " GROUP BY sport, miner_hotkey"
+            query += " GROUP BY sport, miner_hotkey, miner_coldkey, miner_uid, miner_age"
         else:
             query += " GROUP BY sport"
 
@@ -323,7 +350,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
         """
 
         if group_by_miner:
-            query += ", miner_hotkey"
+            query += ", miner_hotkey, miner_coldkey, miner_age"
 
         query += f"""
             FROM {prediction_scores_table_name}
@@ -339,7 +366,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
             query += " AND miner_is_registered = 1"
 
         if group_by_miner:
-            query += " GROUP BY miner_hotkey"
+            query += " GROUP BY miner_hotkey, miner_coldkey, miner_uid, miner_age"
 
         c.execute(query, params)
         return c.fetchall()
@@ -681,8 +708,10 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS MatchPredictionResults (
             id INT AUTO_INCREMENT PRIMARY KEY,
             miner_hotkey VARCHAR(64) NOT NULL,
+            miner_coldkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
             miner_is_registered TINYINT(1) DEFAULT 1,
+            miner_age INTEGER NOT NULL DEFAULT 0,
             league VARCHAR(50) NOT NULL,
             sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,
@@ -697,8 +726,10 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS MatchPredictionResults_test (
             id INT AUTO_INCREMENT PRIMARY KEY,
             miner_hotkey VARCHAR(64) NOT NULL,
+            miner_coldkey VARCHAR(64) NOT NULL,
             miner_uid INTEGER NOT NULL,
             miner_is_registered TINYINT(1) DEFAULT 1,
+            miner_age INTEGER NOT NULL DEFAULT 0,
             league VARCHAR(50) NOT NULL,
             sport INTEGER NOT NULL,
             total_predictions INTEGER NOT NULL,
@@ -712,18 +743,19 @@ def create_tables():
             """
         CREATE TABLE IF NOT EXISTS MPRSnapshots (
             snapshot_id INT AUTO_INCREMENT PRIMARY KEY,
-            snapshot_date DATE NOT NULL,
+            snapshot_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             id INT,
             miner_hotkey VARCHAR(64),
+            miner_coldkey VARCHAR(64),
             miner_uid INTEGER,
             miner_is_registered TINYINT(1),
+            miner_age INTEGER NOT NULL DEFAULT 0,
             league VARCHAR(50),
             sport INTEGER,
             total_predictions INTEGER,
             winner_predictions INTEGER,
             avg_score FLOAT,
-            last_updated TIMESTAMP,
-            UNIQUE (snapshot_date, id)
+            last_updated TIMESTAMP
         )"""
         )
         conn.commit()
