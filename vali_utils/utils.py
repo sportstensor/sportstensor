@@ -171,21 +171,21 @@ async def sync_player_data(player_data_endpoint) -> bool:
         players_to_update = []
         players_elgible_stats_update = []
         players_elgible_stats_insert = []
-        for item in players_data:
-            if "playerId" not in item:
-                bt.logging.error(f"Skipping player data missing playerId: {item}")
+        for player in players_data:
+            if "playerId" not in player:
+                bt.logging.error(f"Skipping player data missing playerId: {player}")
                 continue
 
             player = Player(
-                playerId=item["playerId"],
-                playerName=item["playerName"],
-                playerTeam=item["playerTeam"],
-                playerPosition=item["playerPosition"],
-                sport=item["sport"],
-                league=item["league"],
-                stats=item["stats"],
+                playerId=player["playerId"],
+                playerName=player["playerName"],
+                playerTeam=player["playerTeam"],
+                playerPosition=player["playerPosition"],
+                sport=player["sport"],
+                league=player["league"],
+                stats=player["stats"],
             )
-            storedPlayer = storage.check_player(item["playerId"])
+            storedPlayer = storage.check_player(player["playerId"])
             if storedPlayer:
                 # Check if any of the attributes have changed
                 if (storedPlayer.stats != player.stats or
