@@ -14,6 +14,7 @@ from common.data import (
     PlayerStat,
     Stat,
     PlayerPrediction,
+    PlayerEligibleStat,
     League,
     MatchPredictionWithMatchData,
 )
@@ -84,6 +85,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             playerPosition      VARCHAR(30)     NULL,
                             sport               INTEGER         NOT NULL,
                             league              VARCHAR(50)     NOT NULL,
+                            stats               VARCHAR(30)     NOT NULL,
                             )"""
     
     PLAYER_ELIGIBLE_STATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerEligibleStats (
@@ -321,6 +323,151 @@ class SqliteValidatorStorage(ValidatorStorage):
                     )
                 else:
                     return None
+
+    def check_stats(self, statId: str) -> Stat:
+        """Check if a stat with the given ID exists in the database."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.execute(
+                    """SELECT EXISTS(SELECT 1 FROM stats WHERE statId = ?)""",
+                    (statId,),
+                )
+                return cursor.fetchone()[0]
+
+    def insert_stats(self, stats: List[Stat]):
+        """Stores stats """
+        values = []
+        for stat in stats:
+            # Parse every Match into a list of values to insert.
+            values.append(
+                [
+                    stat.statId,
+                    stat.statName,
+                    stat.statDescription,
+                    stat.statAbbr,
+                    stat.statType,
+                    stat.sport,
+                ]
+            )
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO Stats (statId, statName, statDescription, statAbbr, statType, sport) VALUES (?, ?, ?, ?, ?, ?)""",
+                    values,
+                )
+                connection.commit()
+    
+    def check_player(self, playerId: str) -> Player:
+        """Check if a player with the given ID exists in the database."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.execute(
+                    """SELECT EXISTS(SELECT 1 FROM Players WHERE playerId = ?)""",
+                    (playerId,),
+                )
+                return cursor.fetchone()[0]
+
+    def insert_players(self, players: List[Player]):
+        """Stores players """
+        values = []
+        for player in players:
+
+            # Parse every Match into a list of values to insert.
+            values.append(
+                [
+                    player.playerId,
+                    player.playerName,
+                    player.playerTeam,
+                    player.playerPosition,
+                    player.sport,
+                    player.league,
+                    player.stats,
+                ]
+            )
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO Players (playerId, playerName, playerTeam, playerPosition, sport, league, stats) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    values,
+                )
+                connection.commit()
+    
+    def update_players(self, players: List[Player]):
+        """Updates players."""
+        values = []
+        for player in players:
+            # Parse Matches into a list of values to update.
+            values.append(
+                [
+                    player.playerTeam,
+                    player.playerPosition,
+                    player.stats,
+                    player.playerId
+                ]
+            )
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.executemany(
+                    """UPDATE Players SET playerTeam = ?, playerPosition = ?, stats = ? WHERE playerId = ?""",
+                    values,
+                )
+                connection.commit()
+    
+    def insert_player_eligible_stats(self, playerEligibleStats: List[PlayerEligibleStat]):
+        """Stores players """
+        values = []
+        for pes in playerEligibleStats:
+
+            # Parse every Match into a list of values to insert.
+            values.append(
+                [
+                    pes.playerId,
+                    pes.statId,
+                ]
+            )
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO PlayerEligibleStats (playerId, statId) VALUES (?, ?)""",
+                    values,
+                )
+                connection.commit()
+        
+    def update_player_eligible_stats(self, playerEligibleStats: List[PlayerEligibleStat]):
+        """Update players """
+        values = []
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                for pes in playerEligibleStats:
+                    # Delete existing stats for the player
+                    cursor.execute(
+                        """DELETE FROM PlayerEligibleStats WHERE playerId = ?""",
+                        (pes.playerId,)
+                    )
+                    # Parse every Match into a list of values to insert.
+                    values.append(
+                        [
+                            pes.playerId,
+                            pes.statId,
+                        ]
+                    )
+                cursor.executemany(
+                    """INSERT OR IGNORE INTO PlayerEligibleStats (playerId, statId) VALUES (?, ?)""",
+                    values,
+                )
+                connection.commit()
 
     def get_matches_to_predict(self, batchsize: int = 10) -> List[Match]:
         """Gets batchsize number of matches ready to be predicted."""
@@ -680,7 +827,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """INSERT OR IGNORE INTO PlayerStats (playerStatId, matchId, playerName, playerTeam, playerPosition, statType, statValue, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT OR IGNORE INTO PlayerMatchStats (playerStatId, matchId, playerName, playerTeam, playerPosition, statType, statValue, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -704,7 +851,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """UPDATE PlayerStats SET statValue = ?, lastUpdated = ? WHERE playerStatId = ?""",
+                    """UPDATE PlayerMatchStats SET statValue = ?, lastUpdated = ? WHERE playerStatId = ?""",
                     values,
                 )
                 connection.commit()
@@ -715,7 +862,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.execute(
-                    """SELECT EXISTS(SELECT 1 FROM PlayerStats WHERE playerStatId = ?)""",
+                    """SELECT EXISTS(SELECT 1 FROM PlayerMatchStats WHERE playerStatId = ?)""",
                     (playerStatId,),
                 )
                 return cursor.fetchone()[0]

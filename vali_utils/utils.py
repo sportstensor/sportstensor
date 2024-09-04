@@ -6,8 +6,8 @@ import traceback
 from typing import List, Optional, Tuple, Type, Dict, Union
 from collections import defaultdict
 import copy
-
-from common.data import Sport, Match, MatchPrediction, PlayerStat, PlayerPrediction, Stat
+import gspread
+from common.data import Sport, Match, Stat, Player, MatchPrediction, PlayerStat, PlayerPrediction, Stat, PlayerEligibleStat
 from common.protocol import GetMatchPrediction, GetPlayerPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
@@ -84,7 +84,7 @@ async def sync_match_data(match_data_endpoint) -> bool:
         return False
     
 
-async def sync_player_data(match_data_endpoint) -> bool:
+async def sync_player_match__stats_data(match_data_endpoint) -> bool:
     try:
         async with ClientSession() as session:
             async with session.get(match_data_endpoint) as response:
@@ -117,7 +117,7 @@ async def sync_player_data(match_data_endpoint) -> bool:
                     statType=item["statType"],
                     statValue=item["statValue"],
                 )
-                if storage.check_player_data(item["playerDataId"]):
+                if storage.check_player_stat(item["playerStatId"]):
                     stats_to_update.append(player_stat)
                 else:
                     stats_to_insert.append(player_stat)
@@ -135,6 +135,105 @@ async def sync_player_data(match_data_endpoint) -> bool:
         bt.logging.error(f"Error getting match data: {e}")
         return False
 
+async def sync_player_data(player_data_endpoint) -> bool:
+    try:
+        gc = gspread.api_key('AIzaSyAOj3881YK1QGkK07tyJr_bz2o106YcIXg')
+        spreadsheet = gc.open_by_url(player_data_endpoint)
+        statsSheet = spreadsheet.sheet1
+        playersSheet = spreadsheet.get_worksheet(1)
+        stats_data = statsSheet.get_all_records()
+        players_data = playersSheet.get_all_records()
+
+        # Sync stats data
+        stats_to_insert = []
+        for item in stats_data:
+            if "statId" not in item:
+                bt.logging.error(f"Skipping stats data missing statId: {item}")
+                continue
+
+            stat = Stat(
+                statId=item["statId"],
+                statName=item["statName"],
+                statAbbr=item["statAbbr"],
+                statDescription=item["statDescription"],
+                statType=item["statType"],
+                sport=item["sport"],
+            )
+            if not storage.check_stats(item["statId"]):
+                stats_to_insert.append(stat)
+
+        if stats_to_insert:
+            storage.insert_stats(stats_to_insert)
+            bt.logging.info(f"Inserted {len(stats_to_insert)} new matches.")
+        
+        # Sync players data
+        players_to_insert = []
+        players_to_update = []
+        players_elgible_stats_update = []
+        players_elgible_stats_insert = []
+        for item in players_data:
+            if "playerId" not in item:
+                bt.logging.error(f"Skipping player data missing playerId: {item}")
+                continue
+
+            player = Player(
+                playerId=item["playerId"],
+                playerName=item["playerName"],
+                playerTeam=item["playerTeam"],
+                playerPosition=item["playerPosition"],
+                sport=item["sport"],
+                league=item["league"],
+                stats=item["stats"],
+            )
+            storedPlayer = storage.check_player(item["playerId"])
+            if storedPlayer:
+                # Check if any of the attributes have changed
+                if (storedPlayer.stats != player.stats or
+                    storedPlayer.playerTeam != player.playerTeam or
+                    storedPlayer.playerPosition != player.playerPosition):
+                    players_to_update.append(player)
+                    # Prepare eligible stats based on player sport and stats type
+                    eligible_stats = [
+                        PlayerEligibleStat(
+                            playerId=player.playerId,
+                            statId=stat["statId"]
+                        )
+                        for stat in stats_data
+                        if "statId" in stat and player.sport == stat["sport"] and player.stats == stat['statType']
+                    ]
+                    players_elgible_stats_update.extend(eligible_stats)
+            else:
+                players_to_insert.append(player)
+                # Prepare eligible stats based on player sport and stats type
+                eligible_stats = [
+                    PlayerEligibleStat(
+                        playerId=player.playerId,
+                        statId=stat["statId"]
+                    )
+                    for stat in stats_data
+                    if "statId" in stat and player.sport == stat["sport"] and player.stats == stat['statType']
+                ]
+                players_elgible_stats_insert.extend(eligible_stats)
+        if players_to_insert:
+            storage.insert_players(players_to_insert)
+            bt.logging.info(f"Inserted {len(players_to_insert)} new players.")
+        if players_to_update:
+            storage.update_players(players_to_update)
+            bt.logging.info(f"Updated {len(players_to_update)} existing players.")
+        if players_elgible_stats_insert:
+            storage.insert_player_eligible_stats(players_elgible_stats_insert)
+            bt.logging.info(f"Inserted {len(players_elgible_stats_insert)} new player elgible stats.")
+        if players_elgible_stats_update:
+            storage.update_player_eligible_stats(players_elgible_stats_update)
+            bt.logging.info(f"Updated {len(players_elgible_stats_update)} existing player elgible stats.")
+        
+        # Sync eligible player stats data
+
+        return True
+
+    except Exception as e:
+        bt.logging.error(f"Error getting stats and players data: {e}")
+        return False
 
 async def process_app_prediction_requests(
     vali: Validator, app_prediction_requests_endpoint: str

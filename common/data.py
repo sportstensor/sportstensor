@@ -37,6 +37,11 @@ class Sport(IntEnum):
     UNKNOWN_6 = 6
     UNKNOWN_7 = 7
 
+class StatType(Enum):
+    OFFENSE = "OFFENSIVE"
+    DEFENSE = "DEFENSIVE"
+    SPECIAL = "SPECIAL"
+    OTHER = "OTHER"
 
 class League(Enum):
     """Represents a sports league, mainly used for mapping and indicating active status to run predictions on."""
@@ -111,6 +116,7 @@ class Player(StrictBaseModel):
     playerName: str
     playerTeam: str
     playerPosition: Optional[str]
+    stats: StatType
     sport: int
     league: str
 
@@ -129,13 +135,6 @@ class Player(StrictBaseModel):
         if field.name in values and v != values[field.name]:
             raise ValueError(f"{field.name} is immutable and cannot be changed")
         return v
-
-class StatType(Enum):
-    OFFENSE = "OFFENSE"
-    DEFENSE = "DEFENSE"
-    SPECIAL = "SPECIAL"
-    OTHER = "OTHER"
-
 
 class Stat(StrictBaseModel):
     """
@@ -162,6 +161,9 @@ class Stat(StrictBaseModel):
     statType: StatType
     sport: Sport
 
+class PlayerEligibleStat(StrictBaseModel):
+    playerId: str
+    statId: str
 
 class PlayerStat(StrictBaseModel):
     """Represents a player's stat in a sports match."""

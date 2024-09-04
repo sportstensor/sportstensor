@@ -83,6 +83,7 @@ class Validator(BaseValidatorNeuron):
         self.match_data_endpoint = f"{api_root}/matches"
         self.prediction_results_endpoint = f"{api_root}/predictionResults"
         self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictions"
+        self.players_stats_single_source = "https://docs.google.com/spreadsheets/d/1IhHu98r20QReWPTXya7LbDd_dj3BRYxrLaC11qq0Iog/edit?gid=231032492#gid=231032492"
 
         self.client_timeout_seconds = VALIDATOR_TIMEOUT
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
@@ -137,8 +138,9 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(
                 "*** Syncing the latest match data to local validator storage. ***"
             )
-            sync_result = await utils.sync_match_data(self.match_data_endpoint)
-            if sync_result:
+            sync_match_result = await utils.sync_match_data(self.match_data_endpoint)
+            sync_player_stats_result = await utils.sync_player_data(self.players_stats_single_source)
+            if sync_match_result:
                 bt.logging.info("Successfully synced match data.")
             else:
                 bt.logging.warning("Issue syncing match data")
