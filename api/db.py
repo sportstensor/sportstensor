@@ -2,7 +2,7 @@ import mysql.connector
 import logging
 import datetime as dt
 from datetime import timezone
-from api.config import IS_PROD
+from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
 
 
@@ -153,9 +153,11 @@ def upload_prediction_results(prediction_results):
 
         conn.commit()
         logging.info("Prediction results data inserted or updated in database")
+        return True
 
     except Exception as e:
         logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()
@@ -192,9 +194,11 @@ def update_miner_reg_statuses(active_uids, active_hotkeys):
             conn.commit()
         
         logging.info("Miner registration statuses updated in database")
+        return True
 
     except Exception as e:
         logging.error("Failed to update miner registration statuses in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()
@@ -272,6 +276,7 @@ def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=Fal
         logging.error(
             "Failed to query league prediction stats from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -322,6 +327,7 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         logging.error(
             "Failed to query sport prediction stats from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -369,6 +375,7 @@ def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
         logging.error(
             "Failed to query total prediction stats from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
@@ -409,12 +416,54 @@ def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
         logging.error(
             "Failed to query match prediction snapshots from MySQL database", exc_info=True
         )
+        return False
     finally:
         c.close()
         conn.close()
 
 
-def upsert_app_match_prediction(prediction):
+def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+
+        query = f"""
+            SELECT *
+            FROM MPRSnapshots
+            WHERE 1=1
+        """
+
+        params = []
+        if sport:
+            query += " AND sport = %s"
+            params.append(sport)
+
+        if league:
+            query += " AND league = %s"
+            params.append(league)
+
+        if miner_hotkey:
+            query += " AND miner_hotkey = %s"
+            params.append(miner_hotkey)
+        else:
+            query += " AND miner_is_registered = 1"
+
+        query += " ORDER BY snapshot_date ASC"
+        
+        c.execute(query, params)
+        return c.fetchall()
+
+    except Exception as e:
+        logging.error(
+            "Failed to query match prediction snapshots from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+
+def upsert_app_match_prediction(prediction, vali_hotkey):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -424,25 +473,28 @@ def upsert_app_match_prediction(prediction):
 
         c.execute(
             """
-            INSERT INTO AppMatchPredictions (app_request_id, matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated, miner_hotkey) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO AppMatchPredictions (app_request_id, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated, miner_hotkey, vali_hotkey) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 matchId=VALUES(matchId), 
                 matchDate=VALUES(matchDate), 
                 sport=VALUES(sport),
+                league=VALUES(league),
                 homeTeamName=VALUES(homeTeamName), 
                 awayTeamName=VALUES(awayTeamName),
                 homeTeamScore=VALUES(homeTeamScore), 
                 awayTeamScore=VALUES(awayTeamScore),
                 isComplete=VALUES(isComplete), 
                 lastUpdated=VALUES(lastUpdated),
-                miner_hotkey=VALUES(miner_hotkey)
+                miner_hotkey=VALUES(miner_hotkey),
+                vali_hotkey=VALUES(vali_hotkey)
             """,
             (
                 prediction["app_request_id"],
                 prediction["matchId"],
                 prediction["matchDate"],
                 prediction["sport"],
+                prediction["league"],
                 prediction["homeTeamName"],
                 prediction["awayTeamName"],
                 prediction.get("homeTeamScore"),  # These can be None, hence using get
@@ -450,32 +502,143 @@ def upsert_app_match_prediction(prediction):
                 prediction.get("isComplete", 0),  # Default to 0 if not provided
                 current_utc_time,
                 prediction.get("miner_hotkey"),  # This can be None
+                vali_hotkey,  # This can be None
             ),
         )
 
         conn.commit()
         logging.info("Data inserted or updated in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert app match prediction in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def update_app_match_predictions(predictions):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        current_utc_time = dt.datetime.now(timezone.utc)
+        current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        predictions_to_update = []
+        predictions_with_issues = []
+        for prediction in predictions:
+            if "minerHasIssue" in prediction and (prediction["minerHasIssue"] == 1 or prediction["minerHasIssue"] == True):
+                predictions_with_issues.append(
+                    (
+                        current_utc_time,
+                        1,
+                        prediction["minerIssueMessage"],
+                        prediction["app_request_id"],
+                    )
+                )
+                continue
+
+            if "homeTeamScore" not in prediction or "awayTeamScore" not in prediction:
+                logging.error("Missing homeTeamScore or awayTeamScore for prediction in update_app_match_predictions")
+                continue
+            
+            predictions_to_update.append(
+                (
+                    prediction["homeTeamScore"],
+                    prediction["awayTeamScore"],
+                    1,
+                    current_utc_time,
+                    prediction["app_request_id"],
+                )
+            )
+
+        if predictions_to_update:
+            c.executemany(
+                """
+                UPDATE AppMatchPredictions
+                SET homeTeamScore = %s, awayTeamScore = %s, isComplete = %s, lastUpdated = %s
+                WHERE app_request_id = %s
+                """,
+                predictions_to_update
+            )
+        if predictions_with_issues:
+            c.executemany(
+                """
+                UPDATE AppMatchPredictions
+                SET valiLastUpdated = %s, minerHasIssue = %s, minerIssueMessage = %s
+                WHERE app_request_id = %s
+                """,
+                predictions_with_issues
+            )
+
+        conn.commit()
+        logging.info("Data inserted or updated in database")
+        return True
 
     except Exception as e:
         logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()
 
 
-def get_app_match_predictions():
+def get_app_match_predictions(vali_hotkey=None, batch_size=-1):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM AppMatchPredictions")
+        query = "SELECT * FROM AppMatchPredictions WHERE isComplete = 0"
+        
+        params = []
+        if vali_hotkey is not None:
+            query += " AND vali_hotkey = %s"
+            params.append(vali_hotkey)
+        if batch_size > 0:
+            query += " LIMIT %s"
+            params.append(batch_size)
+            
+        cursor.execute(query, params)
         match_list = cursor.fetchall()
+
+        # if results, we need to update the valiLastUpdated field
+        if match_list and vali_hotkey is not None:
+            cursor.execute(
+                "UPDATE AppMatchPredictions SET valiLastUpdated = NOW() WHERE app_request_id IN (%s)"
+                % ",".join(["%s"] * len(match_list)),
+                [match["app_request_id"] for match in match_list],
+            )
+            conn.commit()
 
         return match_list
 
     except Exception as e:
         logging.error(
             "Failed to retrieve app match predictions from the MySQL database",
+            exc_info=True,
+        )
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_app_match_predictions_unfulfilled(unfulfilled_threshold=5):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            f"SELECT * FROM AppMatchPredictions WHERE isComplete = 0 AND valiLastUpdated IS NULL AND lastUpdated < NOW() - INTERVAL {unfulfilled_threshold} MINUTE"
+        )
+        match_list = cursor.fetchall()
+
+        return match_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve unfulfilled app match predictions from the MySQL database",
             exc_info=True,
         )
         return False
@@ -496,8 +659,13 @@ def get_prediction_by_id(app_id):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(
-            "SELECT * FROM AppMatchPredictions WHERE app_request_id = %s", (app_id,)
+        cursor.execute("""
+            SELECT m.*, apm.app_request_id, apm.isComplete AS predictionIsComplete, apm.homeTeamScore AS predictedHomeTeamScore, apm.awayTeamScore AS predictedAwayTeamScore, apm.lastUpdated AS predictionLastUpdated,
+                       apm.miner_hotkey, apm.vali_hotkey, apm.valiLastUpdated, apm.minerHasIssue, apm.minerIssueMessage
+            FROM AppMatchPredictions apm 
+            LEFT JOIN matches m ON (m.matchId = apm.matchId) 
+            WHERE app_request_id = %s
+        """, (app_id,)
         )
         prediction = cursor.fetchone()
 
@@ -613,14 +781,18 @@ def create_app_tables():
             matchId VARCHAR(50) NOT NULL,
             matchDate TIMESTAMP NOT NULL,
             sport INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
             homeTeamName VARCHAR(30) NOT NULL,
             awayTeamName VARCHAR(30) NOT NULL,
             homeTeamScore INTEGER,
             awayTeamScore INTEGER,
-            matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
             lastUpdated TIMESTAMP NOT NULL,
-            miner_hotkey VARCHAR(64) NULL
+            miner_hotkey VARCHAR(64) NULL,
+            vali_hotkey VARCHAR(64) NULL,
+            valiLastUpdated TIMESTAMP NULL,
+            minerHasIssue BOOLEAN DEFAULT FALSE,
+            minerIssueMessage VARCHAR(255) NULL
         )"""
         )
         conn.commit()
@@ -636,10 +808,10 @@ def create_app_tables():
 def get_db_conn():
     try:
         conn = mysql.connector.connect(
-            host="localhost",
-            database="sportstensor",
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
         )
         return conn
     except mysql.connector.Error as e:

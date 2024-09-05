@@ -16,6 +16,7 @@ from storage.sqlite_validator_storage import SqliteValidatorStorage
 
 from common.constants import (
     IS_DEV,
+    VALIDATOR_TIMEOUT,
     CORRECT_MATCH_WINNER_SCORE,
     TOTAL_SCORE_THRESHOLD,
     MAX_SCORE_DIFFERENCE,
@@ -85,21 +86,28 @@ async def sync_match_data(match_data_endpoint) -> bool:
 
 
 async def process_app_prediction_requests(
-    vali: Validator, app_prediction_requests_endpoint: str
+    vali: Validator,
+    app_prediction_requests_endpoint: str,
+    app_prediction_responses_endpoint: str,
 ) -> bool:
+    keypair = vali.dendrite.keypair
+    hotkey = keypair.ss58_address
+    signature = f"0x{keypair.sign(hotkey).hex()}"
     try:
         async with ClientSession() as session:
-            # TODO: add in authentication
-            async with session.get(app_prediction_requests_endpoint) as response:
+            async with session.get(
+                app_prediction_requests_endpoint, auth=BasicAuth(hotkey, signature)
+            ) as response:
                 response.raise_for_status()
                 prediction_requests = await response.json()
 
-        if not prediction_requests or "matches" not in prediction_requests:
+        if not prediction_requests or "requests" not in prediction_requests:
             bt.logging.info("No app prediction requests returned from API")
             return False
 
-        prediction_requests = prediction_requests["matches"]
+        prediction_requests = prediction_requests["requests"]
 
+        prediction_responses = []
         bt.logging.info(
             f"Sending {len(prediction_requests)} app requests to miners for predictions."
         )
@@ -108,6 +116,7 @@ async def process_app_prediction_requests(
                 matchId=pr["matchId"],
                 matchDate=pr["matchDate"],
                 sport=pr["sport"],
+                league=pr["league"],
                 homeTeamName=pr["homeTeamName"],
                 awayTeamName=pr["awayTeamName"],
             )
@@ -115,22 +124,111 @@ async def process_app_prediction_requests(
             if IS_DEV:
                 miner_uids = [9999]
             else:
-                miner_uids = [
-                    ax.uid for ax in vali.metagraph.axons if ax.hotkey == miner_hotkey
-                ]
+                if miner_hotkey in vali.metagraph.hotkeys:
+                    miner_uids = [
+                        vali.metagraph.hotkeys.index(miner_hotkey) 
+                    ]
 
-            input_synapse = GetMatchPrediction(match_prediction=match_prediction)
-            # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
-            finished_responses, working_miner_uids = await send_predictions_to_miners(
-                vali, input_synapse, miner_uids
-            )
+            if len(miner_uids) > 0:
+                bt.logging.info(
+                    f"-- Sending match to miners {miner_uids} for predictions."
+                )
+                input_synapse = GetMatchPrediction(match_prediction=match_prediction)
+                # Send prediction requests to miners and store their responses. TODO: do we need to mark the stored prediction as being an app request prediction? not sure it matters
+                finished_responses, working_miner_uids = await send_predictions_to_miners(
+                    vali, input_synapse, miner_uids
+                )
+                # Add the responses to the list of responses
+                for response in finished_responses:
+                    # Extract match_prediction and add app_request_id
+                    match_prediction = response.match_prediction
+                    match_prediction_dict = match_prediction.__dict__
+                    match_prediction_dict["app_request_id"] = pr["app_request_id"]
+                    match_prediction_dict["matchDate"] = str(match_prediction_dict["matchDate"]), # convert matchDate to string for serialization
+                    prediction_responses.append(match_prediction_dict)
 
-            # Post the response back per prediction_request or batch? Probably batch.
+                # Loop through miners not responding and add them to the response list with a flag
+                for uid in miner_uids:
+                    if uid not in working_miner_uids:
+                        match_prediction_not_working = pr
+                        match_prediction_not_working["minerHasIssue"] = True
+                        match_prediction_not_working["minerIssueMessage"] = "Miner did not respond with a prediction."
+                        prediction_responses.append(match_prediction_not_working)
+
+            else:
+                bt.logging.info(
+                    f"-- No miner uid found for {miner_hotkey}, skipping."
+                )
+
+        if len(prediction_responses) > 0:
+            max_retries = 3
+            # Post the prediction responses back to API
+            for attempt in range(max_retries):
+                try:
+                    # Attempt to post the prediction responses
+                    post_result = await post_app_prediction_responses(
+                        vali, app_prediction_responses_endpoint, prediction_responses
+                    )
+                    return post_result
+                except Exception as e:
+                    bt.logging.error(f"Attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        # Wait before retrying
+                        await asyncio.sleep(2)
+                    else:
+                        # Raise the exception if the maximum number of retries is reached
+                        bt.logging.error(
+                            f"Failed to post app prediction responses after {max_retries} attempts."
+                        )
+                        # Return False to indicate that the post failed
+                        return False
 
         return True
 
     except Exception as e:
-        bt.logging.error(f"Error syncing app prediction requests: {e}")
+        bt.logging.error(f"Error processing app prediction requests: {e}")
+        return False
+
+
+async def post_app_prediction_responses(
+    vali, prediction_responses_endpoint, prediction_responses
+):
+    keypair = vali.dendrite.keypair
+    hotkey = keypair.ss58_address
+    signature = f"0x{keypair.sign(hotkey).hex()}"
+    try:
+        # Post the app prediction request responses back to the api
+        """
+        prediction_responses = [
+            {
+                "app_request_id": "frontend-12345",
+                "match_prediction":{
+                    "matchId": "TeamATeamB202408011530",
+                    "matchDate": "2024-08-01 15:30:00",
+                    "sport": "Baseball",
+                    "league": "MLB",
+                    "homeTeamName": "Team A",
+                    "awayTeamName": "Team B",
+                    "homeTeamScore": 2,
+                    "awayTeamScore": 3,
+                    "isComplete": 1,
+                    "miner_hotkey": "hotkey123"
+                }
+            }
+        ]
+        """
+        async with ClientSession() as session:
+            async with session.post(
+                prediction_responses_endpoint,
+                auth=BasicAuth(hotkey, signature),
+                json=prediction_responses,
+            ) as response:
+                response.raise_for_status()
+                bt.logging.info("Successfully posted app prediction responses to API.")
+                return True
+
+    except Exception as e:
+        bt.logging.error(f"Error posting app prediction responses to API: {e}")
         return False
 
 
@@ -185,7 +283,7 @@ async def send_predictions_to_miners(
                 axons=axons,
                 synapse=input_synapse,
                 deserialize=True,
-                timeout=120,
+                timeout=VALIDATOR_TIMEOUT,
             )
 
         working_miner_uids = []

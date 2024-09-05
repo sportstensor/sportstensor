@@ -2,7 +2,7 @@ import datetime
 
 IS_DEV = False
 # Controls if validators should process our SportsTensor App-based logic
-ENABLE_APP = False
+ENABLE_APP = True
 
 # The current protocol version (int)
 PROTOCOL_VERSION = 1
@@ -13,10 +13,13 @@ DATA_SYNC_INTERVAL_IN_MINUTES = 30
 # Interval in minutes that we poll the api for prediction requests from the app
 APP_DATA_SYNC_INTERVAL_IN_MINUTES = 1
 
-# Validator API endpoint timeout in seconds
-VALIDATOR_TIMEOUT = 120
+# Interval in minutes that we give validators to respond to an assigned app prediction request
+APP_PREDICTIONS_UNFULFILLED_THRESHOLD = 3
 
-# Have Validators pull match data ever X seconds.
+# Validator enforced miner response timeout in seconds
+VALIDATOR_TIMEOUT = 10
+
+# Have Validators pull match data every X seconds.
 VALI_REFRESH_MATCHES = 60 * 30
 
 # The base FloatTensor score for all miners that return a valid prediction

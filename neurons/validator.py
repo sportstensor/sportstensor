@@ -82,9 +82,9 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Using Sportstensor API: {api_root}")
         self.match_data_endpoint = f"{api_root}/matches"
         self.prediction_results_endpoint = f"{api_root}/predictionResults"
-        self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictions"
-
-        self.client_timeout_seconds = VALIDATOR_TIMEOUT
+        self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictionsForValidators"
+        self.app_prediction_responses_endpoint = f"{api_root}/AppMatchPredictionsForValidators"
+        
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
@@ -152,8 +152,7 @@ class Validator(BaseValidatorNeuron):
         miner_uids = utils.get_random_uids(self, k=NUM_MINERS_TO_SEND_TO)
 
         if len(miner_uids) == 0:
-            bt.logging.info("No miners available")
-            return
+            bt.logging.info("No miners available to send requests to.")
 
         # Get a prediction requests to send to miners
         match_prediction_requests = utils.get_match_prediction_requests()
@@ -274,17 +273,17 @@ class Validator(BaseValidatorNeuron):
                 dt.timezone.utc
             ):
                 bt.logging.info(
-                    "*** Syncing the latest app prediction request data to local validator storage. ***"
+                    "*** Checking the latest app prediction request data for requests for this validator. ***"
                 )
                 process_result = await utils.process_app_prediction_requests(
-                    self, self.app_prediction_requests_endpoint
+                    self,
+                    self.app_prediction_requests_endpoint,
+                    self.app_prediction_responses_endpoint,
                 )
                 if process_result:
                     bt.logging.info(
                         "Successfully processed app match prediction requests."
                     )
-                else:
-                    bt.logging.warning("Issue processing app prediction requests.")
                 self.next_app_predictions_syncing_datetime = dt.datetime.now(
                     dt.timezone.utc
                 ) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
