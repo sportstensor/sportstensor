@@ -49,7 +49,7 @@ def mlb():
     )
 
 def epl():
-    matchDate = "2024-08-20"
+    matchDate = "2024-09-20"
     match_prediction = MatchPrediction(
         matchId=1234,
         matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
@@ -57,6 +57,17 @@ def epl():
         league=League.EPL,
         homeTeamName="Arsenal",
         awayTeamName="Chelsea",
+    )
+
+def nfl():
+    matchDate = "2024-09-20"
+    match_prediction = MatchPrediction(
+        matchId=1234,
+        matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
+        sport=Sport.FOOTBALL,
+        league=League.NFL,
+        homeTeamName="Cincinnati Bengals",
+        awayTeamName="Tampa Bay Buccaneers",
     )
 
     match_prediction = make_match_prediction(match_prediction)
@@ -71,4 +82,5 @@ def epl():
 if __name__ == "__main__":
     #mls()
     #mlb()
-    epl()
+    #epl()
+    nfl()
