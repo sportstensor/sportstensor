@@ -6,16 +6,19 @@ from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
 
 
-def get_matches():
+def get_matches(all=False):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(
+        if all:
+            cursor.execute("SELECT * FROM matches")
+        else:
+            cursor.execute(
+                """
+                SELECT * FROM matches
+                WHERE matchDate BETWEEN NOW() - INTERVAL 10 DAY AND NOW() + INTERVAL 48 HOUR
             """
-            SELECT * FROM matches
-            WHERE matchDate BETWEEN NOW() - INTERVAL 10 DAY AND NOW() + INTERVAL 48 HOUR
-        """
         )
         match_list = cursor.fetchall()
 
@@ -581,6 +584,38 @@ def update_app_match_predictions(predictions):
         return False
     finally:
         c.close()
+        conn.close()
+
+
+def get_app_match_predictions_by_ids(prediction_ids, batch_size=-1):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = "SELECT * FROM AppMatchPredictions WHERE 1=1"
+        
+        params = []
+        if prediction_ids is not None and len(prediction_ids) > 0:
+            placeholders = ', '.join(['%s'] * len(prediction_ids))
+            query += f" AND app_request_id IN ({placeholders})"
+            params.extend(prediction_ids)
+        if batch_size > 0:
+            query += " LIMIT %s"
+            params.append(batch_size)
+            
+        cursor.execute(query, params)
+        requests_list = cursor.fetchall()
+
+        return requests_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve app match predictions by ids from the MySQL database",
+            exc_info=True,
+        )
+        return False
+    finally:
+        cursor.close()
         conn.close()
 
 
