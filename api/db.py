@@ -592,7 +592,11 @@ def get_app_match_predictions_by_ids(prediction_ids, batch_size=-1):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        query = "SELECT * FROM AppMatchPredictions WHERE 1=1"
+        query = """SELECT m.*, apm.app_request_id, apm.isComplete AS predictionIsComplete, apm.homeTeamScore AS predictedHomeTeamScore, apm.awayTeamScore AS predictedAwayTeamScore, apm.lastUpdated AS predictionLastUpdated,
+                       apm.miner_hotkey, apm.vali_hotkey, apm.valiLastUpdated, apm.minerHasIssue, apm.minerIssueMessage
+            FROM AppMatchPredictions apm 
+            LEFT JOIN matches m ON (m.matchId = apm.matchId) 
+            WHERE 1=1 """
         
         params = []
         if prediction_ids is not None and len(prediction_ids) > 0:
