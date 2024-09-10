@@ -16,13 +16,13 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-from typing import Dict, Union, Tuple
+from typing import Tuple
 import bittensor as bt
 
 from base.miner import BaseMinerNeuron
 
 from common import constants
-from common.protocol import GetMatchPrediction, GetPlayerPrediction
+from common.protocol import GetPrediction
 from st.sport_prediction_model import make_match_prediction, make_player_prediction
 
 class Miner(BaseMinerNeuron):
@@ -31,32 +31,32 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-    async def forward(self, synapse: Dict[str, Union[GetMatchPrediction, list[GetPlayerPrediction]]]) -> Dict[str, Union[GetMatchPrediction, list[GetPlayerPrediction]]]:
-        mp_synapse = synapse['mp']
-        pp_synapses = synapse['ipp']
+    async def forward(self, synapse: GetPrediction) -> GetPrediction:
+        mp_synapse = synapse.prediction['mp']
+        pp_synapses = synapse.prediction['ipp']
         bt.logging.info(
-            f"Received GetMatchPrediction request in forward() from {mp_synapse.dendrite.hotkey}."
+            f"Received GetMatchPrediction request in forward() from {synapse.dendrite.hotkey}."
         )
 
         # Make the match prediction based on the requested MatchPrediction object
         # TODO: does this need to by async?
-        mp_synapse.match_prediction = make_match_prediction(mp_synapse.match_prediction)
-        mp_synapse.version = constants.PROTOCOL_VERSION
+        mp_synapse = make_match_prediction(mp_synapse)
+        synapse.version = constants.PROTOCOL_VERSION
         for pp in pp_synapses:
-            pp.player_prediction = make_player_prediction(pp.player_prediction)
-            pp.version = constants.PROTOCOL_VERSION
+            pp = make_player_prediction(pp)
 
         bt.logging.success(
-            f"Returning MatchPrediction to {mp_synapse.dendrite.hotkey}: \n{mp_synapse.match_prediction}."
+            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n{mp_synapse}."
         )
         for pp in pp_synapses:
             bt.logging.success(
-                f"Returning PlayerPrediction to {mp_synapse.dendrite.hotkey}: \n{pp.player_prediction}."
+                f"Returning PlayerPrediction to {synapse.dendrite.hotkey}: \n{pp}."
             )
+        synapse.prediction = {'mp': mp_synapse, 'ipp': pp_synapses}
 
         return synapse
 
-    async def blacklist(self, synapse: Dict[str, Union[GetMatchPrediction, list[GetPlayerPrediction]]]) -> Tuple[bool, str]:
+    async def blacklist(self, synapse: GetPrediction) -> Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -86,25 +86,23 @@ class Miner(BaseMinerNeuron):
 
         Otherwise, allow the request to be processed further.
         """
-        mp_synapse = synapse['mp']
-
-        if not mp_synapse.dendrite.hotkey:
+        if not synapse.dendrite.hotkey:
             return True, "Hotkey not provided"
-        registered = mp_synapse.dendrite.hotkey in self.metagraph.hotkeys
+        registered = synapse.dendrite.hotkey in self.metagraph.hotkeys
         if self.config.blacklist.allow_non_registered and not registered:
             return False, "Allowing un-registered hotkey"
         elif not registered:
             bt.logging.trace(
-                f"Blacklisting un-registered hotkey {mp_synapse.dendrite.hotkey}"
+                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
             )
-            return True, f"Unrecognized hotkey {mp_synapse.dendrite.hotkey}"
+            return True, f"Unrecognized hotkey {synapse.dendrite.hotkey}"
 
-        uid = self.metagraph.hotkeys.index(mp_synapse.dendrite.hotkey)
+        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if self.config.blacklist.force_validator_permit:
             # If the config is set to force validator permit, then we should only allow requests from validators.
             if not self.metagraph.validator_permit[uid]:
                 bt.logging.warning(
-                    f"Blacklisting a request from non-validator hotkey {mp_synapse.dendrite.hotkey}"
+                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
                 )
                 return True, "Non-validator hotkey"
 
@@ -114,16 +112,16 @@ class Miner(BaseMinerNeuron):
             and stake < self.config.blacklist.validator_min_stake
         ):
             bt.logging.warning(
-                f"Blacklisting request from {mp_synapse.dendrite.hotkey} [uid={uid}], not enough stake -- {stake}"
+                f"Blacklisting request from {synapse.dendrite.hotkey} [uid={uid}], not enough stake -- {stake}"
             )
             return True, "Stake below minimum"
 
         bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {mp_synapse.dendrite.hotkey}"
+            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: Dict[str, Union[GetMatchPrediction, list[GetPlayerPrediction]]]) -> float:
+    async def priority(self, synapse: GetPrediction) -> float:
         """
         The priority function determines the order in which requests are handled. More valuable or higher-priority
         requests are processed before others. You should design your own priority mechanism with care.
@@ -143,16 +141,14 @@ class Miner(BaseMinerNeuron):
         Example priority logic:
         - A higher stake results in a higher priority value.
         """
-        mp_synapse = synapse['mp']
-        
         caller_uid = self.metagraph.hotkeys.index(
-            mp_synapse.dendrite.hotkey
+            synapse.dendrite.hotkey
         )  # Get the caller index.
         prirority = float(
             self.metagraph.S[caller_uid]
         )  # Return the stake as the priority.
         bt.logging.trace(
-            f"Prioritizing {mp_synapse.dendrite.hotkey} with value: ", prirority
+            f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
         )
         return prirority
 

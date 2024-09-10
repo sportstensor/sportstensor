@@ -365,7 +365,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.execute(
-                    """SELECT EXISTS(SELECT 1 FROM Players WHERE playerId = ?)""",
+                    """SELECT EXISTS(SELECT 1 FROM players WHERE playerId = ?)""",
                     (playerId,),
                 )
                 return cursor.fetchone()[0]

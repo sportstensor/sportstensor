@@ -3,12 +3,12 @@ import asyncio
 import bittensor as bt
 import random
 import traceback
-from typing import List, Optional, Tuple, Type, Dict, Union
+from typing import List, Optional, Tuple, Type
 from collections import defaultdict
 import copy
 import gspread
 from common.data import Sport, Match, Stat, Player, MatchPrediction, PlayerStat, PlayerPrediction, Stat, PlayerEligibleStat
-from common.protocol import GetMatchPrediction, GetPlayerPrediction, GetPrediction
+from common.protocol import GetMatchPrediction, GetPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
 
@@ -181,23 +181,18 @@ async def sync_player_data(player_data_endpoint) -> bool:
                 league=item["league"],
                 stats=item["stats"],
             )
-            storedPlayer = storage.check_player(player.playerId)
-            if storedPlayer:
-                # Check if any of the attributes have changed
-                if (storedPlayer.stats != player.stats or
-                    storedPlayer.playerTeam != player.playerTeam or
-                    storedPlayer.playerPosition != player.playerPosition):
-                    players_to_update.append(player)
-                    # Prepare eligible stats based on player sport and stats type
-                    eligible_stats = [
-                        PlayerEligibleStat(
-                            playerId=player.playerId,
-                            statId=stat["statId"]
-                        )
-                        for stat in stats_data
-                        if "statId" in stat and player.sport == stat["sport"] and player.stats == stat['statType']
-                    ]
-                    players_elgible_stats_update.extend(eligible_stats)
+            if storage.check_player(item['playerId']):
+                players_to_update.append(player)
+                # Prepare eligible stats based on player sport and stats type
+                eligible_stats = [
+                    PlayerEligibleStat(
+                        playerId=player.playerId,
+                        statId=stat["statId"]
+                    )
+                    for stat in stats_data
+                    if "statId" in stat and player.sport == stat["sport"] and player.stats == stat['statType']
+                ]
+                players_elgible_stats_update.extend(eligible_stats)
             else:
                 players_to_insert.append(player)
                 # Prepare eligible stats based on player sport and stats type
@@ -372,9 +367,7 @@ async def send_predictions_to_miners(
                 playerPrediction.matchDate = str(
                     playerPrediction.matchDate
                 )
-            bt.logging.info(f"input synapse=====================>: {input_synapse}")
-            bt.logging.info(f"axons=====================>: {axons}")
-            responses: List[Dict[str, Union[MatchPrediction, list[PlayerPrediction]]]] = await vali.dendrite(
+            responses: List[GetPrediction] = await vali.dendrite(
                 # Send the query to selected miner axons in the network.
                 axons=axons,
                 synapse=input_synapse,
@@ -386,8 +379,8 @@ async def send_predictions_to_miners(
         finished_mp_responses = []
         finished_pp_responses = []
         for response in responses:
-            mp_response = response['mp']
-            pp_response = response['ipp']
+            mp_response = response.prediction['mp']
+            pp_response = response.prediction['ipp']
             is_mp_valid, error_msg_for_mp = is_match_prediction_valid(
                 mp_response,
                 mp_prediction,
@@ -413,7 +406,7 @@ async def send_predictions_to_miners(
                         f"{input_synapse.axon.hotkey}: Miner failed to respond with a match prediction."
                     )
                     continue
-                elif (pp_response is None) or (pp_response == []) or any(prediction.player_prediction.statValue is None for prediction in pp_response):
+                elif (pp_response is None) or (pp_response == []) or any(prediction.statValue is None for prediction in pp_response):
                     bt.logging.info(
                         f"{input_synapse.axon.hotkey}: Miner failed to respond with a player prediction."
                     )
@@ -760,24 +753,24 @@ def get_match_prediction_from_response(
     return response.match_prediction
 
 
-def redact_scores(responses: List[Dict[str, Union[GetMatchPrediction, list[GetPlayerPrediction]]]]):
+def redact_scores(responses: List[GetPrediction]):
     redacted_responses = []
     for response in responses:
         # Create a copy of the response to avoid modifying the original
-        mp_response = response["mp"]
+        mp_response = response.prediction["mp"]
         redacted_response = copy.deepcopy(mp_response)
 
         # Redact the homeTeamScore and awayTeamScore
         if (
-            hasattr(redacted_response.match_prediction, "homeTeamScore")
-            and redacted_response.match_prediction.homeTeamScore is not None
+            hasattr(redacted_response, "homeTeamScore")
+            and redacted_response.homeTeamScore is not None
         ):
-            redacted_response.match_prediction.homeTeamScore = "REDACTED"
+            redacted_response.homeTeamScore = "REDACTED"
         if (
-            hasattr(redacted_response.match_prediction, "awayTeamScore")
-            and redacted_response.match_prediction.awayTeamScore is not None
+            hasattr(redacted_response, "awayTeamScore")
+            and redacted_response.awayTeamScore is not None
         ):
-            redacted_response.match_prediction.awayTeamScore = "REDACTED"
+            redacted_response.awayTeamScore = "REDACTED"
 
         redacted_responses.append(redacted_response)
     return redacted_responses
