@@ -50,7 +50,7 @@ class League(Enum):
     NFL = "NFL"
     NBA = "NBA"
     NHL = "NHL"
-    EPL = "EPL"
+    EPL = "English Premier League"
     MLS = "American Major League Soccer"
 
     """
@@ -117,8 +117,8 @@ class Player(StrictBaseModel):
     playerTeam: str
     playerPosition: Optional[str]
     stats: StatType
-    sport: int
-    league: str
+    sport: Sport
+    league: League
 
     # Validators to ensure immutability
     @validator(

@@ -70,27 +70,27 @@ class SqliteValidatorStorage(ValidatorStorage):
                             )"""
     
     STATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS Stats (
-                            statId              INTEGER         PRIMARY KEY,
+                            statId              VARCHAR(50)     PRIMARY KEY,
                             statName            VARCHAR(30)     NOT NULL,
                             statAbbr            VARCHAR(10)     NULL,
                             statDescription     VARCHAR(100)    NULL,
                             statType            VARCHAR(30)     NOT NULL,
-                            sport               INTEGER         NOT NULL,
+                            sport               INTEGER         NOT NULL
                             )"""
     
     PLAYERS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS Players (
-                            playerId            INTEGER         PRIMARY KEY,
+                            playerId            VARCHAR(50)     PRIMARY KEY,
                             playerName          VARCHAR(30)     NOT NULL,
                             playerTeam          VARCHAR(30)     NOT NULL,
                             playerPosition      VARCHAR(30)     NULL,
                             sport               INTEGER         NOT NULL,
                             league              VARCHAR(50)     NOT NULL,
-                            stats               VARCHAR(30)     NOT NULL,
+                            stats               VARCHAR(30)     NOT NULL
                             )"""
     
     PLAYER_ELIGIBLE_STATS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS PlayerEligibleStats (
-                            playerId            INTEGER         NOT NULL,
-                            statId              INTEGER         NOT NULL,
+                            playerId            VARCHAR(50)         NOT NULL,
+                            statId              VARCHAR(50)         NOT NULL,
                             PRIMARY KEY (playerId, statId),
                             FOREIGN KEY (playerId) REFERENCES Players(playerId),
                             FOREIGN KEY (statId) REFERENCES Stats(statId)
@@ -344,18 +344,17 @@ class SqliteValidatorStorage(ValidatorStorage):
                 [
                     stat.statId,
                     stat.statName,
-                    stat.statDescription,
                     stat.statAbbr,
+                    stat.statDescription,
                     stat.statType,
-                    stat.sport,
+                    stat.sport
                 ]
             )
-
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """INSERT OR IGNORE INTO Stats (statId, statName, statDescription, statAbbr, statType, sport) VALUES (?, ?, ?, ?, ?, ?)""",
+                    """INSERT OR IGNORE INTO Stats (statId, statName, statAbbr, statDescription, statType, sport) VALUES (?, ?, ?, ?, ?, ?)""",
                     values,
                 )
                 connection.commit()
@@ -866,7 +865,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     (playerStatId,),
                 )
                 return cursor.fetchone()[0]
-    
+
     def read_miner_last_prediction(self, miner_hotkey: str) -> Optional[dt.datetime]:
         """Gets when a specific miner last returned a prediction."""
         with self.lock:

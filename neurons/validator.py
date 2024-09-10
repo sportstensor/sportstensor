@@ -37,7 +37,7 @@ from common.constants import (
     NUM_MINERS_TO_SEND_TO,
     BASE_MINER_PREDICTION_SCORE,
     MAX_BATCHSIZE_FOR_SCORING,
-    SCORING_INTERVAL_IN_MINUTES,
+    SCORING_INTERVAL_IN_MINUTES
 )
 import vali_utils.utils as utils
 
@@ -144,6 +144,10 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.info("Successfully synced match data.")
             else:
                 bt.logging.warning("Issue syncing match data")
+            if sync_player_stats_result:
+                bt.logging.info("Successfully synced players and stats data.")
+            else:
+                bt.logging.warning("Issue syncing players and stats data")
             self.next_match_syncing_datetime = dt.datetime.now(
                 dt.timezone.utc
             ) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)

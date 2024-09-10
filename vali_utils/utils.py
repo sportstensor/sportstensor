@@ -45,7 +45,6 @@ async def sync_match_data(match_data_endpoint) -> bool:
             return False
 
         match_data = match_data["matches"]
-
         # UPSERT logic
         matches_to_insert = []
         matches_to_update = []
@@ -53,7 +52,6 @@ async def sync_match_data(match_data_endpoint) -> bool:
             if "matchId" not in item:
                 bt.logging.error(f"Skipping match data missing matchId: {item}")
                 continue
-
             match = Match(
                 matchId=item["matchId"],
                 matchDate=item["matchDate"],
@@ -132,7 +130,7 @@ async def sync_player_match__stats_data(match_data_endpoint) -> bool:
         return True
 
     except Exception as e:
-        bt.logging.error(f"Error getting match data: {e}")
+        bt.logging.error(f"Error getting player data: {e}")
         return False
 
 async def sync_player_data(player_data_endpoint) -> bool:
@@ -147,10 +145,9 @@ async def sync_player_data(player_data_endpoint) -> bool:
         # Sync stats data
         stats_to_insert = []
         for item in stats_data:
-            if "statId" not in item:
-                bt.logging.error(f"Skipping stats data missing statId: {item}")
+            if "statId" not in item or not item["statId"]:
+                bt.logging.error(f"Skipping stats data missing statId or empty statId: {item}")
                 continue
-
             stat = Stat(
                 statId=item["statId"],
                 statName=item["statName"],
@@ -161,31 +158,30 @@ async def sync_player_data(player_data_endpoint) -> bool:
             )
             if not storage.check_stats(item["statId"]):
                 stats_to_insert.append(stat)
-
         if stats_to_insert:
             storage.insert_stats(stats_to_insert)
-            bt.logging.info(f"Inserted {len(stats_to_insert)} new matches.")
+            bt.logging.info(f"Inserted {len(stats_to_insert)} new stats.")
         
         # Sync players data
         players_to_insert = []
         players_to_update = []
         players_elgible_stats_update = []
         players_elgible_stats_insert = []
-        for player in players_data:
-            if "playerId" not in player:
-                bt.logging.error(f"Skipping player data missing playerId: {player}")
+        for item in players_data:
+            if "playerId" not in item:
+                bt.logging.error(f"Skipping player data missing playerId: {item}")
                 continue
 
             player = Player(
-                playerId=player["playerId"],
-                playerName=player["playerName"],
-                playerTeam=player["playerTeam"],
-                playerPosition=player["playerPosition"],
-                sport=player["sport"],
-                league=player["league"],
-                stats=player["stats"],
+                playerId=item["playerId"],
+                playerName=item["playerName"],
+                playerTeam=item["playerTeam"],
+                playerPosition=item["playerPosition"],
+                sport=item["sport"],
+                league=item["league"],
+                stats=item["stats"],
             )
-            storedPlayer = storage.check_player(player["playerId"])
+            storedPlayer = storage.check_player(player.playerId)
             if storedPlayer:
                 # Check if any of the attributes have changed
                 if (storedPlayer.stats != player.stats or
