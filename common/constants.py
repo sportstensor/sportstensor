@@ -26,7 +26,7 @@ BASE_MINER_PREDICTION_SCORE = 0.01
 NUM_MINERS_TO_SEND_TO = 20
 
 # Number of players picked for player prediction reqeusts
-NUM_PLAYERS_TO_PICK = 5
+NUM_PLAYERS_TO_PICK = 3
 
 # Number of player-eligible stats to predict
 NUM_ELIGIBLE_PLAYER_STATS = 3

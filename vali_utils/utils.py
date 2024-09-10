@@ -8,7 +8,7 @@ from collections import defaultdict
 import copy
 import gspread
 from common.data import Sport, Match, Stat, Player, MatchPrediction, PlayerStat, PlayerPrediction, Stat, PlayerEligibleStat
-from common.protocol import GetMatchPrediction, GetPlayerPrediction
+from common.protocol import GetMatchPrediction, GetPlayerPrediction, GetPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
 
@@ -320,70 +320,66 @@ def get_player_prediction_requests(match: MatchPrediction, batchsize: int = NUM_
     return player_prediction_requests
 
 async def send_predictions_to_miners(
-    vali: Validator, input_synapse: Dict[str, Union[GetMatchPrediction, list[GetPlayerPrediction]]], miner_uids: List[int]
-) -> Tuple[List[GetMatchPrediction], List[list[GetPlayerPrediction]], List[int]]:
-    mp_input_synapse = input_synapse['mp']
-    pp_input_synapse = input_synapse['ipp']
+    vali: Validator, input_synapse: GetPrediction, miner_uids: List[int]
+) -> Tuple[List[MatchPrediction], List[list[PlayerPrediction]], List[int]]:
+    mp_prediction = input_synapse.prediction['mp']
+    pp_predictions = input_synapse.prediction['ipp']
     try:
         if IS_DEV:
             # For now, just return a list of random MatchPrediction and PlayerPrediction responses
-            mp_responses: List[GetMatchPrediction] = []
-            pp_responses: List[list[GetPlayerPrediction]] = []
+            mp_responses: List[MatchPrediction] = []
+            pp_responses: List[list[PlayerPrediction]] = []
             for uid in miner_uids:
-                mp_responses.append(
-                    GetMatchPrediction(
-                        match_prediction=MatchPrediction(
-                            matchId=mp_input_synapse.match_prediction.matchId,
-                            matchDate=mp_input_synapse.match_prediction.matchDate,
-                            sport=mp_input_synapse.match_prediction.sport,
-                            league=mp_input_synapse.match_prediction.league,
-                            homeTeamName=mp_input_synapse.match_prediction.homeTeamName,
-                            awayTeamName=mp_input_synapse.match_prediction.awayTeamName,
-                            homeTeamScore=random.randint(0, 10),
-                            awayTeamScore=random.randint(0, 10),
-                        )
+                mp_responses.append(MatchPrediction(
+                        matchId=mp_prediction.matchId,
+                        matchDate=mp_prediction.matchDate,
+                        sport=mp_prediction.sport,
+                        league=mp_prediction.league,
+                        homeTeamName=mp_prediction.homeTeamName,
+                        awayTeamName=mp_prediction.awayTeamName,
+                        homeTeamScore=random.randint(0, 10),
+                        awayTeamScore=random.randint(0, 10),
                     )
                 )
                 ipp_responses = []
-                for playerPrediction in pp_input_synapse:
+                for playerPrediction in pp_predictions:
                     ipp_responses.append(
-                        GetPlayerPrediction(
-                            player_prediction=PlayerPrediction(
-                                matchId=playerPrediction.player_prediction.matchId,
-                                matchDate=playerPrediction.player_prediction.matchDate,
-                                sport=playerPrediction.player_prediction.sport,
-                                league=playerPrediction.player_prediction.league,
-                                playerName=playerPrediction.player_prediction.playerName,
-                                playerTeam=playerPrediction.player_prediction.playerTeam,
-                                playerPosition=playerPrediction.player_prediction.playerPosition,
-                                statName=playerPrediction.player_prediction.statName,
-                                statAbbr=playerPrediction.player_prediction.statAbbr,
-                                statDescription=playerPrediction.player_prediction.statDescription,
-                                statType=playerPrediction.player_prediction.statType,
-                                statValue=random.randint(0, 10),
-                            )
+                        PlayerPrediction(
+                            matchId=playerPrediction.matchId,
+                            matchDate=playerPrediction.matchDate,
+                            sport=playerPrediction.sport,
+                            league=playerPrediction.league,
+                            playerName=playerPrediction.playerName,
+                            playerTeam=playerPrediction.playerTeam,
+                            playerPosition=playerPrediction.playerPosition,
+                            statName=playerPrediction.statName,
+                            statAbbr=playerPrediction.statAbbr,
+                            statDescription=playerPrediction.statDescription,
+                            statType=playerPrediction.statType,
+                            statValue=random.randint(0, 10),
                         )
                     )
                 pp_responses.append(ipp_responses)
         else:
-
             random.shuffle(miner_uids)
             axons = [vali.metagraph.axons[uid] for uid in miner_uids]
 
             # convert matchDate to string for serialization
-            mp_input_synapse.match_prediction.matchDate = str(
-                mp_input_synapse.match_prediction.matchDate
+            mp_prediction.matchDate = str(
+                mp_prediction.matchDate
             )
-            for playerPrediction in pp_input_synapse:
-                playerPrediction.player_prediction.matchDate = str(
-                    playerPrediction.player_prediction.matchDate
+            for playerPrediction in pp_predictions:
+                playerPrediction.matchDate = str(
+                    playerPrediction.matchDate
                 )
-            responses: List[Dict[str, Union[GetMatchPrediction, list[GetPlayerPrediction]]]] = await vali.dendrite(
+            bt.logging.info(f"input synapse=====================>: {input_synapse}")
+            bt.logging.info(f"axons=====================>: {axons}")
+            responses: List[Dict[str, Union[MatchPrediction, list[PlayerPrediction]]]] = await vali.dendrite(
                 # Send the query to selected miner axons in the network.
                 axons=axons,
                 synapse=input_synapse,
                 deserialize=True,
-                timeout=120,
+                timeout=120
             )
 
         working_miner_uids = []
@@ -393,12 +389,12 @@ async def send_predictions_to_miners(
             mp_response = response['mp']
             pp_response = response['ipp']
             is_mp_valid, error_msg_for_mp = is_match_prediction_valid(
-                mp_response.match_prediction,
-                mp_input_synapse,
+                mp_response,
+                mp_prediction,
             )
             is_ipp_valid, error_msg_for_ipp = is_player_prediction_valid(
                 pp_response,
-                pp_input_synapse,
+                pp_predictions,
             )
             if IS_DEV:
                 uid = miner_uids.pop(random.randrange(len(miner_uids)))
@@ -408,42 +404,42 @@ async def send_predictions_to_miners(
             else:
                 if (
                     mp_response is None
-                    or mp_response.match_prediction.homeTeamScore is None
-                    or mp_response.match_prediction.awayTeamScore is None
-                    or mp_response.axon is None
-                    or mp_response.axon.hotkey is None
+                    or mp_response.homeTeamScore is None
+                    or mp_response.awayTeamScore is None
+                    or input_synapse.axon is None
+                    or input_synapse.axon.hotkey is None
                 ):
                     bt.logging.info(
-                        f"{mp_response.axon.hotkey}: Miner failed to respond with a match prediction."
+                        f"{input_synapse.axon.hotkey}: Miner failed to respond with a match prediction."
                     )
                     continue
                 elif (pp_response is None) or (pp_response == []) or any(prediction.player_prediction.statValue is None for prediction in pp_response):
                     bt.logging.info(
-                        f"{mp_response.axon.hotkey}: Miner failed to respond with a player prediction."
+                        f"{input_synapse.axon.hotkey}: Miner failed to respond with a player prediction."
                     )
                     continue
                 elif not is_mp_valid:
                     bt.logging.info(
-                        f"{mp_response.axon.hotkey}: Miner match prediction failed validation: {error_msg_for_mp}"
+                        f"{input_synapse.axon.hotkey}: Miner match prediction failed validation: {error_msg_for_mp}"
                     )
                     continue
                 elif not is_ipp_valid:
                     bt.logging.info(
-                        f"{mp_response.axon.hotkey}: Miner player prediction failed validation: {error_msg_for_ipp}"
+                        f"{input_synapse.axon.hotkey}: Miner player prediction failed validation: {error_msg_for_ipp}"
                     )
                     continue
                 else:
                     uid = [
                         uid
                         for uid, axon in zip(miner_uids, axons)
-                        if axon.hotkey == mp_response.axon.hotkey
+                        if axon.hotkey == input_synapse.axon.hotkey
                     ][0]
                     working_miner_uids.append(uid)
-                    mp_response.match_prediction.minerId = uid
-                    mp_response.match_prediction.hotkey = mp_response.axon.hotkey
+                    mp_response.minerId = uid
+                    mp_response.hotkey = input_synapse.axon.hotkey
                     for pp in pp_response:
-                        pp.player_prediction.minerId = uid
-                        pp.player_prediction.hotkey = mp_response.axon.hotkey
+                        pp.minerId = uid
+                        pp.hotkey = input_synapse.axon.hotkey
                     finished_mp_responses.append(mp_response)
                     finished_pp_responses.append(pp_response)
 
@@ -597,7 +593,7 @@ def calculate_prediction_score(
 
     return total_score, correct_winner_score
 
-def is_player_prediction_valid(prediction: List[GetPlayerPrediction], input_synapse: List[GetPlayerPrediction]) -> Tuple[bool, str]:
+def is_player_prediction_valid(prediction: List[PlayerPrediction], input_synapse: List[PlayerPrediction]) -> Tuple[bool, str]:
     """Performs basic validation on a PlayerPrediction.
 
     Returns a tuple of (is_valid, reason) where is_valid is True if the entities are valid,
@@ -611,24 +607,24 @@ def is_player_prediction_valid(prediction: List[GetPlayerPrediction], input_syna
     # Validate each prediction against the input synapse
     for pred, input_pred in zip(prediction, input_synapse):
         # Validate stat value
-        if not isinstance(pred.player_prediction.statValue, int):
+        if not isinstance(pred.statValue, int):
             return (
                 False,
-                f"Player stat value {pred.player_prediction.statValue} is not an integer",
+                f"Player stat value {pred.statValue} is not an integer",
             )
-        if pred.player_prediction.statValue < 0:
+        if pred.statValue < 0:
             return (
                 False,
-                f"Player stat value {pred.player_prediction.statValue} is a negative integer",
+                f"Player stat value {pred.statValue} is a negative integer",
             )
 
         # Check that the prediction response matches the prediction request
         if (
-            str(pred.player_prediction.matchDate) != str(input_pred.player_prediction.matchDate)
-            or pred.player_prediction.sport != input_pred.player_prediction.sport
-            or pred.player_prediction.league != input_pred.player_prediction.league
-            or pred.player_prediction.playerName != input_pred.player_prediction.playerName
-            or pred.player_prediction.playerTeam != input_pred.player_prediction.playerTeam
+            str(pred.matchDate) != str(input_pred.matchDate)
+            or pred.sport != input_pred.sport
+            or pred.league != input_pred.league
+            or pred.playerName != input_pred.playerName
+            or pred.playerTeam != input_pred.playerTeam
         ):
             return (
                 False,
@@ -638,7 +634,7 @@ def is_player_prediction_valid(prediction: List[GetPlayerPrediction], input_syna
     return (True, "")
 
 def is_match_prediction_valid(
-    prediction: MatchPrediction, input_synapse: GetMatchPrediction
+    prediction: MatchPrediction, input_synapse: MatchPrediction
 ) -> Tuple[bool, str]:
     """Performs basic validation on a MatchPrediction.
 
@@ -671,11 +667,11 @@ def is_match_prediction_valid(
 
     # Check that the prediction response matches the prediction request
     if (
-        str(prediction.matchDate) != str(input_synapse.match_prediction.matchDate)
-        or prediction.sport != input_synapse.match_prediction.sport
-        or prediction.league != input_synapse.match_prediction.league
-        or prediction.homeTeamName != input_synapse.match_prediction.homeTeamName
-        or prediction.awayTeamName != input_synapse.match_prediction.awayTeamName
+        str(prediction.matchDate) != str(input_synapse.matchDate)
+        or prediction.sport != input_synapse.sport
+        or prediction.league != input_synapse.league
+        or prediction.homeTeamName != input_synapse.homeTeamName
+        or prediction.awayTeamName != input_synapse.awayTeamName
     ):
         return (
             False,

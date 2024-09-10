@@ -320,6 +320,6 @@ class PlayerPrediction(Prediction):
         base_str = super().__str__()
         return (
             f"{base_str[:-1]}, "  # Remove the closing parenthesis from the base string
-            f"playerName={self.playerStat.playerName}, playerTeam={self.playerStat.playerTeam}, "
-            f"playerPosition={self.playerStat.playerPosition}, stat={self.playerStat.stat})"")"
+            f"playerName={self.playerName}, playerTeam={self.playerTeam}, "
+            f"playerPosition={self.playerPosition}, stat={self.statName})"")"
         )

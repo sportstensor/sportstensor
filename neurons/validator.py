@@ -27,7 +27,7 @@ import torch
 import wandb
 
 # Bittensor Validator Template:
-from common.protocol import GetMatchPrediction, GetPlayerPrediction
+from common.protocol import GetMatchPrediction, GetPlayerPrediction, GetPrediction
 from common.data import MatchPrediction, PlayerPrediction
 from common.constants import (
     ENABLE_APP,
@@ -171,13 +171,13 @@ class Validator(BaseValidatorNeuron):
             )
             # Loop through predictions and send to miners
             for mpr in match_prediction_requests:
+                # input_synapse_for_match_prediction = GetMatchPrediction(match_prediction=mpr)
                 player_prediction_requests = utils.get_player_prediction_requests(mpr)
-                input_synapse_for_match_prediction = GetMatchPrediction(match_prediction=mpr)
-                input_synapse_for_player_prediction = [
-                    GetPlayerPrediction(player_prediction=ppr)
-                    for ppr in player_prediction_requests
-                ]
-                input_synapse = { "mp": input_synapse_for_match_prediction, "ipp": input_synapse_for_player_prediction }
+                # input_synapse_for_player_prediction = [
+                #     GetPlayerPrediction(player_prediction=ppr)
+                #     for ppr in player_prediction_requests
+                # ]
+                input_synapse = GetPrediction({ "mp": mpr, "ipp": player_prediction_requests })
                 # Send prediction requests to miners and store their responses
                 finished_mp_responses, finished_pp_responses, working_miner_uids = (
                     await utils.send_predictions_to_miners(
