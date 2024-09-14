@@ -370,6 +370,44 @@ class SqliteValidatorStorage(ValidatorStorage):
                 )
                 connection.commit()
 
+    def delete_unscored_deregistered_match_predictions(self, active_miner_hotkeys: List[str]):
+        """Deletes unscored predictions returned from miners that are no longer registered."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+
+                # Get the unique hotkeys and count of predictions to be deleted
+                cursor.execute(
+                    """
+                    SELECT hotkey, COUNT(*) 
+                    FROM MatchPredictions 
+                    WHERE isScored = 0 AND hotkey NOT IN ({})
+                    GROUP BY hotkey
+                    """.format(",".join("?" * len(active_miner_hotkeys))),
+                    list(active_miner_hotkeys),
+                )
+                deletion_data = cursor.fetchall()
+                
+                if deletion_data:
+                    hotkeys_to_delete = [row[0] for row in deletion_data]
+                    counts_to_delete = [row[1] for row in deletion_data]
+                    total_count_to_delete = sum(counts_to_delete)
+
+                    # Delete the predictions that are not from registered hotkeys
+                    cursor.execute(
+                        "DELETE FROM MatchPredictions WHERE isScored = 0 AND hotkey NOT IN ({})".format(
+                            ",".join("?" * len(active_miner_hotkeys))
+                        ),
+                        list(active_miner_hotkeys),
+                    )
+                    connection.commit()
+
+                    # Log the details
+                    bt.logging.info(f"Deleted a total of {total_count_to_delete} unscored predictions from {len(hotkeys_to_delete)} deregistered miners.")
+                    bt.logging.info(f"Affected hotkeys and their prediction counts: {dict(zip(hotkeys_to_delete, counts_to_delete))}")
+                else:
+                    bt.logging.info("No unscored predictions from deregistered miners found for deletion.")
+
     def get_match_predictions_to_score(
         self, batchsize: int = 10, matchDateCutoff: int = SCORING_CUTOFF_IN_DAYS
     ) -> Optional[List[MatchPredictionWithMatchData]]:
