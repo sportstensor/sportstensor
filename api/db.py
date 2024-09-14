@@ -5,6 +5,25 @@ from datetime import timezone
 from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
 
+def generate_uuid():
+    return os.urandom(16).hex()
+
+def match_id_exists(match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM matches WHERE matchId = %s", (match_id,))
+        count = cursor.fetchone()[0]
+
+        return count > 0
+
+    except Exception as e:
+        logging.error("Failed to check if match exists in MySQL database", exc_info=True)
+        return False
+    finally:
+        cursor.close()
+        conn.close()
 
 def get_matches(all=False):
     try:
@@ -89,12 +108,61 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
 
         conn.commit()
         logging.info("Data inserted or updated in database")
+        return True
 
     except Exception as e:
         logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
     finally:
         c.close()
         conn.close()
+
+
+def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT IGNORE INTO matches_lookup (matchId, sportsdbMatchId) 
+            VALUES (%s, %s)
+            """,
+            (
+                match_id,
+                sportsdb_match_id,
+            ),
+        )
+
+        conn.commit()
+        logging.info("Match lookup inserted in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def query_sportsdb_match_lookup(sportsdb_match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT matchId FROM matches_lookup WHERE sportsdbMatchId = %s",
+            (sportsdb_match_id,),
+        )
+        match_id = cursor.fetchone()
+
+        return match_id[0] if match_id else None
+
+    except Exception as e:
+        logging.error("Failed to query sportsdb match lookup in MySQL database", exc_info=True)
+        return None
+    finally:
+        cursor.close()
+        conn.close()        
 
 
 def upload_prediction_results(prediction_results):
@@ -740,6 +808,14 @@ def create_tables():
             matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
             lastUpdated TIMESTAMP NOT NULL
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS matches_lookup (
+            matchId VARCHAR(50) PRIMARY KEY,
+            sportsdbMatchId VARCHAR(50) DEFAULT NULL,
+            oddsapiMatchId VARCHAR(50) DEFAULT NULL
         )"""
         )
         c.execute(
