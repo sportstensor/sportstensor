@@ -86,6 +86,7 @@ class Validator(BaseValidatorNeuron):
         self.app_prediction_responses_endpoint = f"{api_root}/AppMatchPredictionsForValidators"
         
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
+        self.next_predictions_cleanup_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
 
@@ -210,6 +211,18 @@ class Validator(BaseValidatorNeuron):
         else:
             bt.logging.info("No matches available to send for predictions.")
         """ END MATCH PREDICTION REQUESTS """
+
+        """ START MATCH PREDICTIONS CLEANUP """
+        # Clean up any unscored predictions from miners that are no longer registered
+        if self.next_predictions_cleanup_datetime <= dt.datetime.now(dt.timezone.utc):
+            bt.logging.info(
+                "*** Cleaning up unscored predictions from miners that are no longer registered. ***"
+            )
+            utils.clean_up_unscored_deregistered_match_predictions(self.metagraph.hotkeys)
+            self.next_predictions_cleanup_datetime = dt.datetime.now(
+                dt.timezone.utc
+            ) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
+        """ END MATCH PREDICTIONS CLEANUP """
 
         """ START MATCH PREDICTION SCORING """
         # Check if we're ready to score another batch of predictions

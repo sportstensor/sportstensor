@@ -48,6 +48,11 @@ class ValidatorStorage(ABC):
     def insert_match_predictions(self, predictions: List[GetMatchPrediction]):
         """Stores unscored predictions returned from miners."""
         raise NotImplemented
+    
+    @abstractmethod
+    def delete_unscored_deregistered_match_predictions(self, active_miner_hotkeys: List[str]):
+        """Deletes unscored predictions returned from miners that are no longer registered."""
+        raise NotImplemented
 
     @abstractmethod
     def get_match_predictions_to_score(
