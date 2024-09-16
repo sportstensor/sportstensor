@@ -16,17 +16,14 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import traceback
-import typing
+from typing import Tuple
 import bittensor as bt
 
-import base
 from base.miner import BaseMinerNeuron
 
 from common import constants
-from common.protocol import GetMatchPrediction
-from st.sport_prediction_model import make_match_prediction
-
+from common.protocol import GetPrediction
+from st.sport_prediction_model import make_match_prediction, make_player_prediction
 
 class Miner(BaseMinerNeuron):
     """The Sports Tensor Miner."""
@@ -34,23 +31,32 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-    async def forward(self, synapse: GetMatchPrediction) -> GetMatchPrediction:
+    async def forward(self, synapse: GetPrediction) -> GetPrediction:
+        mp_synapse = synapse.prediction['mp']
+        pp_synapses = synapse.prediction['ipp']
         bt.logging.info(
             f"Received GetMatchPrediction request in forward() from {synapse.dendrite.hotkey}."
         )
 
         # Make the match prediction based on the requested MatchPrediction object
         # TODO: does this need to by async?
-        synapse.match_prediction = make_match_prediction(synapse.match_prediction)
+        mp_synapse = make_match_prediction(mp_synapse)
         synapse.version = constants.PROTOCOL_VERSION
+        for pp in pp_synapses:
+            pp = make_player_prediction(pp)
 
         bt.logging.success(
-            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n{synapse.match_prediction}."
+            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n{mp_synapse}."
         )
+        for pp in pp_synapses:
+            bt.logging.success(
+                f"Returning PlayerPrediction to {synapse.dendrite.hotkey}: \n{pp}."
+            )
+        synapse.prediction = {'mp': mp_synapse, 'ipp': pp_synapses}
 
         return synapse
 
-    async def blacklist(self, synapse: GetMatchPrediction) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: GetPrediction) -> Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -115,7 +121,7 @@ class Miner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: GetMatchPrediction) -> float:
+    async def priority(self, synapse: GetPrediction) -> float:
         """
         The priority function determines the order in which requests are handled. More valuable or higher-priority
         requests are processed before others. You should design your own priority mechanism with care.

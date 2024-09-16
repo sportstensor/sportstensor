@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import bittensor as bt
-from common.data import MatchPrediction, Sport, League, get_league_from_string
+from common.data import MatchPrediction, PlayerPrediction, Sport, League, get_league_from_string
 import logging
 
 
@@ -75,3 +75,13 @@ def make_match_prediction(prediction: MatchPrediction):
         prediction.awayTeamScore = 0
 
     return prediction
+
+def make_player_prediction(prediction: PlayerPrediction):
+     # Add individual player prediction model class
+    from st.models.player_stats import PlayerStatsPredictionModel
+
+    result = prediction
+    player_prediction = PlayerStatsPredictionModel(result)
+    player_prediction.make_prediction()
+
+    return result

@@ -21,7 +21,7 @@ from common.data import (
     MatchPrediction,
     PlayerPrediction
 )
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Union, Optional, List
 import datetime as dt
 
 
@@ -73,5 +73,25 @@ class GetPlayerPrediction(BaseProtocol):
 
     def __str__(self):
         return f"GetPlayerPrediction(player_prediction={self.player_prediction}, axon={self.axon})"
+
+    __repr__ = __str__
+
+class GetPrediction(BaseProtocol):
+    """
+    Protocol by which Validators can retrieve a Prediction(Match & Player) from a Miner.
+
+    Attributes:
+    - prediction: A single prediction object that the Miner can serve.
+    """
+
+    prediction: Dict[str, Union[MatchPrediction, List[PlayerPrediction]]] = pydantic.Field(
+        description="The PlayerPrediction object being requested",
+        frozen=False,
+        repr=False,
+        default=None,
+    )
+
+    def __str__(self):
+        return f"GetPrediction(prediction={self.prediction}, axon={self.axon})"
 
     __repr__ = __str__

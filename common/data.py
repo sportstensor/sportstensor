@@ -37,6 +37,11 @@ class Sport(IntEnum):
     UNKNOWN_6 = 6
     UNKNOWN_7 = 7
 
+class StatType(Enum):
+    OFFENSE = "OFFENSIVE"
+    DEFENSE = "DEFENSIVE"
+    SPECIAL = "SPECIAL"
+    OTHER = "OTHER"
 
 class League(Enum):
     """Represents a sports league, mainly used for mapping and indicating active status to run predictions on."""
@@ -45,7 +50,7 @@ class League(Enum):
     NFL = "NFL"
     NBA = "NBA"
     NHL = "NHL"
-    EPL = "EPL"
+    EPL = "English Premier League"
     MLS = "American Major League Soccer"
 
     """
@@ -104,13 +109,32 @@ class Match(StrictBaseModel):
             raise ValueError(f"{field.name} is immutable and cannot be changed")
         return v
     
+class Player(StrictBaseModel):
+    """Represents a player."""
 
-class StatType(Enum):
-    OFFENSE = "OFFENSE"
-    DEFENSE = "DEFENSE"
-    SPECIAL = "SPECIAL"
-    OTHER = "OTHER"
+    playerId: str = Field(description="Unique Id that represents an individual player.")
+    playerName: str
+    playerTeam: str
+    playerPosition: Optional[str]
+    stats: StatType
+    sport: Sport
+    league: League
 
+    # Validators to ensure immutability
+    @validator(
+        "playerId",
+        "playerName",
+        "playerTeam",
+        "sport",
+        "league",
+        pre=True,
+        always=True,
+        check_fields=False,
+    )
+    def match_fields_are_immutable(cls, v, values, field):
+        if field.name in values and v != values[field.name]:
+            raise ValueError(f"{field.name} is immutable and cannot be changed")
+        return v
 
 class Stat(StrictBaseModel):
     """
@@ -137,6 +161,9 @@ class Stat(StrictBaseModel):
     statType: StatType
     sport: Sport
 
+class PlayerEligibleStat(StrictBaseModel):
+    playerId: str
+    statId: str
 
 class PlayerStat(StrictBaseModel):
     """Represents a player's stat in a sports match."""
@@ -229,7 +256,6 @@ class Prediction(StrictBaseModel):
             f"isScored={self.isScored}, scoredDate={self.scoredDate})"
         )
 
-
 class MatchPrediction(Prediction):
     """Represents a prediction of a sports match."""
 
@@ -294,6 +320,6 @@ class PlayerPrediction(Prediction):
         base_str = super().__str__()
         return (
             f"{base_str[:-1]}, "  # Remove the closing parenthesis from the base string
-            f"playerName={self.playerStat.playerName}, playerTeam={self.playerStat.playerTeam}, "
-            f"playerPosition={self.playerStat.playerPosition}, stat={self.playerStat.stat})"")"
+            f"playerName={self.playerName}, playerTeam={self.playerTeam}, "
+            f"playerPosition={self.playerPosition}, stat={self.statName})"")"
         )

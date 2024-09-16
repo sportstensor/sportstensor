@@ -27,7 +27,7 @@ import torch
 import wandb
 
 # Bittensor Validator Template:
-from common.protocol import GetMatchPrediction
+from common.protocol import GetPrediction
 from common.data import MatchPrediction
 from common.constants import (
     ENABLE_APP,
@@ -37,7 +37,7 @@ from common.constants import (
     NUM_MINERS_TO_SEND_TO,
     BASE_MINER_PREDICTION_SCORE,
     MAX_BATCHSIZE_FOR_SCORING,
-    SCORING_INTERVAL_IN_MINUTES,
+    SCORING_INTERVAL_IN_MINUTES
 )
 import vali_utils.utils as utils
 
@@ -83,6 +83,7 @@ class Validator(BaseValidatorNeuron):
         self.match_data_endpoint = f"{api_root}/matches"
         self.prediction_results_endpoint = f"{api_root}/predictionResults"
         self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictions"
+        self.players_stats_single_source = "https://docs.google.com/spreadsheets/d/1IhHu98r20QReWPTXya7LbDd_dj3BRYxrLaC11qq0Iog/edit?gid=231032492#gid=231032492"
 
         self.client_timeout_seconds = VALIDATOR_TIMEOUT
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
@@ -137,11 +138,16 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(
                 "*** Syncing the latest match data to local validator storage. ***"
             )
-            sync_result = await utils.sync_match_data(self.match_data_endpoint)
-            if sync_result:
+            sync_match_result = await utils.sync_match_data(self.match_data_endpoint)
+            sync_player_stats_result = await utils.sync_player_data(self.players_stats_single_source)
+            if sync_match_result:
                 bt.logging.info("Successfully synced match data.")
             else:
                 bt.logging.warning("Issue syncing match data")
+            if sync_player_stats_result:
+                bt.logging.info("Successfully synced players and stats data.")
+            else:
+                bt.logging.warning("Issue syncing players and stats data")
             self.next_match_syncing_datetime = dt.datetime.now(
                 dt.timezone.utc
             ) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
@@ -165,9 +171,10 @@ class Validator(BaseValidatorNeuron):
             )
             # Loop through predictions and send to miners
             for mpr in match_prediction_requests:
-                input_synapse = GetMatchPrediction(match_prediction=mpr)
+                player_prediction_requests = utils.get_player_prediction_requests(mpr)
+                input_synapse = GetPrediction(prediction = { "mp": mpr, "ipp": player_prediction_requests })
                 # Send prediction requests to miners and store their responses
-                finished_responses, working_miner_uids = (
+                finished_mp_responses, finished_pp_responses, working_miner_uids = (
                     await utils.send_predictions_to_miners(
                         self, input_synapse, miner_uids
                     )
@@ -176,9 +183,7 @@ class Validator(BaseValidatorNeuron):
                 # Adjust the scores based on responses from miners.
                 try:
                     rewards = (
-                        await self.get_basic_match_prediction_rewards(
-                            input_synapse=input_synapse, responses=finished_responses
-                        )
+                        await self.get_basic_match_prediction_rewards(responses=finished_mp_responses)
                     ).to(self.device)
                 except Exception as e:
                     bt.logging.error(
@@ -292,7 +297,6 @@ class Validator(BaseValidatorNeuron):
 
     async def get_basic_match_prediction_rewards(
         self,
-        input_synapse: GetMatchPrediction,
         responses: List[MatchPrediction],
     ) -> torch.FloatTensor:
         """
