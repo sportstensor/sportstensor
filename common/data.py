@@ -45,7 +45,7 @@ class League(Enum):
     NFL = "NFL"
     NBA = "NBA"
     NHL = "NHL"
-    EPL = "EPL"
+    EPL = "English Premier League"
     MLS = "American Major League Soccer"
 
     """

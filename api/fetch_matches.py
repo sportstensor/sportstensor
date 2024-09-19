@@ -13,20 +13,37 @@ logging.basicConfig(
 from api.config import NETWORK
 
 # Define sport mapping
-sport_mapping = {"SOCCER": 1, "FOOTBALL": 2, "BASEBALL": 3, "BASKETBALL": 4}
+sport_mapping = {"SOCCER": 1, "AMERICAN FOOTBALL": 2, "BASEBALL": 3, "BASKETBALL": 4}
 
 
 def parse_datetime_with_optional_timezone(timestamp):
+    if isinstance(timestamp, (int, float)) or timestamp.isdigit():
+        # Handle Unix timestamp (seconds since epoch)
+        return datetime.fromtimestamp(float(timestamp), tz=timezone.utc)
+    
     try:
-        # First, try parsing with timezone
+        # Try parsing with timezone
         return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
     except ValueError:
-        # If that fails, parse without the timezone and assume UTC
-        dt_naive = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
-        return dt_naive.replace(tzinfo=timezone.utc)
+        try:
+            # Try parsing without timezone and assume UTC
+            dt_naive = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
+            return dt_naive.replace(tzinfo=timezone.utc)
+        except ValueError:
+            # If all else fails, raise an informative error
+            raise ValueError(f"Unable to parse timestamp: {timestamp}. "
+                             "Expected format: YYYY-MM-DDTHH:MM:SS[±HHMM] or Unix timestamp.")
 
 
-def create_match_id(home_team, away_team, match_date):
+def create_match_id():
+    # generate a unique uuid for the match. make sure it does not already exist.
+    match_id = db.generate_uuid()
+    while db.match_id_exists(match_id):
+        print(f"Match ID {match_id} already exists. Generating a new one.")
+        match_id = db.generate_uuid()
+    return match_id
+
+def create_match_id_deprecated(home_team, away_team, match_date):
     # Extract the first 10 letters of home and away team names
     home_prefix = home_team.replace(" ", "")[:10]
     away_prefix = away_team.replace(" ", "")[:10]
@@ -103,11 +120,15 @@ def fetch_and_store_events():
 
     try:
         for event in all_events:
-            match_id = create_match_id(
-                event.get("strHomeTeam"),
-                event.get("strAwayTeam"),
-                event.get("strTimestamp"),
-            )
+            event_id = event.get("idEvent")
+
+            # Query the lookup table
+            match_id = db.query_sportsdb_match_lookup(event_id)
+            new_match = False
+            if match_id is None:
+                match_id = create_match_id()
+                new_match = True
+
             status = event.get("strStatus")
             is_complete = (
                 0
@@ -117,21 +138,32 @@ def fetch_and_store_events():
             sport_type = sport_mapping.get(
                 event.get("strSport").upper(), 0
             )  # Default to 0 if sport is unknown
+            
+            if isinstance(event.get("strTimestamp"), (int, float)) or event.get("strTimestamp").isdigit():
+                # Handle Unix timestamp (seconds since epoch)
+                matchTimestamp = datetime.fromtimestamp(float(event.get("strTimestamp")), tz=timezone.utc)
+                matchTimestampStr = matchTimestamp.strftime("%Y-%m-%d %H:%M:%S")
+                event.update({"strTimestamp": matchTimestampStr})
 
             dbresult = db.insert_match(
                 match_id, event, sport_type, is_complete, current_utc_time
             )
+            if dbresult and new_match:
+                dbresult2 = db.insert_sportsdb_match_lookup(match_id, event_id)
+                if dbresult2:
+                    logging.info(f"Inserted matchId {match_id} and sportsdbMatchId {event_id} lookup into the database")
+
     except Exception as e:
         logging.error("Failed inserting events into the MySQL database", exc_info=True)
 
+if __name__ == "__main__":
+    # Schedule the function to run every 10 minutes
+    schedule.every(10).minutes.do(fetch_and_store_events)
 
-# Schedule the function to run every 10 minutes
-schedule.every(10).minutes.do(fetch_and_store_events)
+    # Initial fetch and store to ensure setup is correct
+    fetch_and_store_events()
 
-# Initial fetch and store to ensure setup is correct
-fetch_and_store_events()
-
-# Run the scheduler in an infinite loop
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+    # Run the scheduler in an infinite loop
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

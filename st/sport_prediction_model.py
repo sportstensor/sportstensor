@@ -29,6 +29,8 @@ def make_match_prediction(prediction: MatchPrediction):
     # Add new league classes here
     from st.models.soccer_mls import MLSSoccerPredictionModel
     from st.models.baseball_mlb import MLBBaseballPredictionModel
+    from st.models.soccer_epl import EPLSoccerPredictionModel
+    from st.models.football_nfl import NFLFootballPredictionModel
 
     sport_classes = {
         Sport.SOCCER: SoccerPredictionModel,
@@ -40,6 +42,8 @@ def make_match_prediction(prediction: MatchPrediction):
     league_classes = {
         League.MLS: MLSSoccerPredictionModel,
         League.MLB: MLBBaseballPredictionModel,
+        League.EPL: EPLSoccerPredictionModel,
+        League.NFL: NFLFootballPredictionModel,
     }
 
     # Convert the league string back to the League enum
@@ -70,7 +74,6 @@ def make_match_prediction(prediction: MatchPrediction):
     # If we don't have a prediction model for the sport, return 0 for both scores
     else:
         bt.logging.info("Unknown sport, returning 0 for both scores")
-        print("unknown")
         prediction.homeTeamScore = 0
         prediction.awayTeamScore = 0
 
