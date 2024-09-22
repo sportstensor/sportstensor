@@ -492,6 +492,9 @@ def is_match_prediction_valid(
     and reason is a string describing why they are not valid.
     """
 
+    if prediction is None:
+        return (False, "Prediction is None")
+
     # Check the validity of the scores
     if not isinstance(prediction.homeTeamScore, int):
         return (
