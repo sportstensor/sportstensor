@@ -11,6 +11,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PositiveInt,
+    NonNegativeInt,
     validator,
 )
 
@@ -112,7 +113,7 @@ class Prediction(StrictBaseModel):
         description="Unique ID that represents a predication."
     )
 
-    minerId: Optional[PositiveInt] = Field(
+    minerId: Optional[NonNegativeInt] = Field(
         description="Unique ID that represents a miner."
     )
 

@@ -22,6 +22,9 @@ VALIDATOR_TIMEOUT = 10
 # Have Validators pull match data every X seconds.
 VALI_REFRESH_MATCHES = 60 * 30
 
+# Have Validators run the cleaning process every X minutes.
+PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES = 5
+
 # The base FloatTensor score for all miners that return a valid prediction
 BASE_MINER_PREDICTION_SCORE = 0.01
 

@@ -257,8 +257,8 @@ def update_miner_reg_statuses(active_uids, active_hotkeys):
             c.execute(
                 f"""
                 UPDATE {prediction_scores_table_name}
-                SET miner_is_registered = 1
-                WHERE miner_uid = %s AND miner_hotkey = %s
+                SET miner_is_registered = 1, miner_uid = %s
+                WHERE miner_hotkey = %s
                 """,
                 (uid, hotkey),
             )
