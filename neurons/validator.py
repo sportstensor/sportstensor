@@ -34,6 +34,7 @@ from common.constants import (
     DATA_SYNC_INTERVAL_IN_MINUTES,
     APP_DATA_SYNC_INTERVAL_IN_MINUTES,
     VALIDATOR_TIMEOUT,
+    PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES,
     NUM_MINERS_TO_SEND_TO,
     BASE_MINER_PREDICTION_SCORE,
     MAX_BATCHSIZE_FOR_SCORING,
@@ -221,7 +222,7 @@ class Validator(BaseValidatorNeuron):
             utils.clean_up_unscored_deregistered_match_predictions(self.metagraph.hotkeys)
             self.next_predictions_cleanup_datetime = dt.datetime.now(
                 dt.timezone.utc
-            ) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
+            ) + dt.timedelta(minutes=PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES)
         """ END MATCH PREDICTIONS CLEANUP """
 
         """ START MATCH PREDICTION SCORING """
