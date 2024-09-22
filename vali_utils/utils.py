@@ -300,6 +300,7 @@ async def send_predictions_to_miners(
             else:
                 if (
                     response is None
+                    or response.match_prediction is None
                     or response.match_prediction.homeTeamScore is None
                     or response.match_prediction.awayTeamScore is None
                     or response.axon is None
