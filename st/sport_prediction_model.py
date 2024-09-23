@@ -44,6 +44,10 @@ def make_match_prediction(prediction: MatchPrediction):
         League.MLB: MLBBaseballPredictionModel,
         League.EPL: EPLSoccerPredictionModel,
         League.NFL: NFLFootballPredictionModel,
+<<<<<<< HEAD
+=======
+
+>>>>>>> b406dcbd6bed201c26a191d4856f84af73fc6377
     }
 
     # Convert the league string back to the League enum
