@@ -232,9 +232,10 @@ def get_odds_api(event):
 
         homeTeam = event.get("strHomeTeam")
         awayTeam = event.get("strAwayTeam")
+        matchDate = event.get("strTimestamp")
         cursor.execute(
-            "SELECT api_id FROM odds WHERE home_team = %s AND away_team = %s",
-            (homeTeam, awayTeam),
+            "SELECT api_id FROM odds WHERE home_team = %s AND away_team = %s AND Date(commence_time) = Date(%s)",
+            (homeTeam, awayTeam, matchDate),
         )
         api_id = cursor.fetchone()
 
