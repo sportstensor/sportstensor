@@ -1,12 +1,12 @@
 import requests
 import db as db
-from api.config import API_KEYS
+from api.config import ODDS_API_KEY
 
 # Fetch JSON data from the API
 def fetch_odds():
     api_url = "https://api.the-odds-api.com/v4/sports/soccer_italy_serie_a/odds/"
     params = {
-        "apiKey": API_KEYS[0],
+        "apiKey": ODDS_API_KEY,
         "regions": "uk",
         "bookmakers": "pinnacle"
     }
