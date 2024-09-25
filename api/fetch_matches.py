@@ -149,9 +149,10 @@ def fetch_and_store_events():
                 match_id, event, sport_type, is_complete, current_utc_time
             )
             if dbresult and new_match:
-                dbresult2 = db.insert_sportsdb_match_lookup(match_id, event_id)
+                oddsAPI = db.get_odds_api(event)
+                dbresult2 = db.insert_sportsdb_match_lookup(match_id, event_id, oddsAPI)
                 if dbresult2:
-                    logging.info(f"Inserted matchId {match_id} and sportsdbMatchId {event_id} lookup into the database")
+                    logging.info(f"Inserted matchId {match_id}, sportsdbMatchId {event_id}, and oddsapiMatchId {oddsAPI} lookup into the database")
 
     except Exception as e:
         logging.error("Failed inserting events into the MySQL database", exc_info=True)

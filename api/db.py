@@ -1,7 +1,7 @@
 import mysql.connector
 import logging
 import datetime as dt
-from datetime import timezone
+from datetime import timezone, datetime
 from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
 
@@ -118,18 +118,22 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
         conn.close()
 
 
-def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
+def insert_sportsdb_match_lookup(match_id, sportsdb_match_id, oddsapiMatchId):
     try:
         conn = get_db_conn()
         c = conn.cursor()
         c.execute(
             """
-            INSERT IGNORE INTO matches_lookup (matchId, sportsdbMatchId) 
-            VALUES (%s, %s)
+            INSERT IGNORE INTO matches_lookup (matchId, sportsdbMatchId, oddsapiMatchId) 
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                sportsdbMatchId=VALUES(sportsdbMatchId),
+                oddsapiMatchId=VALUES(oddsapiMatchId)
             """,
             (
                 match_id,
                 sportsdb_match_id,
+                oddsapiMatchId
             ),
         )
 
@@ -139,6 +143,63 @@ def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
 
     except Exception as e:
         logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_odds(odds_data):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        insert_query = """
+        INSERT INTO Odds (api_id, sport_title, home_team, away_team, homeTeamWinOdds, awayTeamWinOdds, teamDrawOdds, commence_time)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            homeTeamWinOdds = VALUES(homeTeamWinOdds),
+            awayTeamWinOdds = VALUES(awayTeamWinOdds),
+            teamDrawOdds = VALUES(teamDrawOdds),
+            commence_time = VALUES(commence_time)
+        """
+
+        # Loop through the matches in the JSON response
+        for match in odds_data:
+            api_id = match["id"]  # Get the match ID
+            sport_title = match["sport_title"]
+            home_team = match["home_team"]
+            away_team = match["away_team"]
+            commence_time_str = match["commence_time"]
+            commence_time = datetime.strptime(commence_time_str, '%Y-%m-%dT%H:%M:%SZ')
+
+            # Find the Pinnacle bookmaker data and extract the odds
+            for bookmaker in match["bookmakers"]:
+                if bookmaker["key"] == "pinnacle":
+                    for market in bookmaker["markets"]:
+                        if market["key"] == "h2h":
+                            outcomes = market["outcomes"]
+                            home_team_odds = None
+                            away_team_odds = None
+                            draw_odds = None
+
+                            # Map odds to the correct columns
+                            for outcome in outcomes:
+                                if outcome["name"] == home_team:
+                                    home_team_odds = outcome["price"]
+                                elif outcome["name"] == away_team:
+                                    away_team_odds = outcome["price"]
+                                elif outcome["name"] == "Draw":
+                                    draw_odds = outcome["price"]
+
+                            # Insert into the database
+                            c.execute(insert_query, (api_id, sport_title, home_team, away_team, home_team_odds, away_team_odds, draw_odds, commence_time))
+
+        # Commit the transaction
+        conn.commit()
+        logging.info("Odds inserted in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert odds in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -162,7 +223,29 @@ def query_sportsdb_match_lookup(sportsdb_match_id):
         return None
     finally:
         cursor.close()
-        conn.close()        
+        conn.close()   
+
+def get_odds_api(event):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        homeTeam = event.get("strHomeTeam")
+        awayTeam = event.get("strAwayTeam")
+        cursor.execute(
+            "SELECT api_id FROM odds WHERE home_team = %s AND away_team = %s",
+            (homeTeam, awayTeam),
+        )
+        api_id = cursor.fetchone()
+
+        return api_id[0] if api_id else None
+
+    except Exception as e:
+        logging.error("Failed to query oddsAPI in MySQL database", exc_info=True)
+        return None
+    finally:
+        cursor.close()
+        conn.close()      
 
 
 def upload_prediction_results(prediction_results):
@@ -807,7 +890,7 @@ def create_tables():
             awayTeamScore INTEGER,
             matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
-            lastUpdated TIMESTAMP NOT NULL
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
         c.execute(
@@ -818,6 +901,22 @@ def create_tables():
             oddsapiMatchId VARCHAR(50) DEFAULT NULL
         )"""
         )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS odds (
+            api_id VARCHAR(50) PRIMARY KEY,
+            sport_title VARCHAR(50),
+            home_team VARCHAR(30) NOT NULL,
+            away_team VARCHAR(30) NOT NULL,
+            homeTeamWinOdds FLOAT,
+            awayTeamWinOdds FLOAT,
+            teamDrawOdds FLOAT,
+            commence_time TIMESTAMP NOT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+
         c.execute(
             """
         CREATE TABLE IF NOT EXISTS MatchPredictionResults (
@@ -832,7 +931,7 @@ def create_tables():
             total_predictions INTEGER NOT NULL,
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
-            last_updated TIMESTAMP NOT NULL,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE (miner_hotkey, league)
         )"""
         )
@@ -850,7 +949,7 @@ def create_tables():
             total_predictions INTEGER NOT NULL,
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
-            last_updated TIMESTAMP NOT NULL,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE (miner_hotkey, league)
         )"""
         )
@@ -870,7 +969,7 @@ def create_tables():
             total_predictions INTEGER,
             winner_predictions INTEGER,
             avg_score FLOAT,
-            last_updated TIMESTAMP
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
         conn.commit()
@@ -902,7 +1001,7 @@ def create_app_tables():
             homeTeamScore INTEGER,
             awayTeamScore INTEGER,
             isComplete BOOLEAN DEFAULT FALSE,
-            lastUpdated TIMESTAMP NOT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             miner_hotkey VARCHAR(64) NULL,
             vali_hotkey VARCHAR(64) NULL,
             valiLastUpdated TIMESTAMP NULL,
