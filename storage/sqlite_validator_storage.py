@@ -439,7 +439,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     AND mp.awayTeamScore IS NOT NULL
                     AND m.homeTeamScore IS NOT NULL
                     AND m.awayTeamScore IS NOT NULL
-                    ORDER BY mp.matchDate ASC
+                    ORDER BY RANDOM()
                     LIMIT ?
                     """,
                     [match_cutoff_str, batchsize],
