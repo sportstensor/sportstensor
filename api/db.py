@@ -30,15 +30,19 @@ def get_matches(all=False):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        if all:
-            cursor.execute("SELECT * FROM matches")
-        else:
-            cursor.execute(
-                """
-                SELECT * FROM matches
-                WHERE matchDate BETWEEN NOW() - INTERVAL 10 DAY AND NOW() + INTERVAL 48 HOUR
+        query = """
+            SELECT m.*, o.homeTeamWinOdds, o.awayTeamWinOdds, o.teamDrawOdds
+            FROM matches m
+            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+            LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
+        """
+
+        if not all:
+            query += """
+                WHERE m.matchDate BETWEEN NOW() - INTERVAL 10 DAY AND NOW() + INTERVAL 48 HOUR
             """
-        )
+        
+        cursor.execute(query)
         match_list = cursor.fetchall()
 
         return match_list
@@ -165,7 +169,7 @@ def insert_odds(odds_data):
         # Loop through the matches in the JSON response
         for match in odds_data:
             api_id = match["id"]  # Get the match ID
-            sport_title = match["sport_title"]
+            sport_title = 'English Premier League' if match["sport_title"] == 'EPL' else match["sport_title"]
             home_team = match["home_team"]
             away_team = match["away_team"]
             commence_time_str = match["commence_time"]
@@ -233,9 +237,10 @@ def get_odds_api(event):
         homeTeam = event.get("strHomeTeam")
         awayTeam = event.get("strAwayTeam")
         matchDate = event.get("strTimestamp")
+        league = event.get("strLeague")
         cursor.execute(
-            "SELECT api_id FROM odds WHERE home_team = %s AND away_team = %s AND Date(commence_time) = Date(%s)",
-            (homeTeam, awayTeam, matchDate),
+            "SELECT api_id FROM odds WHERE home_team = %s AND away_team = %s AND Date(commence_time) = Date(%s) AND sport_title = %s",
+            (homeTeam, awayTeam, matchDate, league),
         )
         api_id = cursor.fetchone()
 
