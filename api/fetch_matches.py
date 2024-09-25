@@ -124,10 +124,8 @@ def fetch_and_store_events():
 
             # Query the lookup table
             match_id = db.query_sportsdb_match_lookup(event_id)
-            new_match = False
             if match_id is None:
                 match_id = create_match_id()
-                new_match = True
 
             status = event.get("strStatus")
             is_complete = (
@@ -148,7 +146,7 @@ def fetch_and_store_events():
             dbresult = db.insert_match(
                 match_id, event, sport_type, is_complete, current_utc_time
             )
-            if dbresult and new_match:
+            if dbresult:
                 oddsAPI = db.get_odds_api(event)
                 dbresult2 = db.insert_sportsdb_match_lookup(match_id, event_id, oddsAPI)
                 if dbresult2:
