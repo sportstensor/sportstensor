@@ -221,7 +221,7 @@ def insert_odds(api_id, sport_title, home_team, away_team, home_team_odds, away_
         conn = get_db_conn()
         c = conn.cursor()
         insert_query = """
-        INSERT INTO Odds (api_id, sport_title, home_team, away_team, homeTeamWinOdds, awayTeamWinOdds, teamDrawOdds, commence_time)
+        INSERT INTO odds (api_id, sport_title, home_team, away_team, homeTeamWinOdds, awayTeamWinOdds, teamDrawOdds, commence_time)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             homeTeamWinOdds = VALUES(homeTeamWinOdds),
