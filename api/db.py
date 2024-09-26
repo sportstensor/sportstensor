@@ -64,7 +64,13 @@ def get_match_by_id(match_id):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM matches WHERE matchId = %s", (match_id,))
+        cursor.execute("""
+            SELECT m.*, o.homeTeamWinOdds, o.awayTeamWinOdds, o.teamDrawOdds
+            FROM matches m
+            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+            LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
+            WHERE matchId = %s
+        """, (match_id,))
         match = cursor.fetchone()
 
         return match
