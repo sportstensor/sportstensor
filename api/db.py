@@ -31,7 +31,7 @@ def get_matches(all=False):
         cursor = conn.cursor(dictionary=True)
 
         query = """
-            SELECT m.*, o.homeTeamWinOdds, o.awayTeamWinOdds, o.teamDrawOdds
+            SELECT m.*, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
             FROM matches m
             LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
             LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
@@ -65,7 +65,7 @@ def get_match_by_id(match_id):
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT m.*, o.homeTeamWinOdds, o.awayTeamWinOdds, o.teamDrawOdds
+            SELECT m.*, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
             FROM matches m
             LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
             LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
