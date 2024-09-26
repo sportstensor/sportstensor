@@ -147,6 +147,26 @@ def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
         c.close()
         conn.close()
 
+def query_sportsdb_match_lookup(sportsdb_match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT matchId FROM matches_lookup WHERE sportsdbMatchId = %s",
+            (sportsdb_match_id,),
+        )
+        match_id = cursor.fetchone()
+
+        return match_id[0] if match_id else None
+
+    except Exception as e:
+        logging.error("Failed to query sportsdb match lookup in MySQL database", exc_info=True)
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
 def query_match_id_with_odds_data(home_team, away_team, sport_title, commence_time):
     try:
         conn = get_db_conn()
@@ -222,27 +242,6 @@ def insert_odds(api_id, sport_title, home_team, away_team, home_team_odds, away_
     finally:
         c.close()
         conn.close()
-
-def query_sportsdb_match_lookup(sportsdb_match_id):
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "SELECT matchId FROM matches_lookup WHERE sportsdbMatchId = %s",
-            (sportsdb_match_id,),
-        )
-        match_id = cursor.fetchone()
-
-        return match_id[0] if match_id else None
-
-    except Exception as e:
-        logging.error("Failed to query sportsdb match lookup in MySQL database", exc_info=True)
-        return None
-    finally:
-        cursor.close()
-        conn.close()
-
 
 def upload_prediction_results(prediction_results):
     try:
