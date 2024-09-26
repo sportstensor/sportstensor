@@ -241,7 +241,7 @@ def query_sportsdb_match_lookup(sportsdb_match_id):
         return None
     finally:
         cursor.close()
-        conn.close()      
+        conn.close()
 
 
 def upload_prediction_results(prediction_results):
