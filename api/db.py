@@ -121,22 +121,66 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
         c.close()
         conn.close()
 
-
-def insert_sportsdb_match_lookup(match_id, sportsdb_match_id, oddsapiMatchId):
+def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
     try:
         conn = get_db_conn()
         c = conn.cursor()
         c.execute(
             """
-            INSERT IGNORE INTO matches_lookup (matchId, sportsdbMatchId, oddsapiMatchId) 
-            VALUES (%s, %s, %s)
+            INSERT IGNORE INTO matches_lookup (matchId, sportsdbMatchId) 
+            VALUES (%s, %s)
+            """,
+            (
+                match_id,
+                sportsdb_match_id
+            ),
+        )
+
+        conn.commit()
+        logging.info("Match lookup inserted in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def query_match_id_with_odds_data(home_team, away_team, sport_title, commence_time):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT matchId FROM matches WHERE homeTeamName = %s AND awayTeamName = %s AND Date(matchDate) = Date(%s) AND matchLeague = %s",
+            (home_team, away_team, commence_time, sport_title),
+        )
+        matchId = cursor.fetchone()
+        cursor.fetchall()
+
+        return matchId[0] if matchId else None
+
+    except Exception as e:
+        logging.error("Failed to query oddsAPI in MySQL database", exc_info=True)
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+def insert_odds_match_lookup(match_id, oddsapiMatchId):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT IGNORE INTO matches_lookup (matchId, oddsapiMatchId) 
+            VALUES (%s, %s)
             ON DUPLICATE KEY UPDATE
-                sportsdbMatchId=VALUES(sportsdbMatchId),
                 oddsapiMatchId=VALUES(oddsapiMatchId)
             """,
             (
                 match_id,
-                sportsdb_match_id,
                 oddsapiMatchId
             ),
         )
@@ -152,7 +196,7 @@ def insert_sportsdb_match_lookup(match_id, sportsdb_match_id, oddsapiMatchId):
         c.close()
         conn.close()
 
-def insert_odds(odds_data):
+def insert_odds(api_id, sport_title, home_team, away_team, home_team_odds, away_team_odds, draw_odds, commence_time):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -166,40 +210,10 @@ def insert_odds(odds_data):
             commence_time = VALUES(commence_time)
         """
 
-        # Loop through the matches in the JSON response
-        for match in odds_data:
-            api_id = match["id"]  # Get the match ID
-            sport_title = 'English Premier League' if match["sport_title"] == 'EPL' else match["sport_title"]
-            home_team = match["home_team"]
-            away_team = match["away_team"]
-            commence_time_str = match["commence_time"]
-            commence_time = datetime.strptime(commence_time_str, '%Y-%m-%dT%H:%M:%SZ')
+        c.execute(insert_query, (api_id, sport_title, home_team, away_team, home_team_odds, away_team_odds, draw_odds, commence_time))
 
-            # Find the Pinnacle bookmaker data and extract the odds
-            for bookmaker in match["bookmakers"]:
-                if bookmaker["key"] == "pinnacle":
-                    for market in bookmaker["markets"]:
-                        if market["key"] == "h2h":
-                            outcomes = market["outcomes"]
-                            home_team_odds = None
-                            away_team_odds = None
-                            draw_odds = None
-
-                            # Map odds to the correct columns
-                            for outcome in outcomes:
-                                if outcome["name"] == home_team:
-                                    home_team_odds = outcome["price"]
-                                elif outcome["name"] == away_team:
-                                    away_team_odds = outcome["price"]
-                                elif outcome["name"] == "Draw":
-                                    draw_odds = outcome["price"]
-
-                            # Insert into the database
-                            c.execute(insert_query, (api_id, sport_title, home_team, away_team, home_team_odds, away_team_odds, draw_odds, commence_time))
-
-        # Commit the transaction
         conn.commit()
-        logging.info("Odds inserted in database")
+        logging.info("Odds inserted or updated in database")
         return True
 
     except Exception as e:
@@ -224,30 +238,6 @@ def query_sportsdb_match_lookup(sportsdb_match_id):
 
     except Exception as e:
         logging.error("Failed to query sportsdb match lookup in MySQL database", exc_info=True)
-        return None
-    finally:
-        cursor.close()
-        conn.close()   
-
-def get_odds_api(event):
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor()
-
-        homeTeam = event.get("strHomeTeam")
-        awayTeam = event.get("strAwayTeam")
-        matchDate = event.get("strTimestamp")
-        league = event.get("strLeague")
-        cursor.execute(
-            "SELECT api_id FROM odds WHERE home_team = %s AND away_team = %s AND Date(commence_time) = Date(%s) AND sport_title = %s",
-            (homeTeam, awayTeam, matchDate, league),
-        )
-        api_id = cursor.fetchone()
-
-        return api_id[0] if api_id else None
-
-    except Exception as e:
-        logging.error("Failed to query oddsAPI in MySQL database", exc_info=True)
         return None
     finally:
         cursor.close()
