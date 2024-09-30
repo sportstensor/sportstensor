@@ -177,10 +177,28 @@ def query_match_id_with_odds_data(home_team, away_team, sport_title, commence_ti
     try:
         conn = get_db_conn()
         cursor = conn.cursor()
-
+        mismatch_teams_mapping = {
+            'Orlando City SC': 'Orlando City',
+            'Inter Miami CF': 'Inter Miami',
+            'Atlanta United FC': 'Atlanta United',
+            'Montreal Impact': 'CF Montréal',
+            'D.C. United': 'DC United',
+            'Tottenham Hotspur': 'Tottenham',
+            'Columbus Crew SC': 'Columbus Crew',
+            'Minnesota United FC': 'Minnesota United',
+            'Vancouver Whitecaps FC': 'Vancouver Whitecaps',
+            'Leicester City': 'Leicester',
+            'West Ham United': 'West Ham',
+            'Ipswich Town': 'Ipswich',
+            'Vancouver Whitecaps FC': 'Vancouver Whitecaps',
+            'Brighton and Hove Albion': 'Brighton',
+            'Wolverhampton Wanderers': 'Wolves',
+            'Newcastle United': 'Newcastle',
+            'LA Galaxy': 'L.A. Galaxy'
+        }
         cursor.execute(
             "SELECT matchId FROM matches WHERE homeTeamName = %s AND awayTeamName = %s AND Date(matchDate) = Date(%s) AND matchLeague = %s",
-            (home_team, away_team, commence_time, sport_title),
+            (mismatch_teams_mapping.get(home_team, home_team), mismatch_teams_mapping.get(away_team, away_team), commence_time, sport_title),
         )
         matchId = cursor.fetchone()
         cursor.fetchall()

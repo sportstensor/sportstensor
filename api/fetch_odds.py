@@ -82,8 +82,8 @@ def fetch_and_store_odds():
         logging.error("Failed inserting odds into the MySQL database", exc_info=True)
 
 if __name__ == "__main__":
-    # Schedule the function to run every 10 minutes
-    schedule.every(1440).minutes.do(fetch_and_store_odds)
+    # Schedule the function to run twice a day
+    schedule.every(60).minutes.do(fetch_and_store_odds)
 
     # Initial fetch and store to ensure setup is correct
     fetch_and_store_odds()
