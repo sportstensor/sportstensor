@@ -221,6 +221,18 @@ async def main():
         except Exception as e:
             logging.error(f"Error retrieving matches: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
+
+    @app.get("/matches/upcoming")
+    def get_upcoming_matches():
+        try:
+            match_list = db.get_upcoming_matches()
+            if match_list:
+                return {"matches": match_list}
+            else:
+                return {"matches": []}
+        except Exception as e:
+            logging.error(f"Error retrieving matches: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
         
     @app.get("/matches/all")
     def get_all_matches():
@@ -246,6 +258,18 @@ async def main():
                 return {"message": "No match found for the given ID."}
         except Exception as e:
             logging.error(f"Error retrieving get-match: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
+
+    @app.get("/matchOdds")
+    async def get_match_odds(matchId: Optional[str] = None):
+        try:
+            match_odds = db.get_match_odds_by_id(matchId)
+            if match_odds:
+                return {"match_odds": match_odds}
+            else:
+                return {"match_odds": []}
+        except Exception as e:
+            logging.error(f"Error retrieving match odds by match id: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
 
     @app.get("/get-prediction")
