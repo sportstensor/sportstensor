@@ -25,6 +25,23 @@ def match_id_exists(match_id):
         cursor.close()
         conn.close()
 
+def match_odds_id_exists(match_odds_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM match_odds WHERE id = %s", (match_odds_id,))
+        count = cursor.fetchone()[0]
+
+        return count > 0
+
+    except Exception as e:
+        logging.error("Failed to check if match_odds exists in MySQL database", exc_info=True)
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 def get_matches(all=False):
     try:
         conn = get_db_conn()
@@ -46,6 +63,34 @@ def get_matches(all=False):
         match_list = cursor.fetchall()
 
         return match_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_match_odds_by_id(match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT m.*
+            FROM match_odds m
+            WHERE m.matchId = %s
+            ORDER BY m.lastUpdated ASC
+        """
+        
+        cursor.execute(query, (match_id,))
+        match_odds = cursor.fetchall()
+
+        return match_odds
 
     except Exception as e:
         logging.error(
@@ -231,6 +276,52 @@ def insert_odds_match_lookup(match_id, oddsapiMatchId):
 
         conn.commit()
         logging.info("Match lookup inserted in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def query_all_match_odds(match_ids):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+        format_strings = ','.join(['%s'] * len(match_ids))  # Create a string for the query
+        cursor.execute(
+            f"""
+                SELECT ml.matchId, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
+                FROM matches m
+                LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+                LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
+                WHERE ml.matchId IN ({format_strings})
+            """, tuple(match_ids)
+        )
+        match_odds = cursor.fetchall()
+        return {match_id: odds for match_id, *odds in match_odds}  # Return a dictionary
+
+    except Exception as e:
+        logging.error(f"Failed to query match odds in MySQL database==>{e}", exc_info=True)
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+def insert_match_odds_bulk(match_data):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO match_odds (id, matchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            match_data,
+        )
+
+        conn.commit()
         return True
 
     except Exception as e:
@@ -932,6 +1023,18 @@ def create_tables():
             awayTeamWinOdds FLOAT,
             teamDrawOdds FLOAT,
             commence_time TIMESTAMP NOT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS match_odds (
+            id VARCHAR(50) PRIMARY KEY,
+            matchId VARCHAR(50) DEFAULT NULL,
+            homeTeamOdds FLOAT,
+            awayTeamOdds FLOAT,
+            drawOdds FLOAT,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
