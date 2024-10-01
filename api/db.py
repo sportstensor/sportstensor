@@ -112,17 +112,49 @@ def get_match_odds_by_id(match_id):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
-
-        query = """
-            SELECT m.*
-            FROM match_odds m
-            WHERE m.matchId = %s
-            ORDER BY m.lastUpdated ASC
-        """
+        if match_id:
+            query = """
+                SELECT m.*
+                FROM match_odds m
+                WHERE m.matchId = %s
+                ORDER BY m.lastUpdated ASC
+            """
+            cursor.execute(query, (match_id,))
+            match_odds = cursor.fetchall()
+        else:
+            query = """
+                SELECT 
+                    ordered.matchId,
+                    JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            "id", ordered.id,
+                            "matchId", ordered.matchId,
+                            "homeTeamOdds", ordered.homeTeamOdds,
+                            "awayTeamOdds", ordered.awayTeamOdds,
+                            "drawOdds", ordered.drawOdds,
+                            "lastUpdated", ordered.lastUpdated
+                        )
+                    ) AS oddsData
+                FROM (
+                    SELECT
+                        m.id,
+                        m.matchId,
+                        m.homeTeamOdds,
+                        m.awayTeamOdds,
+                        m.drawOdds,
+                        m.lastUpdated
+                    FROM match_odds m
+                    ORDER BY
+                        m.lastUpdated ASC
+                ) AS ordered
+                GROUP BY
+                    ordered.matchId
+                ORDER BY
+                    MAX(ordered.lastUpdated) ASC
+            """
+            cursor.execute(query)
+            match_odds = cursor.fetchall()
         
-        cursor.execute(query, (match_id,))
-        match_odds = cursor.fetchall()
-
         return match_odds
 
     except Exception as e:
