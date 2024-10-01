@@ -85,13 +85,9 @@ def get_upcoming_matches():
             FROM matches m
             LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
             LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
+            WHERE m.matchDate BETWEEN NOW() AND NOW() + INTERVAL 48 HOUR
         """
 
-        if not all:
-            query += """
-                WHERE m.matchDate BETWEEN NOW() AND NOW() + INTERVAL 48 HOUR
-            """
-        
         cursor.execute(query)
         match_list = cursor.fetchall()
 
