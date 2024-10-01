@@ -109,9 +109,7 @@ class Validator(BaseValidatorNeuron):
         
         self.next_match_syncing_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_predictions_cleanup_datetime = dt.datetime.now(dt.timezone.utc)
-
         self.next_league_commitments_datetime = dt.datetime.now(dt.timezone.utc)
-
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
 
@@ -406,7 +404,7 @@ class Validator(BaseValidatorNeuron):
 
             # Archive predictions from miners that are no longer registered
             utils.archive_deregistered_match_predictions(active_hotkeys, active_uids)
-
+            
             self.next_predictions_cleanup_datetime = dt.datetime.now(
                 dt.timezone.utc
             ) + dt.timedelta(minutes=PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES)

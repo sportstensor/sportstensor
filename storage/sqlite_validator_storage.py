@@ -590,7 +590,6 @@ class SqliteValidatorStorage(ValidatorStorage):
                 connection.commit()
 
     def delete_unscored_deregistered_match_predictions(self, miner_hotkeys: List[str], miner_uids: List[int]):
-
         """Deletes unscored predictions returned from miners that are no longer registered."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:

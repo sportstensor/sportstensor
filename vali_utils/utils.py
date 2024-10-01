@@ -526,14 +526,6 @@ async def send_predictions_to_miners(
         return None
     
 
-def clean_up_unscored_deregistered_match_predictions(active_miner_hotkeys: List[str]):
-    """Deletes unscored predictions returned from miners that are no longer registered."""
-    try:
-        storage.delete_unscored_deregistered_match_predictions(active_miner_hotkeys)
-    except Exception as e:
-        bt.logging.error(f"Error cleaning up unscored deregistered predictions: {e}")
-
-
 def clean_up_unscored_deregistered_match_predictions(active_miner_hotkeys: List[str], active_miner_uids: List[int]):
     """Deletes unscored predictions returned from miners that are no longer registered."""
     try:
@@ -606,6 +598,7 @@ def is_match_prediction_valid(
     Returns a tuple of (is_valid, reason) where is_valid is True if the entities are valid,
     and reason is a string describing why they are not valid.
     """
+
     # Check if probabilityChoice is None
     if prediction.probabilityChoice is None:
         return (
@@ -638,7 +631,6 @@ def is_match_prediction_valid(
             f"Probability {prediction.probability} is not between 0 and 1",
         )
     """ Turning off homeTeamScore and awayTeamScore validation as it will no longer be needed.
-
     # Check the validity of the scores
     if not isinstance(prediction.homeTeamScore, int):
         return (
