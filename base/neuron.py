@@ -102,8 +102,8 @@ class BaseNeuron(ABC):
         )
         self.step = 0
 
-    @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
+    #@abstractmethod
+    #async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
 
     @abstractmethod
     def run(self): ...
@@ -115,11 +115,12 @@ class BaseNeuron(ABC):
         # Ensure miner or validator hotkey is still registered on the network.
         self.check_registered()
 
-        if self.should_sync_metagraph():
-            self.resync_metagraph()
+        #if self.should_sync_metagraph():
+            #self.resync_metagraph()
 
-        if self.should_set_weights():
-            self.set_weights()
+        # Turning off setting weights here as we'll run its logic in a background thread defined in neurons/validator.py
+        #if self.should_set_weights():
+            #self.set_weights()
 
         # Always save state.
         self.save_state()

@@ -1,8 +1,8 @@
-import datetime
+from common.data import League
 
 IS_DEV = False
 # Controls if validators should process our SportsTensor App-based logic
-ENABLE_APP = True
+ENABLE_APP = False
 
 # The current protocol version (int)
 PROTOCOL_VERSION = 1
@@ -22,6 +22,9 @@ VALIDATOR_TIMEOUT = 10
 # Have Validators pull match data every X seconds.
 VALI_REFRESH_MATCHES = 60 * 30
 
+# Have Validators run the cleaning process every X minutes.
+PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES = 5
+
 # The base FloatTensor score for all miners that return a valid prediction
 BASE_MINER_PREDICTION_SCORE = 0.01
 
@@ -29,13 +32,13 @@ BASE_MINER_PREDICTION_SCORE = 0.01
 NUM_MINERS_TO_SEND_TO = 20
 
 # Minimum time in seconds predictions are allowed before match begins
-MIN_PREDICTION_TIME_THRESHOLD = 60 * 30
+MIN_PREDICTION_TIME_THRESHOLD = 60 * 5
 
 # Max number of days in the future for allowable predictions. 
 MAX_PREDICTION_DAYS_THRESHOLD = 2
 
 # Max number of predictions that can be scored at a time
-MAX_BATCHSIZE_FOR_SCORING = 25
+MAX_BATCHSIZE_FOR_SCORING = 100
 
 # Cut off days to attempt to score predictions. i.e. Any predictions not scored with X days will be left behind
 SCORING_CUTOFF_IN_DAYS = 10
@@ -47,13 +50,28 @@ SCORING_INTERVAL_IN_MINUTES = 1
 MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
-CORRECT_MATCH_WINNER_SCORE = 0.5
-# The score a miner must achieve to earn weights
-TOTAL_SCORE_THRESHOLD = 0.4
+NO_LEAGUE_COMMITMENT_PENALTY = -1.0
 
-MAX_SCORE_DIFFERENCE = 10
-MAX_SCORE_DIFFERENCE_SOCCER = 10
-MAX_SCORE_DIFFERENCE_FOOTBALL = 50
-MAX_SCORE_DIFFERENCE_BASKETBALL = 50
-MAX_SCORE_DIFFERENCE_BASEBALL = 20
-MAX_SCORE_DIFFERENCE_CRICKET = 20
+ACTIVE_LEAGUES = [
+    League.MLB,
+    League.EPL,
+    League.MLS,
+    League.NFL
+]
+
+ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
+    League.MLB: 250,
+    League.NBA: 250,
+    League.EPL: 40,
+    League.MLS: 48,
+    League.NFL: 64
+}
+
+# MUST ADD UP to 1.0 (100%)
+LEAGUE_SCORING_PERCENTAGES = {
+    League.MLB: 0.30,
+    League.NBA: 0.0,
+    League.EPL: 0.25,
+    League.MLS: 0.10,
+    League.NFL: 0.35
+}

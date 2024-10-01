@@ -336,6 +336,36 @@ async def main():
             logging.error(f"Error posting AppMatchPredictionsForValidators: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
 
+    @app.post("/predictionEdgeResults")
+    async def upload_prediction_edge_results(
+        prediction_edge_results: dict = Body(...),
+        hotkey: Annotated[str, Depends(get_hotkey)] = None,
+    ):
+        if not authenticate_with_bittensor(hotkey, metagraph):
+            print(f"Valid hotkey required, returning 403. hotkey: {hotkey}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Valid hotkey required.",
+            )
+        # get uid of bittensor validator
+        uid = metagraph.hotkeys.index(hotkey)
+
+        try:
+            result = db.upload_prediction_edge_results(prediction_edge_results)
+            if result:
+                return {
+                    "message": "Prediction edge results uploaded successfully from validator "
+                    + str(uid)
+                }
+            else:
+                raise HTTPException(
+                    status_code=500, detail="Failed to upload prediction edge results from validator "
+                    + str(uid)
+                )
+        except Exception as e:
+            logging.error(f"Error posting predictionEdgeResults: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
+    
     @app.post("/predictionResults")
     async def upload_prediction_results(
         prediction_results: dict = Body(...),

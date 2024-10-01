@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+from typing import List
 import bittensor as bt
-from common.data import MatchPrediction, Sport, League, get_league_from_string
+from common.data import MatchPrediction, Sport, League, get_league_from_string, ProbabilityChoice
 import logging
+import random
 
 
 class SportPredictionModel(ABC):
@@ -17,6 +19,30 @@ class SportPredictionModel(ABC):
         self.prediction.homeTeamScore = 0
         self.prediction.awayTeamScore = 0
 
+    def set_default_probability(self, canTie: bool = False):
+        if canTie:
+
+            probs = generate_random_probabilities_with_tie()
+            # Check which probability is the highest to determine the choice
+            max_prob = max(probs)
+            if probs[0] == max_prob:
+                self.prediction.probabilityChoice = ProbabilityChoice.HOMETEAM
+            elif probs[1] == max_prob:
+                self.prediction.probabilityChoice = ProbabilityChoice.AWAYTEAM
+            else:
+                self.prediction.probabilityChoice = ProbabilityChoice.DRAW
+
+            self.prediction.probability = max_prob
+
+        else:
+            prob_a, prob_b = generate_random_probability_no_tie()
+            if prob_a > prob_b:
+                self.prediction.probabilityChoice = ProbabilityChoice.HOMETEAM
+            else:
+                self.prediction.probabilityChoice = ProbabilityChoice.AWAYTEAM
+
+            self.prediction.probability = max(prob_a, prob_b)
+
 
 def make_match_prediction(prediction: MatchPrediction):
     # Lazy import to avoid circular dependency
@@ -24,7 +50,6 @@ def make_match_prediction(prediction: MatchPrediction):
     from st.models.football import FootballPredictionModel
     from st.models.baseball import BaseballPredictionModel
     from st.models.basketball import BasketballPredictionModel
-    from st.models.cricket import CricketPredictionModel
 
     # Add new league classes here
     from st.models.soccer_mls import MLSSoccerPredictionModel
@@ -36,7 +61,6 @@ def make_match_prediction(prediction: MatchPrediction):
         Sport.FOOTBALL: FootballPredictionModel,
         Sport.BASEBALL: BaseballPredictionModel,
         Sport.BASKETBALL: BasketballPredictionModel,
-        Sport.CRICKET: CricketPredictionModel,
     }
     league_classes = {
         League.MLS: MLSSoccerPredictionModel,
@@ -59,7 +83,7 @@ def make_match_prediction(prediction: MatchPrediction):
             f"Using league-specific prediction model: {league_class.__name__}"
         )
         league_prediction = league_class(prediction)
-        league_prediction.set_default_scores()
+        league_prediction.set_default_probability()
         league_prediction.make_prediction()
     # If not, check if we have a sport-specific prediction model
     elif sport_class:
@@ -67,12 +91,37 @@ def make_match_prediction(prediction: MatchPrediction):
             f"Using sport-specific prediction model: {sport_class.__name__}"
         )
         sport_prediction = sport_class(prediction)
-        sport_prediction.set_default_scores()
+        sport_prediction.set_default_probability()
         sport_prediction.make_prediction()
     # If we don't have a prediction model for the sport, return 0 for both scores
     else:
-        bt.logging.info("Unknown sport, returning 0 for both scores")
-        prediction.homeTeamScore = 0
-        prediction.awayTeamScore = 0
+        bt.logging.info("Unknown sport, returning default probability.")
+        prob_a, prob_b = generate_random_probability_no_tie()
+        if prob_a > prob_b:
+            prediction.probabilityChoice = ProbabilityChoice.HOMETEAM
+        else:
+            prediction.probabilityChoice = ProbabilityChoice.AWAYTEAM
+
+        prediction.probability = max(prob_a, prob_b)
 
     return prediction
+
+def generate_random_probability_no_tie() -> List[float]:
+    # Generate a random probability for team A
+    prob_a = random.uniform(0.05, 0.95)
+    prob_b = 1 - prob_a
+    
+    return [prob_a, prob_b]
+
+def generate_random_probabilities_with_tie() -> List[float]:
+    # Generate random probabilities for win, lose, draw
+    total = 0
+    probs = [0, 0, 0]
+    for i in range(3):
+        probs[i] = random.uniform(0.1, 0.8)
+        total += probs[i]
+    
+    # Normalize probabilities so they sum to 1
+    probs = [p / total for p in probs]
+
+    return probs

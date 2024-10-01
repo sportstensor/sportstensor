@@ -94,6 +94,75 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
         conn.close()
 
 
+def upload_prediction_edge_results(prediction_results):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        current_utc_time = dt.datetime.now(timezone.utc)
+        current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        """
+        {
+            'edge_scores': edge_scores,
+            'correct_winner_results': correct_winner_results,
+            'uids': prediction_rewards_uids,
+            'hotkeys': prediction_results_hotkeys,
+            'sports': prediction_sports,
+            'leagues': prediction_leagues
+        }
+        """
+
+        # Prepare the data for executemany
+        data_to_insert = list(
+            zip(
+                prediction_results["hotkeys"],
+                prediction_results["uids"],
+                prediction_results["leagues"],
+                prediction_results["sports"],
+                [1] * len(prediction_results["uids"]),
+                prediction_results["correct_winner_results"],
+                prediction_results["edge_scores"],
+            )
+        )
+
+        prediction_edge_scores_table_name = "MatchPredictionEdgeResults"
+        if not IS_PROD:
+            prediction_edge_scores_table_name += "_test"
+        c.executemany(
+            f"""
+            INSERT INTO {prediction_edge_scores_table_name} (
+                miner_hotkey,
+                miner_uid,
+                league,
+                sport,
+                total_predictions,
+                winner_predictions,
+                avg_edge,
+                last_updated
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, NOW()
+            ) ON DUPLICATE KEY UPDATE
+                total_predictions = total_predictions + VALUES(total_predictions),
+                winner_predictions = winner_predictions + VALUES(winner_predictions),
+                avg_edge = ((avg_edge * (total_predictions - VALUES(total_predictions))) + (VALUES(avg_edge) * VALUES(total_predictions))) / total_predictions,
+                last_updated = NOW();
+            """,
+            data_to_insert,
+        )
+
+        conn.commit()
+        logging.info("Prediction edge results data inserted or updated in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert prediction edge results data in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+
 def upload_prediction_results(prediction_results):
     try:
         conn = get_db_conn()
@@ -718,7 +787,7 @@ def create_tables():
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, league)
+            UNIQUE (miner_hotkey, miner_uid, league)
         )"""
         )
         c.execute(
@@ -736,7 +805,7 @@ def create_tables():
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, league)
+            UNIQUE (miner_hotkey, miner_uid, league)
         )"""
         )
         c.execute(

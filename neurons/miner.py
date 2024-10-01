@@ -24,7 +24,8 @@ import base
 from base.miner import BaseMinerNeuron
 
 from common import constants
-from common.protocol import GetMatchPrediction
+from common.data import League
+from common.protocol import GetLeagueCommitments, GetMatchPrediction
 from st.sport_prediction_model import make_match_prediction
 
 
@@ -34,13 +35,32 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-    async def forward(self, synapse: GetMatchPrediction) -> GetMatchPrediction:
+    async def get_league_commitments(self, synapse: GetLeagueCommitments) -> GetLeagueCommitments:
+        bt.logging.info(
+            f"Received GetLeagueCommitments request in forward() from {synapse.dendrite.hotkey}."
+        )
+
+        # Define the leagues you want to commit to making match predictions to.
+        # @TODO: Implement a configuration file to define the leagues. .env?
+        synapse.leagues = [
+            League.MLB,
+            League.EPL,
+            League.NFL
+        ]
+        synapse.version = constants.PROTOCOL_VERSION
+
+        bt.logging.success(
+            f"Returning Leagues to {synapse.dendrite.hotkey}: {[league.value for league in synapse.leagues]}."
+        )
+
+        return synapse
+
+    async def get_match_prediction(self, synapse: GetMatchPrediction) -> GetMatchPrediction:
         bt.logging.info(
             f"Received GetMatchPrediction request in forward() from {synapse.dendrite.hotkey}."
         )
 
         # Make the match prediction based on the requested MatchPrediction object
-        # TODO: does this need to by async?
         synapse.match_prediction = make_match_prediction(synapse.match_prediction)
         synapse.version = constants.PROTOCOL_VERSION
 
@@ -49,8 +69,18 @@ class Miner(BaseMinerNeuron):
         )
 
         return synapse
+    
+    async def get_league_commitments_blacklist(
+        self, synapse: GetLeagueCommitments
+    ) -> typing.Tuple[bool, str]:
+        return await self.blacklist(synapse)
+    
+    async def get_match_prediction_blacklist(
+        self, synapse: GetMatchPrediction
+    ) -> typing.Tuple[bool, str]:
+        return await self.blacklist(synapse)
 
-    async def blacklist(self, synapse: GetMatchPrediction) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: bt.Synapse) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -115,7 +145,14 @@ class Miner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: GetMatchPrediction) -> float:
+    
+    async def get_league_commitments_priority(self, synapse: GetLeagueCommitments) -> float:
+        return await self.priority(synapse)
+    
+    async def get_match_prediction_priority(self, synapse: GetMatchPrediction) -> float:
+        return await self.priority(synapse)
+
+    async def priority(self, synapse: bt.Synapse) -> float:
         """
         The priority function determines the order in which requests are handled. More valuable or higher-priority
         requests are processed before others. You should design your own priority mechanism with care.
@@ -159,4 +196,3 @@ if __name__ == "__main__":
     with Miner() as miner:
         while True:
             time.sleep(60)
-            # time.sleep(5)

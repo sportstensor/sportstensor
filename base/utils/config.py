@@ -189,6 +189,18 @@ def add_validator_args(cls, parser):
         help="Disables setting weights.",
         default=False,
     )
+   
+    parser.add_argument(
+        "--immediate",
+        action="store_true",
+        help="Triggers setting weights immediately. NOT RECOMMENDED FOR PRODUCTION. This is used internally by SN41 devs for faster testing.",
+    )
+
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Does not launch a wandb run, does not set weights, does not check that your key is registered.",
+    )
 
     parser.add_argument(
         "--neuron.moving_average_alpha",
