@@ -18,6 +18,7 @@
 import bittensor as bt
 import pydantic
 from common.data import (
+    League,
     MatchPrediction,
 )
 from typing import Dict, List, Optional, Tuple
@@ -33,6 +34,27 @@ class BaseProtocol(bt.Synapse):
         description="Protocol version", default=None
     )
 
+
+class GetLeagueCommitments(BaseProtocol):
+    """
+    Protocol by which Validators can retrieve the leagues that a Miner is committed to.
+    
+    Attributes:
+    - leagues: A list of League objects that the Miner is committed to.
+    """
+
+    leagues: List[League] = pydantic.Field(
+        description="The list of leagues that the Miner is committed to",
+        frozen=False,
+        repr=False,
+        default_factory=list,
+    )
+
+    def __str__(self):
+        return f"GetLeagueCommitments(leagues={[league.value for league in self.leagues]}, axon={self.axon})"
+
+    __repr__ = __str__
+    
 
 class GetMatchPrediction(BaseProtocol):
     """

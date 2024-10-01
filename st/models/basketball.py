@@ -1,10 +1,13 @@
 import random
 import bittensor as bt
 from st.sport_prediction_model import SportPredictionModel
+from common.data import ProbabilityChoice
 
 
 class BasketballPredictionModel(SportPredictionModel):
     def make_prediction(self):
-        bt.logging.info("Handling basketball...")
-        self.prediction.homeTeamScore = random.randint(30, 130)
-        self.prediction.awayTeamScore = random.randint(30, 130)
+        bt.logging.info("Predicting basketball game...")
+        
+        # Set your probability predictions here
+        #self.prediction.probabilityChoice = random.choice([ProbabilityChoice.HOMETEAM, ProbabilityChoice.AWAYTEAM, ProbabilityChoice.DRAW])
+        #self.prediction.probability = 0.5

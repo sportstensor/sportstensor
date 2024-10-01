@@ -59,14 +59,22 @@ class League(Enum):
     sport: Sport
     isActive: bool = False
     """
+    
+    def __eq__(self, other):
+        if isinstance(other, League):
+            return self is other
+        return self.value == other
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 def get_league_from_string(league_str: str) -> Optional[League]:
     """Utility function to get a League enum from a string."""
-    for league in League:
-        if league.value == league_str:
-            return league
-    return None
+    try:
+        return next(league for league in League if league.value == league_str)
+    except StopIteration:
+        return None
 
 
 class Match(StrictBaseModel):
@@ -87,6 +95,11 @@ class Match(StrictBaseModel):
     awayTeamName: str
     homeTeamScore: Optional[int]
     awayTeamScore: Optional[int]
+    
+    # Define our odds for the match. These change over time. Final value are the closing odds.
+    homeTeamOdds: Optional[float]
+    awayTeamOdds: Optional[float]
+    drawOdds: Optional[float]
 
     # Validators to ensure immutability
     @validator(
@@ -118,6 +131,10 @@ class Prediction(StrictBaseModel):
     )
 
     hotkey: Optional[str] = Field(description="A unique identifier for the miner.")
+
+    predictionDate: Optional[dt.datetime] = Field(
+        description="The datetime the prediction was made. Should be UTC"
+    )
 
     matchId: str = Field(description="Unique ID that represents a match.")
 
@@ -167,6 +184,22 @@ class Prediction(StrictBaseModel):
         )
 
 
+class ProbabilityChoice(Enum):
+    """Represents the choice a miner can make for a prediction."""
+
+    HOMETEAM = "HomeTeam"
+    AWAYTEAM = "AwayTeam"
+    DRAW = "Draw"
+
+
+def get_probablity_choice_from_string(choice_str: str) -> Optional[ProbabilityChoice]:
+    """Utility function to get a ProbabilityChoice enum from a string."""
+    for choice in ProbabilityChoice:
+        if choice.value == choice_str:
+            return choice
+    return None
+
+
 class MatchPrediction(Prediction):
     """Represents a prediction of a sports match."""
 
@@ -174,6 +207,20 @@ class MatchPrediction(Prediction):
     awayTeamName: str
     homeTeamScore: Optional[int]
     awayTeamScore: Optional[int]
+
+    probabilityChoice: Optional[ProbabilityChoice]
+    probability: Optional[float]
+    
+    drawOdds: Optional[float]
+    closingEdge: Optional[float]
+
+    def get_predicted_team(self) -> str:
+        """Get the predicted team based on the probability choice."""
+        if self.probabilityChoice == ProbabilityChoice.HOMETEAM:
+            return self.homeTeamName
+        elif self.probabilityChoice == ProbabilityChoice.AWAYTEAM:
+            return self.awayTeamName
+        return "Draw"
 
     # Validators to ensure immutability
     @validator(
@@ -189,7 +236,8 @@ class MatchPrediction(Prediction):
         return (
             f"{base_str[:-1]}, "  # Remove the closing parenthesis from the base string
             f"homeTeamName={self.homeTeamName}, awayTeamName={self.awayTeamName}, "
-            f"homeTeamScore={self.homeTeamScore}, awayTeamScore={self.awayTeamScore})"
+            #f"homeTeamScore={self.homeTeamScore}, awayTeamScore={self.awayTeamScore}, "
+            f"probabilityChoice={self.probabilityChoice}, probability={self.probability})"
         )
 
 
@@ -197,3 +245,22 @@ class MatchPredictionWithMatchData(BaseModel):
     prediction: MatchPrediction
     actualHomeTeamScore: int
     actualAwayTeamScore: int
+    homeTeamOdds: float
+    awayTeamOdds: float
+    drawOdds: float
+
+    def get_actual_winner(self) -> str:
+        """Get the actual winner of the match."""
+        if self.actualHomeTeamScore > self.actualAwayTeamScore:
+            return self.prediction.homeTeamName
+        elif self.actualHomeTeamScore < self.actualAwayTeamScore:
+            return self.prediction.awayTeamName
+        return "Draw"
+    
+    def get_actual_winner_odds(self) -> float:
+        """Get the odds of the actual winner of the match."""
+        if self.actualHomeTeamScore > self.actualAwayTeamScore:
+            return self.homeTeamOdds
+        elif self.actualHomeTeamScore < self.actualAwayTeamScore:
+            return self.awayTeamOdds
+        return self.drawOdds

@@ -1,36 +1,32 @@
 from aiohttp import ClientSession, BasicAuth
 import asyncio
+import requests
 import bittensor as bt
 import torch
 import random
 import traceback
 from typing import List, Optional, Tuple, Type, Union
 import datetime as dt
+from datetime import timedelta, timezone
 from collections import defaultdict
 import copy
 
-from common.data import Sport, Match, Prediction, MatchPrediction
-from common.protocol import GetMatchPrediction
+from common.data import Sport, League, Match, MatchPrediction, ProbabilityChoice, get_probablity_choice_from_string
+from common.protocol import GetLeagueCommitments, GetMatchPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
 
 from common.constants import (
     IS_DEV,
-    VALIDATOR_TIMEOUT,
-    CORRECT_MATCH_WINNER_SCORE,
-    TOTAL_SCORE_THRESHOLD,
-    MAX_SCORE_DIFFERENCE,
-    MAX_SCORE_DIFFERENCE_SOCCER,
-    MAX_SCORE_DIFFERENCE_FOOTBALL,
-    MAX_SCORE_DIFFERENCE_BASEBALL,
-    MAX_SCORE_DIFFERENCE_BASKETBALL,
-    MAX_SCORE_DIFFERENCE_CRICKET,
+    VALIDATOR_TIMEOUT
 )
 
 from neurons.validator import Validator
+from vali_utils import scoring_utils
 
 # initialize our validator storage class
-storage = SqliteValidatorStorage()
+storage = SqliteValidatorStorage.get_instance()
+storage.initialize()
 
 
 async def sync_match_data(match_data_endpoint) -> bool:
@@ -64,6 +60,9 @@ async def sync_match_data(match_data_endpoint) -> bool:
                 awayTeamName=item["awayTeamName"],
                 homeTeamScore=item["homeTeamScore"],
                 awayTeamScore=item["awayTeamScore"],
+                homeTeamOdds=item["homeTeamOdds"],
+                awayTeamOdds=item["awayTeamOdds"],
+                drawOdds=item["drawOdds"],
                 isComplete=item["isComplete"],
             )
             if storage.check_match(item["matchId"]):
@@ -83,7 +82,54 @@ async def sync_match_data(match_data_endpoint) -> bool:
     except Exception as e:
         bt.logging.error(f"Error getting match data: {e}")
         return False
+    
+def sync_match_odds_data(match_odds_data_endpoint: str, matchId: str = None) -> Optional[List[Tuple[str, float, float, float, str]]]:
+    try:
+        # Construct the URL
+        if matchId:
+            match_odds_data_endpoint = f"{match_odds_data_endpoint}?matchId={matchId}"
 
+        # Make the GET request
+        response = requests.get(match_odds_data_endpoint)
+        response.raise_for_status()
+        odds_data = response.json()
+
+        if not odds_data or "match_odds" not in odds_data:
+            bt.logging.debug("No odds data returned from API")
+            return None
+        
+        odds_data = odds_data["match_odds"]
+        if len(odds_data) == 0:
+            bt.logging.debug("No odds data returned from API")
+            return None
+
+        odds_to_insert = []
+        for item in odds_data:
+            if "matchId" not in item:
+                bt.logging.error(f"Skipping odds data missing matchId: {item}")
+                continue
+            if not storage.check_match_odds(item["matchId"]):
+                odds_to_insert.append((
+                    item["matchId"],
+                    float(item["homeTeamOdds"]),
+                    float(item["awayTeamOdds"]),
+                    float(item["drawOdds"]),
+                    item["lastUpdated"]
+                ))
+
+        if odds_to_insert:
+            storage.insert_match_odds(odds_to_insert)
+            bt.logging.info(f"Inserted {len(odds_to_insert)} odds for matches.")
+
+        return odds_to_insert
+
+    except requests.RequestException as e:
+        bt.logging.error(f"Error getting odds data: {e}")
+        return None
+
+    except Exception as e:
+        bt.logging.error(f"Unexpected error getting odds data: {e}")
+        return None
 
 async def process_app_prediction_requests(
     vali: Validator,
@@ -232,19 +278,153 @@ async def post_app_prediction_responses(
         return False
 
 
-def get_match_prediction_requests(batchsize: int = 1) -> List[MatchPrediction]:
-    matches = storage.get_matches_to_predict(batchsize)
-    match_predictions = [
-        MatchPrediction(
-            matchId=match.matchId,
-            matchDate=str(match.matchDate),
-            sport=match.sport,
-            league=match.league,
-            homeTeamName=match.homeTeamName,
-            awayTeamName=match.awayTeamName,
+async def send_league_commitments_to_miners(
+    vali: Validator, input_synapse: GetLeagueCommitments, miner_uids: List[int]
+):
+    try:
+        random.shuffle(miner_uids)
+        axons = [vali.metagraph.axons[uid] for uid in miner_uids]
+        
+        responses = await vali.dendrite(
+            # Send the query to selected miner axons in the network.
+            axons=axons,
+            synapse=input_synapse,
+            deserialize=True,
+            timeout=VALIDATOR_TIMEOUT,
         )
-        for match in matches
-    ]
+
+        working_miner_uids = []
+        finished_responses = []
+        uid_league_updates = {}
+        for response in responses:
+            
+            if (
+                response is None
+                or response.leagues is None
+                or response.axon is None
+                or response.axon.hotkey is None
+            ):
+                bt.logging.info(
+                    f"{response.axon.hotkey}: Miner failed to respond to league commitments."
+                )
+                continue
+            else:
+                uid = [
+                    uid
+                    for uid, axon in zip(miner_uids, axons)
+                    if axon.hotkey == response.axon.hotkey
+                ][0]
+                working_miner_uids.append(uid)
+                finished_responses.append(response)
+                # check if the leagues are valid. throw out any invalid leagues
+                valid_leagues = []
+                for league in response.leagues:
+                    if league in League:
+                        valid_leagues.append(league)
+                    else:
+                        bt.logging.info(
+                            f"{response.axon.hotkey}: League {league} is not valid. Throwing out."
+                        )
+                uid_league_updates[uid] = valid_leagues
+
+        if len(working_miner_uids) == 0:
+            bt.logging.info("No miner responses available.")
+            return (finished_responses, working_miner_uids)
+
+        bt.logging.info(f"Received responses: {responses}")
+        bt.logging.info(f"Storing miner league commitments to validator storage.")
+        # Bulk update of uids_to_leagues
+        with vali.uids_to_leagues_lock:
+            for uid, leagues in uid_league_updates.items():
+                vali.uids_to_leagues[uid] = leagues
+
+        return
+
+    except Exception:
+        bt.logging.error(
+            f"Failed to send predictions to miners and store in validator database.",
+            traceback.format_exc(),
+        )
+        return None
+
+
+def get_match_prediction_requests(vali: Validator) -> List[MatchPrediction]:
+    # Get all eligible matches that can be predicted
+    matches = storage.get_matches_to_predict()
+    if not matches:
+        return []
+    
+    current_time = dt.datetime.now(dt.timezone.utc)
+    # Get all the match prediction request data
+    match_prediction_requests = storage.get_match_prediction_requests()
+
+    match_predictions = []
+    for match in matches:
+        # Skip any matches from non-active leagues
+        if match.league not in vali.ACTIVE_LEAGUES:
+            continue
+
+        # If the match is not in the match_prediction_requests, add it
+        if match.matchId not in match_prediction_requests:
+            match_prediction_requests[match.matchId] = {
+                '48_hour': False,
+                '12_hour': False,
+                '4_hour': False,
+                '10_min': False
+            }
+
+        # Calculate the time until the match
+        match_date_aware = match.matchDate.replace(tzinfo=timezone.utc)
+        time_until_match = match_date_aware - current_time
+
+        """
+        print(f"Match: {match.matchId}, Time until match: {time_until_match}")
+        print(f"48_hour: {match_prediction_requests[match.matchId]['48_hour']}")
+        print(f"12_hour: {match_prediction_requests[match.matchId]['12_hour']}")
+        print(f"4_hour: {match_prediction_requests[match.matchId]['4_hour']}")
+        print(f"10_min: {match_prediction_requests[match.matchId]['10_min']}")
+        """
+
+        # Define prediction windows
+        prediction_windows = [
+            ('48_hour', timedelta(hours=48), timedelta(hours=47), 'prediction_48_hour'),
+            ('12_hour', timedelta(hours=12), timedelta(hours=11), 'prediction_12_hour'),
+            ('4_hour', timedelta(hours=4), timedelta(hours=3), 'prediction_4_hour'),
+            ('10_min', timedelta(minutes=15), timedelta(minutes=5), 'prediction_10_min')
+        ]
+
+        if match.matchId == "2786eecc25d70b5a4091d22364a16a0f":
+            if (not match_prediction_requests[match.matchId]['12_hour']):
+                match_predictions.append(
+                    MatchPrediction(
+                        matchId=match.matchId,
+                        matchDate=str(match.matchDate),
+                        sport=match.sport,
+                        league=match.league,
+                        homeTeamName=match.homeTeamName,
+                        awayTeamName=match.awayTeamName
+                    )
+                )
+                storage.update_match_prediction_request(match.matchId, 'prediction_12_hour')
+
+        # Create match predictions for each prediction window, if the match has not been predicted in that window
+        for window, upper_bound, lower_bound, update_key in prediction_windows:
+            if (not match_prediction_requests[match.matchId][window] and
+                upper_bound >= time_until_match > lower_bound):
+                bt.logging.debug(f"Match found in prediction window {window}: {match.awayTeamName} at {match.homeTeamName} on {match.matchDate}")
+                match_predictions.append(
+                    MatchPrediction(
+                        matchId=match.matchId,
+                        matchDate=str(match.matchDate),
+                        sport=match.sport,
+                        league=match.league,
+                        homeTeamName=match.homeTeamName,
+                        awayTeamName=match.awayTeamName
+                    )
+                )
+                storage.update_match_prediction_request(match.matchId, update_key)
+                break  # Only one prediction per match per cycle
+    
     return match_predictions
 
 
@@ -301,13 +481,13 @@ async def send_predictions_to_miners(
                 if (
                     response is None
                     or response.match_prediction is None
-                    or response.match_prediction.homeTeamScore is None
-                    or response.match_prediction.awayTeamScore is None
+                    or response.match_prediction.probabilityChoice is None
+                    or response.match_prediction.probability is None
                     or response.axon is None
                     or response.axon.hotkey is None
                 ):
                     bt.logging.info(
-                        f"{response.axon.hotkey}: Miner failed to respond with a prediction."
+                        f"{response.axon.hotkey}: Miner failed to respond with a valid prediction."
                     )
                     continue
                 elif not is_prediction_valid:
@@ -324,6 +504,7 @@ async def send_predictions_to_miners(
                     working_miner_uids.append(uid)
                     response.match_prediction.minerId = uid
                     response.match_prediction.hotkey = response.axon.hotkey
+                    response.match_prediction.predictionDate = dt.datetime.now()
                     finished_responses.append(response)
 
         if len(working_miner_uids) == 0:
@@ -353,18 +534,34 @@ def clean_up_unscored_deregistered_match_predictions(active_miner_hotkeys: List[
         bt.logging.error(f"Error cleaning up unscored deregistered predictions: {e}")
 
 
-def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[int]]:
+def clean_up_unscored_deregistered_match_predictions(active_miner_hotkeys: List[str], active_miner_uids: List[int]):
+    """Deletes unscored predictions returned from miners that are no longer registered."""
+    try:
+        storage.delete_unscored_deregistered_match_predictions(active_miner_hotkeys, active_miner_uids)
+    except Exception as e:
+        bt.logging.error(f"Error cleaning up unscored deregistered predictions: {e}")
+
+
+def archive_deregistered_match_predictions(active_miner_hotkeys: List[str], active_miner_uids: List[int]):
+    """Archives predictions from miners that are no longer registered."""
+    try:
+        storage.archive_match_predictions(active_miner_hotkeys, active_miner_uids)
+    except Exception as e:
+        bt.logging.error(f"Error archiving unscored deregistered predictions: {e}")
+
+
+def find_and_score_edge_match_predictions(batchsize: int) -> Tuple[List[float], List[int], List[int], List[str], List[str]]:
     """Query the validator's local storage for a list of qualifying MatchPredictions that can be scored.
 
-    Then run scoring algorithms and return scoring results
+    Then run CLV Edge calculations and return results
     """
 
     # Query for scorable match predictions with actual match data
     predictions_with_match_data = storage.get_match_predictions_to_score(batchsize)
 
-    rewards = []
+    edge_scores = []
     correct_winner_results = []
-    rewards_uids = []
+    miner_uids = []
     predictions = []
     sports = []
     leagues = []
@@ -372,116 +569,33 @@ def find_and_score_match_predictions(batchsize: int) -> Tuple[List[float], List[
         prediction = pwmd.prediction
         uid = prediction.minerId
 
-        sport = prediction.sport
-        max_score_difference = MAX_SCORE_DIFFERENCE
-        if sport == Sport.SOCCER:
-            max_score_difference = MAX_SCORE_DIFFERENCE_SOCCER
-        elif sport == Sport.FOOTBALL:
-            max_score_difference = MAX_SCORE_DIFFERENCE_FOOTBALL
-        elif sport == Sport.BASEBALL:
-            max_score_difference = MAX_SCORE_DIFFERENCE_BASEBALL
-        elif sport == Sport.BASKETBALL:
-            max_score_difference = MAX_SCORE_DIFFERENCE_BASKETBALL
-        elif sport == Sport.CRICKET:
-            max_score_difference = MAX_SCORE_DIFFERENCE_CRICKET
-
-        total_score, correct_winner_score = calculate_prediction_score(
-            prediction.homeTeamScore,
-            prediction.awayTeamScore,
-            pwmd.actualHomeTeamScore,
-            pwmd.actualAwayTeamScore,
-            max_score_difference,
+        # Calculate the CLV Edge for the prediction
+        edge, correct_winner_score = scoring_utils.calculate_edge(
+            prediction_team=prediction.get_predicted_team(),
+            prediction_prob=prediction.probability,
+            actual_team=pwmd.get_actual_winner(),
+            consensus_closing_odds=pwmd.get_actual_winner_odds(),
         )
-        rewards.append(total_score)
+        prediction.closingEdge = edge
+        
+        edge_scores.append(edge)
         correct_winner_results.append(correct_winner_score)
-        rewards_uids.append(uid)
+        miner_uids.append(uid)
         predictions.append(prediction)
-        sports.append(sport)
+        sports.append(prediction.sport)
         leagues.append(prediction.league)
 
     # mark predictions as scored in the local db
     if len(predictions) > 0:
         storage.update_match_predictions(predictions)
 
-    # Aggregate rewards for each miner
-    aggregated_rewards = defaultdict(float)
-    num_predictions_below_threshold = 0
-    for uid, reward in zip(rewards_uids, rewards):
-        # Adjust the reward to 0 if it doesn't meat our threshold
-        if reward < TOTAL_SCORE_THRESHOLD:
-            num_predictions_below_threshold += 1
-            reward = 0
-        aggregated_rewards[uid] += reward
-
-    bt.logging.debug(f"Total prediction scores below threshold of {TOTAL_SCORE_THRESHOLD}: {num_predictions_below_threshold} of {len(rewards)}")
-
-    # Convert the aggregated rewards to a list of tuples (uid, aggregated_reward)
-    aggregated_rewards_list = list(aggregated_rewards.items())
-
-    # Normalize the aggregated rewards so that they sum up to 1.0
-    total_rewards = sum(reward for uid, reward in aggregated_rewards_list)
-    if total_rewards > 0:
-        normalized_rewards = [
-            reward / total_rewards for uid, reward in aggregated_rewards_list
-        ]
-    else:
-        # Handle the case where total_rewards is 0 to avoid division by zero
-        normalized_rewards = [0 for uid, reward in aggregated_rewards_list]
-
-    # Extract the corresponding UIDs for the normalized rewards
-    normalized_rewards_uids = [uid for uid, reward in aggregated_rewards_list]
-
     return [
-        normalized_rewards,
-        normalized_rewards_uids,
-        rewards,
+        edge_scores,
         correct_winner_results,
-        rewards_uids,
+        miner_uids,
         sports,
         leagues,
     ]
-
-
-def calculate_prediction_score(
-    predicted_home_score: int,
-    predicted_away_score: int,
-    actual_home_score: int,
-    actual_away_score: int,
-    max_score_difference: int,
-) -> float:
-
-    # Score for home team prediction
-    home_score_diff = abs(predicted_home_score - actual_home_score)
-    # Calculate a float score between 0 and 1. 1 being an exact match
-    home_score = max(0, 0.25 - (home_score_diff / max_score_difference))
-
-    # Score for away team prediction
-    away_score_diff = abs(predicted_away_score - actual_away_score)
-    # Calculate a float score between 0 and 1. 1 being an exact match
-    away_score = max(0, 0.25 - (away_score_diff / max_score_difference))
-
-    # Determine the correct winner or if it's a draw
-    actual_winner = (
-        "home"
-        if actual_home_score > actual_away_score
-        else "away" if actual_home_score < actual_away_score else "draw"
-    )
-    predicted_winner = (
-        "home"
-        if predicted_home_score > predicted_away_score
-        else "away" if predicted_home_score < predicted_away_score else "draw"
-    )
-
-    # Score for correct winner prediction
-    correct_winner_score = 1 if predicted_winner == actual_winner else 0
-
-    # Combine the scores
-    # Max score for home and away scores is 0.25. Correct match winner is 0.5. Perfectly predicted match score is 1
-    total_score = (
-        home_score + away_score + (correct_winner_score * CORRECT_MATCH_WINNER_SCORE)
-    )
-
-    return total_score, correct_winner_score
 
 
 def is_match_prediction_valid(
@@ -492,9 +606,38 @@ def is_match_prediction_valid(
     Returns a tuple of (is_valid, reason) where is_valid is True if the entities are valid,
     and reason is a string describing why they are not valid.
     """
-
-    if prediction is None:
-        return (False, "Prediction is None")
+    # Check if probabilityChoice is None
+    if prediction.probabilityChoice is None:
+        return (
+            False,
+            "Probability choice is None",
+        )
+    # Check the validity of the probability predictions
+    if isinstance(prediction.probabilityChoice, str):
+        if get_probablity_choice_from_string(prediction.probabilityChoice) is None:
+            return (
+                False,
+                f"Probability choice {prediction.probabilityChoice} is not a valid choice",
+            )
+    elif isinstance(prediction.probabilityChoice, ProbabilityChoice):
+        probability_choice = prediction.probabilityChoice
+    else:
+        return (
+            False,
+            f"Probability choice {prediction.probabilityChoice} is not of type ProbabilityChoice or str",
+        )
+    
+    if not isinstance(prediction.probability, float):
+        return (
+            False,
+            f"Probability {prediction.probability} is not a float",
+        )
+    if prediction.probability < 0 or prediction.probability > 1:
+        return (
+            False,
+            f"Probability {prediction.probability} is not between 0 and 1",
+        )
+    """ Turning off homeTeamScore and awayTeamScore validation as it will no longer be needed.
 
     # Check the validity of the scores
     if not isinstance(prediction.homeTeamScore, int):
@@ -518,14 +661,17 @@ def is_match_prediction_valid(
             False,
             f"Away team score {prediction.awayTeamScore} is a negative integer",
         )
+    """
 
     # Check that the prediction response matches the prediction request
     if (
-        str(prediction.matchDate) != str(input_synapse.match_prediction.matchDate)
+        prediction.matchId != input_synapse.match_prediction.matchId
+        or str(prediction.matchDate) != str(input_synapse.match_prediction.matchDate)
         or prediction.sport != input_synapse.match_prediction.sport
         or prediction.league != input_synapse.match_prediction.league
         or prediction.homeTeamName != input_synapse.match_prediction.homeTeamName
         or prediction.awayTeamName != input_synapse.match_prediction.awayTeamName
+        or prediction.closingEdge != input_synapse.match_prediction.closingEdge # closingEdge is not part of the request and should be ignored/None
     ):
         return (
             False,
@@ -533,6 +679,55 @@ def is_match_prediction_valid(
         )
 
     return (True, "")
+
+
+async def post_prediction_edge_results(
+    vali,
+    prediction_edge_results_endpoint,
+    edge_scores,
+    correct_winner_results,
+    prediction_uids,
+    prediction_hotkeys,
+    prediction_sports,
+    prediction_leagues,
+):
+    keypair = vali.dendrite.keypair
+    hotkey = keypair.ss58_address
+    signature = f"0x{keypair.sign(hotkey).hex()}"
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        try:
+            # Post the scoring results back to the api
+            scoring_results = {
+                "scores": edge_scores,
+                "correct_winner_results": correct_winner_results,
+                "uids": prediction_uids,
+                "hotkeys": prediction_hotkeys,
+                "sports": prediction_sports,
+                "leagues": prediction_leagues,
+            }
+            async with ClientSession() as session:
+                async with session.post(
+                    prediction_edge_results_endpoint,
+                    auth=BasicAuth(hotkey, signature),
+                    json=scoring_results,
+                ) as response:
+                    response.raise_for_status()
+                    bt.logging.info("Successfully posted prediction edge results to API.")
+                    return response
+
+        except Exception as e:
+            bt.logging.error(
+                f"Error posting prediction edge results to API, attempt {attempt + 1}: {e}"
+            )
+            if attempt < max_retries - 1:
+                # Wait before retrying
+                await asyncio.sleep(2)
+            else:
+                bt.logging.error(
+                    f"Max retries attempted posting prediction edge results to API. Contact a Sportstensor admin."
+                )
 
 
 async def post_prediction_results(
@@ -584,43 +779,13 @@ async def post_prediction_results(
                 )
 
 
-def get_single_successful_response(
-    responses: List[bt.Synapse], expected_class: Type
-) -> Optional[bt.Synapse]:
-    """Helper function to extract the single response from a list of responses, if the response is valid.
-
-    return: (response, is_valid): The response if it's valid, else None.
-    """
-    if (
-        responses
-        and isinstance(responses, list)
-        and len(responses) == 1
-        and isinstance(responses[0], expected_class)
-        and responses[0].is_success
-    ):
-        return responses[0]
-    return None
-
-
-def get_match_prediction_from_response(
-    response: GetMatchPrediction,
-) -> GetMatchPrediction:
-    """Gets a MatchPrediction from a GetMatchPrediction response."""
-    assert response.is_success
-
-    if not response.match_prediction:
-        raise ValueError("GetMatchPrediction response has no MatchPrediction.")
-
-    return response.match_prediction
-
-
 def redact_scores(responses):
     redacted_responses = []
     for response in responses:
         # Create a copy of the response to avoid modifying the original
         redacted_response = copy.deepcopy(response)
 
-        # Redact the homeTeamScore and awayTeamScore
+        # Redact the homeTeamScore, awayTeamScore, probabilityChoice, and probability fields
         if (
             hasattr(redacted_response.match_prediction, "homeTeamScore")
             and redacted_response.match_prediction.homeTeamScore is not None
@@ -631,6 +796,16 @@ def redact_scores(responses):
             and redacted_response.match_prediction.awayTeamScore is not None
         ):
             redacted_response.match_prediction.awayTeamScore = "REDACTED"
+        if (
+            hasattr(redacted_response.match_prediction, "probabilityChoice")
+            and redacted_response.match_prediction.probabilityChoice is not None
+        ):
+            redacted_response.match_prediction.probabilityChoice = "REDACTED"
+        if (
+            hasattr(redacted_response.match_prediction, "probability")
+            and redacted_response.match_prediction.probability is not None
+        ):
+            redacted_response.match_prediction.probability = "REDACTED"
 
         redacted_responses.append(redacted_response)
     return redacted_responses
