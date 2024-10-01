@@ -48,7 +48,12 @@ def get_matches(all=False):
         cursor = conn.cursor(dictionary=True)
 
         query = """
-            SELECT m.*, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
+            SELECT
+                m.*,
+                o.homeTeamWinOdds as homeTeamOdds,
+                o.awayTeamWinOdds as awayTeamOdds,
+                o.teamDrawOdds as drawOdds,
+                (SELECT COUNT(*) FROM match_odds mo WHERE mo.matchId = m.matchId) AS odds_count
             FROM matches m
             LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
             LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
@@ -81,7 +86,12 @@ def get_upcoming_matches():
         cursor = conn.cursor(dictionary=True)
 
         query = """
-            SELECT m.*, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
+            SELECT
+                m.*,
+                o.homeTeamWinOdds as homeTeamOdds,
+                o.awayTeamWinOdds as awayTeamOdds,
+                o.teamDrawOdds as drawOdds,
+                (SELECT COUNT(*) FROM match_odds mo WHERE mo.matchId = m.matchId) AS odds_count
             FROM matches m
             LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
             LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
