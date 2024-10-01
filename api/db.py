@@ -75,6 +75,39 @@ def get_matches(all=False):
         if conn is not None:
             conn.close()
 
+def get_upcoming_matches():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT m.*, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
+            FROM matches m
+            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+            LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
+        """
+
+        if not all:
+            query += """
+                WHERE m.matchDate BETWEEN NOW() AND NOW() + INTERVAL 48 HOUR
+            """
+        
+        cursor.execute(query)
+        match_list = cursor.fetchall()
+
+        return match_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 def get_match_odds_by_id(match_id):
     try:
         conn = get_db_conn()

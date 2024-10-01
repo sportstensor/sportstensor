@@ -21,7 +21,7 @@ def create_match__odds_id():
 def fetch_and_store_match_odds():
     current_utc_time = datetime.now(timezone.utc)
     current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
-    match_list = db.get_matches(all=True)
+    match_list = db.get_upcoming_matches()
 
     match_data = []
     match_ids = [match.get("matchId") for match in match_list]  # Collect all match IDs
