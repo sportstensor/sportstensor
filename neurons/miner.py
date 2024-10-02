@@ -30,7 +30,7 @@ from st.sport_prediction_model import make_match_prediction
 
 
 class Miner(BaseMinerNeuron):
-    """The Sports Tensor Miner."""
+    """The Sportstensor Miner."""
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
