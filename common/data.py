@@ -240,8 +240,13 @@ class MatchPrediction(Prediction):
         )
     
     def pretty_print(self):
+        league_name = (
+            self.league.name
+            if isinstance(self.league, League)
+            else League(self.league).name
+        )
         return (
-            f"Prediction for {self.league.name} match between {self.homeTeamName} and {self.awayTeamName}.\n"
+            f"Prediction for {league_name} match between {self.homeTeamName} and {self.awayTeamName}.\n"
             f"Predicted winner: {self.get_predicted_team()} with a probability of {self.probability:.2f}.\n"
             f"Match date: {self.matchDate.strftime('%Y-%m-%d %H:%M:%S')}"
         )
