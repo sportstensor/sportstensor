@@ -15,38 +15,59 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import os
 import time
 import traceback
 import typing
+from dotenv import load_dotenv
 import bittensor as bt
 
 import base
 from base.miner import BaseMinerNeuron
 
 from common import constants
-from common.data import League
+from common.data import League, get_league_from_string
 from common.protocol import GetLeagueCommitments, GetMatchPrediction
 from st.sport_prediction_model import make_match_prediction
 
+# Define the path to the miner.env file
+MINER_ENV_PATH = os.path.join(os.path.dirname(__file__), 'miner.env')
 
 class Miner(BaseMinerNeuron):
     """The Sportstensor Miner."""
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
+        self.league_commitments = []
+        self.load_league_commitments()
+
+    def load_league_commitments(self):
+        load_dotenv(dotenv_path=MINER_ENV_PATH, override=True)
+        league_commitments = os.getenv("LEAGUE_COMMITMENTS")
+        leagues_list = league_commitments.split(",")
+        
+        leagues = []
+        for league_string in leagues_list:
+            try:
+                league = get_league_from_string(league_string.strip())
+                leagues.append(league)
+            except ValueError:
+                print(f"Warning: Ignoring invalid league '{league_string}'")
+
+        if not leagues or len(leagues) == 0:
+            bt.logging.error("No leagues found in the environment variable LEAGUE_COMMITMENTS.")
+            self.league_commitments = []
+        else:
+            self.league_commitments = leagues
 
     async def get_league_commitments(self, synapse: GetLeagueCommitments) -> GetLeagueCommitments:
         bt.logging.info(
             f"Received GetLeagueCommitments request in forward() from {synapse.dendrite.hotkey}."
         )
-
-        # Define the leagues you want to commit to making match predictions to.
-        # @TODO: Implement a configuration file to define the leagues. .env?
-        synapse.leagues = [
-            League.MLB,
-            League.EPL,
-            League.NFL
-        ]
+        
+        # Load our league commitments from the environment variable every time we receive a request. Avoids miners having to restart
+        self.load_league_commitments()
+        synapse.leagues = self.league_commitments
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
@@ -65,7 +86,7 @@ class Miner(BaseMinerNeuron):
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
-            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n{synapse.match_prediction}."
+            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n\n{synapse.match_prediction.pretty_print()}."
         )
 
         return synapse
@@ -195,4 +216,5 @@ class Miner(BaseMinerNeuron):
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
+            bt.logging.info(f"Sportstensor Miner running, committed to leagues: {[league.value for league in miner.league_commitments]}")
             time.sleep(60)

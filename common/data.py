@@ -69,12 +69,11 @@ class League(Enum):
         return hash(self.name)
 
 
-def get_league_from_string(league_str: str) -> Optional[League]:
-    """Utility function to get a League enum from a string."""
-    try:
-        return next(league for league in League if league.value == league_str)
-    except StopIteration:
-        return None
+def get_league_from_string(league_string: str) -> League:
+    for league in League:
+        if league_string.upper() == league.name or league_string == league.value:
+            return league
+    raise ValueError(f"Invalid league: {league_string}")
 
 
 class Match(StrictBaseModel):
@@ -238,6 +237,13 @@ class MatchPrediction(Prediction):
             f"homeTeamName={self.homeTeamName}, awayTeamName={self.awayTeamName}, "
             #f"homeTeamScore={self.homeTeamScore}, awayTeamScore={self.awayTeamScore}, "
             f"probabilityChoice={self.probabilityChoice}, probability={self.probability})"
+        )
+    
+    def pretty_print(self):
+        return (
+            f"Prediction for {self.league.name} match between {self.homeTeamName} and {self.awayTeamName}.\n"
+            f"Predicted winner: {self.get_predicted_team()} with a probability of {self.probability:.2f}.\n"
+            f"Match date: {self.matchDate.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
 
