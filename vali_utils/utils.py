@@ -524,7 +524,7 @@ async def send_predictions_to_miners(
             traceback.format_exc(),
         )
         return None
-    
+
 
 def clean_up_unscored_deregistered_match_predictions(active_miner_hotkeys: List[str], active_miner_uids: List[int]):
     """Deletes unscored predictions returned from miners that are no longer registered."""
