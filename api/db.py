@@ -8,6 +8,33 @@ import os
 def generate_uuid():
     return os.urandom(16).hex()
 
+GET_MATCH_QUERY = """
+    SELECT
+        m.matchId,
+        m.matchDate,
+        m.homeTeamName,
+        m.awayTeamName,
+        m.homeTeamScore,
+        m.awayTeamScore,
+        m.matchLeague,
+        m.isComplete,
+        mo.homeTeamOdds,
+        mo.awayTeamOdds,
+        mo.drawOdds,
+        mo.lastUpdated,
+        (SELECT COUNT(*) FROM match_odds mo WHERE mo.matchId = m.matchId) AS odds_count
+    FROM matches m
+    LEFT JOIN (
+        SELECT id, matchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+        FROM match_odds
+        WHERE (matchId, lastUpdated) IN (
+            SELECT matchId, MAX(lastUpdated)
+            FROM match_odds
+            GROUP BY matchId
+        )
+    ) mo ON m.matchId = mo.matchId
+"""
+
 def match_id_exists(match_id):
     try:
         conn = get_db_conn()
@@ -47,17 +74,7 @@ def get_matches(all=False):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
-        query = """
-            SELECT
-                m.*,
-                o.homeTeamWinOdds as homeTeamOdds,
-                o.awayTeamWinOdds as awayTeamOdds,
-                o.teamDrawOdds as drawOdds,
-                (SELECT COUNT(*) FROM match_odds mo WHERE mo.matchId = m.matchId) AS odds_count
-            FROM matches m
-            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
-            LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
-        """
+        query = GET_MATCH_QUERY
 
         if not all:
             query += """
@@ -86,17 +103,9 @@ def get_upcoming_matches():
         cursor = conn.cursor(dictionary=True)
         # Set the current time in UTC
         cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
-        query = """
-            SELECT
-                m.*,
-                o.homeTeamWinOdds as homeTeamOdds,
-                o.awayTeamWinOdds as awayTeamOdds,
-                o.teamDrawOdds as drawOdds,
-                (SELECT COUNT(*) FROM match_odds mo WHERE mo.matchId = m.matchId) AS odds_count
-            FROM matches m
-            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
-            LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
-            WHERE m.matchDate BETWEEN @current_time_utc AND @current_time_utc + INTERVAL 48 HOUR
+
+        query = GET_MATCH_QUERY + """
+           WHERE m.matchDate BETWEEN @current_time_utc AND @current_time_utc + INTERVAL 48 HOUR
         """
 
         cursor.execute(query)
@@ -181,13 +190,10 @@ def get_match_by_id(match_id):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("""
-            SELECT m.*, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
-            FROM matches m
-            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
-            LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
+        query = GET_MATCH_QUERY + """
             WHERE matchId = %s
-        """, (match_id,))
+        """
+        cursor.execute(query, (match_id,))
         match = cursor.fetchone()
 
         return match
@@ -290,97 +296,6 @@ def query_sportsdb_match_lookup(sportsdb_match_id):
         cursor.close()
         conn.close()
 
-def query_match_id_with_odds_data(home_team, away_team, sport_title, commence_time):
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor()
-        mismatch_teams_mapping = {
-            'Orlando City SC': 'Orlando City',
-            'Inter Miami CF': 'Inter Miami',
-            'Atlanta United FC': 'Atlanta United',
-            'Montreal Impact': 'CF Montréal',
-            'D.C. United': 'DC United',
-            'Tottenham Hotspur': 'Tottenham',
-            'Columbus Crew SC': 'Columbus Crew',
-            'Minnesota United FC': 'Minnesota United',
-            'Vancouver Whitecaps FC': 'Vancouver Whitecaps',
-            'Leicester City': 'Leicester',
-            'West Ham United': 'West Ham',
-            'Ipswich Town': 'Ipswich',
-            'Vancouver Whitecaps FC': 'Vancouver Whitecaps',
-            'Brighton and Hove Albion': 'Brighton',
-            'Wolverhampton Wanderers': 'Wolves',
-            'Newcastle United': 'Newcastle',
-            'LA Galaxy': 'L.A. Galaxy'
-        }
-        cursor.execute(
-            "SELECT matchId FROM matches WHERE homeTeamName = %s AND awayTeamName = %s AND Date(matchDate) = Date(%s) AND matchLeague = %s",
-            (mismatch_teams_mapping.get(home_team, home_team), mismatch_teams_mapping.get(away_team, away_team), commence_time, sport_title),
-        )
-        matchId = cursor.fetchone()
-        cursor.fetchall()
-
-        return matchId[0] if matchId else None
-
-    except Exception as e:
-        logging.error("Failed to query oddsAPI in MySQL database", exc_info=True)
-        return None
-    finally:
-        cursor.close()
-        conn.close()
-
-def insert_odds_match_lookup(match_id, oddsapiMatchId):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            """
-            INSERT IGNORE INTO matches_lookup (matchId, oddsapiMatchId) 
-            VALUES (%s, %s)
-            ON DUPLICATE KEY UPDATE
-                oddsapiMatchId=VALUES(oddsapiMatchId)
-            """,
-            (
-                match_id,
-                oddsapiMatchId
-            ),
-        )
-
-        conn.commit()
-        logging.info("Match lookup inserted in database")
-        return True
-
-    except Exception as e:
-        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-def query_all_match_odds(match_ids):
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor()
-        format_strings = ','.join(['%s'] * len(match_ids))  # Create a string for the query
-        cursor.execute(
-            f"""
-                SELECT ml.matchId, o.homeTeamWinOdds as homeTeamOdds, o.awayTeamWinOdds as awayTeamOdds, o.teamDrawOdds as drawOdds
-                FROM matches m
-                LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
-                LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
-                WHERE ml.matchId IN ({format_strings})
-            """, tuple(match_ids)
-        )
-        match_odds = cursor.fetchall()
-        return {match_id: odds for match_id, *odds in match_odds}  # Return a dictionary
-
-    except Exception as e:
-        logging.error(f"Failed to query match odds in MySQL database==>{e}", exc_info=True)
-        return None
-    finally:
-        cursor.close()
-        conn.close()
-
 def insert_match_odds_bulk(match_data):
     try:
         conn = get_db_conn()
@@ -398,33 +313,6 @@ def insert_match_odds_bulk(match_data):
 
     except Exception as e:
         logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-def insert_odds(api_id, sport_title, home_team, away_team, home_team_odds, away_team_odds, draw_odds, commence_time):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        insert_query = """
-        INSERT INTO odds (api_id, sport_title, home_team, away_team, homeTeamWinOdds, awayTeamWinOdds, teamDrawOdds, commence_time)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            homeTeamWinOdds = VALUES(homeTeamWinOdds),
-            awayTeamWinOdds = VALUES(awayTeamWinOdds),
-            teamDrawOdds = VALUES(teamDrawOdds),
-            commence_time = VALUES(commence_time)
-        """
-
-        c.execute(insert_query, (api_id, sport_title, home_team, away_team, home_team_odds, away_team_odds, draw_odds, commence_time))
-
-        conn.commit()
-        logging.info("Odds inserted or updated in database")
-        return True
-
-    except Exception as e:
-        logging.error("Failed to insert odds in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -1150,21 +1038,6 @@ def create_tables():
             matchId VARCHAR(50) PRIMARY KEY,
             sportsdbMatchId VARCHAR(50) DEFAULT NULL,
             oddsapiMatchId VARCHAR(50) DEFAULT NULL
-        )"""
-        )
-
-        c.execute(
-            """
-        CREATE TABLE IF NOT EXISTS odds (
-            api_id VARCHAR(50) PRIMARY KEY,
-            sport_title VARCHAR(50),
-            home_team VARCHAR(30) NOT NULL,
-            away_team VARCHAR(30) NOT NULL,
-            homeTeamWinOdds FLOAT,
-            awayTeamWinOdds FLOAT,
-            teamDrawOdds FLOAT,
-            commence_time TIMESTAMP NOT NULL,
-            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
 
