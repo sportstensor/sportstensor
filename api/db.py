@@ -46,7 +46,7 @@ def get_matches(all=False):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
-
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
         query = """
             SELECT
                 m.*,
@@ -61,7 +61,7 @@ def get_matches(all=False):
 
         if not all:
             query += """
-                WHERE m.matchDate BETWEEN NOW() - INTERVAL 10 DAY AND NOW() + INTERVAL 48 HOUR
+                WHERE m.matchDate BETWEEN @current_time_utc - INTERVAL 10 DAY AND @current_time_utc + INTERVAL 48 HOUR
             """
         
         cursor.execute(query)
@@ -84,7 +84,8 @@ def get_upcoming_matches():
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
-
+        # Set the current time in UTC
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
         query = """
             SELECT
                 m.*,
@@ -95,7 +96,7 @@ def get_upcoming_matches():
             FROM matches m
             LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
             LEFT JOIN odds o ON ml.oddsapiMatchId = o.api_id
-            WHERE m.matchDate BETWEEN NOW() AND NOW() + INTERVAL 48 HOUR
+            WHERE m.matchDate BETWEEN @current_time_utc AND @current_time_utc + INTERVAL 48 HOUR
         """
 
         cursor.execute(query)
