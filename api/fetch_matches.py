@@ -35,7 +35,15 @@ def parse_datetime_with_optional_timezone(timestamp):
                              "Expected format: YYYY-MM-DDTHH:MM:SS[±HHMM] or Unix timestamp.")
 
 
-def create_match_id(home_team, away_team, match_date):
+def create_match_id():
+    # generate a unique uuid for the match. make sure it does not already exist.
+    match_id = db.generate_uuid()
+    while db.match_id_exists(match_id):
+        print(f"Match ID {match_id} already exists. Generating a new one.")
+        match_id = db.generate_uuid()
+    return match_id
+
+def create_match_id_deprecated(home_team, away_team, match_date):
     # Extract the first 10 letters of home and away team names
     home_prefix = home_team.replace(" ", "")[:10]
     away_prefix = away_team.replace(" ", "")[:10]
@@ -112,11 +120,15 @@ def fetch_and_store_events():
 
     try:
         for event in all_events:
-            match_id = create_match_id(
-                event.get("strHomeTeam"),
-                event.get("strAwayTeam"),
-                event.get("strTimestamp"),
-            )
+            event_id = event.get("idEvent")
+
+            # Query the lookup table
+            match_id = db.query_sportsdb_match_lookup(event_id)
+            new_match = False
+            if match_id is None:
+                match_id = create_match_id()
+                new_match = True
+
             status = event.get("strStatus")
             is_complete = (
                 0
@@ -136,17 +148,22 @@ def fetch_and_store_events():
             dbresult = db.insert_match(
                 match_id, event, sport_type, is_complete, current_utc_time
             )
+            if dbresult and new_match:
+                dbresult2 = db.insert_sportsdb_match_lookup(match_id, event_id)
+                if dbresult2:
+                    logging.info(f"Inserted matchId {match_id} and sportsdbMatchId {event_id} lookup into the database")
+
     except Exception as e:
         logging.error("Failed inserting events into the MySQL database", exc_info=True)
 
+if __name__ == "__main__":
+    # Schedule the function to run every 10 minutes
+    schedule.every(10).minutes.do(fetch_and_store_events)
 
-# Schedule the function to run every 10 minutes
-schedule.every(10).minutes.do(fetch_and_store_events)
+    # Initial fetch and store to ensure setup is correct
+    fetch_and_store_events()
 
-# Initial fetch and store to ensure setup is correct
-fetch_and_store_events()
-
-# Run the scheduler in an infinite loop
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+    # Run the scheduler in an infinite loop
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

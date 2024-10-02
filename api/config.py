@@ -23,5 +23,6 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 API_KEYS = os.getenv('API_KEYS')
+ODDS_API_KEY=os.getenv('ODDS_API_KEY')
 
 TESTNET_VALI_HOTKEYS = json.loads(os.environ["TESTNET_VALI_HOTKEYS"])
