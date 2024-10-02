@@ -86,7 +86,7 @@ class Miner(BaseMinerNeuron):
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
-            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n\n{synapse.match_prediction.pretty_print()}."
+            f"Returning MatchPrediction to {synapse.dendrite.hotkey}: \n{synapse.match_prediction.pretty_print()}."
         )
 
         return synapse
