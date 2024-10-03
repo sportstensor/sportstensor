@@ -348,7 +348,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     odds[1],
                     odds[2],
                     odds[3],
-                    odds[4]
+                    dt.datetime.strptime(odds[4], "%Y-%m-%dT%H:%M:%S")
                 ]
             )
 
