@@ -127,7 +127,6 @@ def get_odds_by_match(all_odds, match):
             matching_odds.append(odds)
 
     # Check if there are any matching odds
-    match_odds = matching_odds[0]
     if matching_odds:
         match_odds = matching_odds[0]
         should_update = (match_odds['home_team_odds'] != homeTeamOdds or
