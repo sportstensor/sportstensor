@@ -215,11 +215,6 @@ def calculate_incentives_and_update_scores(vali):
         for index, uid in enumerate(all_uids):
             hotkey = vali.metagraph.hotkeys[uid]
 
-            # Check if miner is committed to this league
-            with vali.uids_to_leagues_lock:
-                if uid not in vali.uids_to_leagues or league not in vali.uids_to_leagues[uid]:
-                    continue  # Miner not committed to this league, keep score as 0
-
             predictions_with_match_data = storage.get_miner_match_predictions(
                 miner_hotkey=hotkey,
                 miner_uid=uid,
