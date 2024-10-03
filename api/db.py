@@ -41,35 +41,6 @@ GET_MATCH_QUERY = """
         )
     ) mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId
 """
-# GET_MATCH_QUERY = """
-#     SELECT
-#         m.matchId,
-#         m.matchDate,
-#         m.homeTeamName,
-#         m.awayTeamName,
-#         m.sport,
-#         m.homeTeamScore,
-#         m.awayTeamScore,
-#         m.matchLeague,
-#         m.isComplete,
-#         mo.homeTeamOdds,
-#         mo.awayTeamOdds,
-#         mo.drawOdds,
-#         mo.lastUpdated,
-#         ml.oddsapiMatchId AS oddsapi_id,
-#         (SELECT COUNT(*) FROM match_odds mo WHERE ml.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count
-#     FROM matches m
-#     LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
-#     LEFT JOIN (
-#         SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
-#         FROM match_odds
-#         WHERE (oddsapiMatchId, lastUpdated) IN (
-#             SELECT oddsapiMatchId, MAX(lastUpdated)
-#             FROM match_odds
-#             GROUP BY oddsapiMatchId 
-#         )
-#     ) mo ON ml.oddsapiMatchId = mo.oddsapiMatchId
-# """
 
 def match_id_exists(match_id):
     try:
