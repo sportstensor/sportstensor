@@ -155,6 +155,7 @@ def fetch_and_store_match_odds():
     match_list = db.get_upcoming_matches()
 
     match_odds_data = []
+    match_lookup_data = []
     
     try:
         for match in match_list:
@@ -163,14 +164,21 @@ def fetch_and_store_match_odds():
             match_odds_id = db.generate_uuid()
             odds, should_update = get_odds_by_match(all_odds, match)  # Get odd for the current match
             if odds and should_update:
-                match_odds_data.append((match_odds_id, match_id, odds['home_team_odds'], odds['away_team_odds'], odds['draw_odds'], current_utc_time))
-        
+                match_odds_data.append((match_odds_id, odds['api_id'], odds['home_team_odds'], odds['away_team_odds'], odds['draw_odds'], current_utc_time))
+                if match.get('oddsapi_id') is None:
+                    match_lookup_data.append((match_id, odds['api_id']))
+
         if match_odds_data:
-            result = db.insert_match_odds_bulk(match_odds_data)
-            if result:
+            result1 = db.insert_match_odds_bulk(match_odds_data)
+            result2 = db.insert_match_lookups_bulk(match_lookup_data)
+            if result1:
                 logging.info(f"Inserted odds data for {len(match_odds_data)} matches into the match odds database")
                 for match_odd in match_odds_data:
-                    logging.info(f"Inserted odds data for {match_odd[1]} matche into the match odds database")
+                    logging.info(f"Inserted odds data {match_odd[1]} into the match odds database")
+            if result2:
+                logging.info(f"Inserted odds data for {len(match_lookup_data)} matches into the match odds database")
+                for match_lookup in match_lookup_data:
+                    logging.info(f"Inserted {match_lookup[0]} match and {match_lookup[1]} odds into the match odds lookup database")
     except Exception as e:
         logging.error("Failed inserting odds data into the MySQL database", exc_info=True)
 

@@ -10,30 +10,36 @@ def generate_uuid():
 
 GET_MATCH_QUERY = """
     SELECT
-        m.matchId,
-        m.matchDate,
-        m.homeTeamName,
-        m.awayTeamName,
-        m.sport,
-        m.homeTeamScore,
-        m.awayTeamScore,
-        m.matchLeague,
-        m.isComplete,
+        mlo.*,
         mo.homeTeamOdds,
         mo.awayTeamOdds,
         mo.drawOdds,
         mo.lastUpdated,
-        (SELECT COUNT(*) FROM match_odds mo WHERE mo.matchId = m.matchId) AS odds_count
-    FROM matches m
+        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count
+    FROM (
+        SELECT
+            m.matchId,
+            m.matchDate,
+            m.homeTeamName,
+            m.awayTeamName,
+            m.sport,
+            m.homeTeamScore,
+            m.awayTeamScore,
+            m.matchLeague,
+            m.isComplete,
+            ml.oddsapiMatchId
+        FROM matches m
+        LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+    ) mlo
     LEFT JOIN (
-        SELECT id, matchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+        SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
         FROM match_odds
-        WHERE (matchId, lastUpdated) IN (
-            SELECT matchId, MAX(lastUpdated)
+        WHERE (oddsapiMatchId, lastUpdated) IN (
+            SELECT oddsapiMatchId, MAX(lastUpdated)
             FROM match_odds
-            GROUP BY matchId
+            GROUP BY oddsapiMatchId 
         )
-    ) mo ON m.matchId = mo.matchId
+    ) mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId
 """
 
 def match_id_exists(match_id):
@@ -79,7 +85,7 @@ def get_matches(all=False):
 
         if not all:
             query += """
-                WHERE m.matchDate BETWEEN @current_time_utc - INTERVAL 10 DAY AND @current_time_utc + INTERVAL 48 HOUR
+                WHERE mlo.matchDate BETWEEN @current_time_utc - INTERVAL 10 DAY AND @current_time_utc + INTERVAL 48 HOUR
             """
         
         cursor.execute(query)
@@ -106,7 +112,7 @@ def get_upcoming_matches():
         cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
 
         query = GET_MATCH_QUERY + """
-           WHERE m.matchDate BETWEEN @current_time_utc AND @current_time_utc + INTERVAL 48 HOUR
+           WHERE mlo.matchDate BETWEEN @current_time_utc AND @current_time_utc + INTERVAL 48 HOUR
         """
 
         cursor.execute(query)
@@ -131,10 +137,11 @@ def get_match_odds_by_id(match_id):
         cursor = conn.cursor(dictionary=True)
         if match_id:
             query = """
-                SELECT m.*
-                FROM match_odds m
-                WHERE m.matchId = %s
-                ORDER BY m.lastUpdated ASC
+                SELECT mo.*, ml.matchId
+                FROM match_odds mo
+                LEFT JOIN matches_lookup ml ON mo.oddsapiMatchId = ml.oddsapiMatchId
+                WHERE ml.matchId = %s
+                ORDER BY mo.lastUpdated ASC
             """
             cursor.execute(query, (match_id,))
             match_odds = cursor.fetchall()
@@ -154,15 +161,16 @@ def get_match_odds_by_id(match_id):
                     ) AS oddsData
                 FROM (
                     SELECT
-                        m.id,
-                        m.matchId,
-                        m.homeTeamOdds,
-                        m.awayTeamOdds,
-                        m.drawOdds,
-                        m.lastUpdated
-                    FROM match_odds m
+                        mo.id,
+                        ml.matchId,
+                        mo.homeTeamOdds,
+                        mo.awayTeamOdds,
+                        mo.drawOdds,
+                        mo.lastUpdated
+                    FROM match_odds mo
+                    LEFT JOIN matches_lookup as ml ON ml.oddsapiMatchId = mo.oddsapiMatchId
                     ORDER BY
-                        m.lastUpdated ASC
+                        mo.lastUpdated ASC
                 ) AS ordered
                 GROUP BY
                     ordered.matchId
@@ -303,10 +311,34 @@ def insert_match_odds_bulk(match_data):
         c = conn.cursor()
         c.executemany(
             """
-            INSERT IGNORE INTO match_odds (id, matchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated) 
+            INSERT IGNORE INTO match_odds (id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated) 
             VALUES (%s, %s, %s, %s, %s, %s)
             """,
             match_data,
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_match_lookups_bulk(match_lookup_data):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO matches_lookup (matchId, oddsapiMatchId) 
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE
+                oddsapiMatchId=VALUES(oddsapiMatchId)
+            """,
+            match_lookup_data,
         )
 
         conn.commit()
@@ -1046,7 +1078,7 @@ def create_tables():
             """
         CREATE TABLE IF NOT EXISTS match_odds (
             id VARCHAR(50) PRIMARY KEY,
-            matchId VARCHAR(50) DEFAULT NULL,
+            oddsapiMatchId VARCHAR(50) DEFAULT NULL,
             homeTeamOdds FLOAT,
             awayTeamOdds FLOAT,
             drawOdds FLOAT,
