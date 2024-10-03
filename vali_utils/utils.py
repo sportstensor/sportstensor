@@ -114,7 +114,7 @@ def sync_match_odds_data(match_odds_data_endpoint: str, matchId: str = None) -> 
                     float(item["homeTeamOdds"]),
                     float(item["awayTeamOdds"]),
                     float(item["drawOdds"]),
-                    item["lastUpdated"]
+                    dt.datetime.strptime(item["lastUpdated"], "%Y-%m-%dT%H:%M:%S")
                 ))
 
         if odds_to_insert:

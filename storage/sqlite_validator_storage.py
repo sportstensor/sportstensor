@@ -338,7 +338,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 )
                 return cursor.fetchone()[0]
             
-    def insert_match_odds(self, match_odds: List[tuple[str, float, float, float, str]]):
+    def insert_match_odds(self, match_odds: List[tuple[str, float, float, float, dt.datetime]]):
         """Stores match odds in the database."""
         values = []
         for odds in match_odds:
@@ -348,7 +348,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     odds[1],
                     odds[2],
                     odds[3],
-                    dt.datetime.strptime(odds[4], "%Y-%m-%dT%H:%M:%S")
+                    odds[4],
                 ]
             )
 

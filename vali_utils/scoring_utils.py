@@ -80,7 +80,7 @@ def calculate_sigma(predictions: List[MatchPredictionWithMatchData]) -> float:
     sigma = average_edge * num_predictions
     return sigma
 
-def calculate_clv(match_odds: List[Tuple[str, float, str]], pwmd: MatchPredictionWithMatchData):
+def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData):
     """
     Calculate the closing line value for this prediction.
 
@@ -99,7 +99,7 @@ def calculate_clv(match_odds: List[Tuple[str, float, str]], pwmd: MatchPredictio
     # clv is the distance between the odds at the time of prediction to the closing odds. Anything above 0 is derived value based on temporal drift of information
     return prediction_odds - pwmd.get_actual_winner_odds()
 
-def find_closest_odds(match_odds: List[Tuple[str, float, float, float, str]], prediction_time: datetime, probability_choice: ProbabilityChoice) -> float:
+def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: ProbabilityChoice) -> float:
     """
     Find the closest odds to the prediction time.
 
@@ -112,7 +112,7 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, str]], pr
     smallest_time_diff = float('inf')
     closest_odds_time = None
 
-    for _, homeTeamOdds, awayTeamOdds, drawOdds, odds_time in match_odds:
+    for _, homeTeamOdds, awayTeamOdds, drawOdds, odds_datetime in match_odds:
         if probability_choice == ProbabilityChoice.HOMETEAM:
             odds = homeTeamOdds
         elif probability_choice == ProbabilityChoice.AWAYTEAM:
@@ -122,8 +122,7 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, str]], pr
 
         if odds is None:
             continue
-
-        odds_datetime = datetime.strptime(odds_time, "%Y-%m-%d %H:%M:%S.%f")
+        
         time_diff = abs((odds_datetime - prediction_time).total_seconds())
 
         if time_diff < smallest_time_diff:

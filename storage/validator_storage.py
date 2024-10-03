@@ -40,7 +40,7 @@ class ValidatorStorage(ABC):
         return NotImplemented
     
     @abstractmethod
-    def insert_match_odds(self, match_odds: List[tuple[str, float, str]]):
+    def insert_match_odds(self, match_odds: List[tuple[str, float, dt.datetime]]):
         """Stores match odds in the database."""
         return NotImplemented
     
