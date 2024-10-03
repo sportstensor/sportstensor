@@ -1,4 +1,6 @@
 import math
+from scipy import stats
+import numpy as np
 import torch
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
@@ -13,10 +15,14 @@ from common.constants import (
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE
 )
 
-# Global constants
-SENSITIVITY_ALPHA = 0.05     # alpha
-TRANSITION_KAPPA = 1.5       # kappa
-EXTREMIS_BETA = 0.1          # beta
+# ALPHA controls how many predictions are needed to start getting rewards.
+SENSITIVITY_ALPHA = 0.025
+# GAMMA controls the time decay of CLV.
+GAMMA = 0.00125
+# KAPPA controls the sharpness of the interchange between CLV and Time.
+TRANSITION_KAPPA = 35
+# BETA controls the ranges that the CLV component lives within.
+EXTREMIS_BETA = 0.25
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, consensus_closing_odds: float) -> Tuple[float, int]:
     """
@@ -48,20 +54,20 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
-def calculate_incentive_score(delta_t: int, z, clv, kappa: float=TRANSITION_KAPPA, beta: float=EXTREMIS_BETA) -> float:
+def calculate_incentive_score(delta_t: int, clv: float, gamma: float=GAMMA, kappa: float=TRANSITION_KAPPA, beta: float=EXTREMIS_BETA) -> float:
     """
     Calculate the incentive score considering time differential and closing line value.
 
     :param delta_t: int, the time differential in minutes
-    :param z: float, the miner's prediction score
     :param clv: float, the miner's closing line value
+    :param gamma: float, the time decay gamma
     :param kappa: float, the transition kappa
     :param beta: float, the extremis beta
     :return: float, the calculated incentive score
     """
-    time_component = math.exp(-delta_t)
+    time_component = math.exp(-gamma * delta_t)
     clv_component = (1 - (2 * beta)) / (1 + math.exp(-kappa * clv)) + beta
-    incentive_score = z * time_component + (1 - time_component) * clv_component
+    incentive_score = time_component + (1 - time_component) * clv_component
     return incentive_score
 
 def calculate_sigma(predictions: List[MatchPredictionWithMatchData]) -> float:
@@ -122,7 +128,7 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
 
         if odds is None:
             continue
-        
+
         time_diff = abs((odds_datetime - prediction_time).total_seconds())
 
         if time_diff < smallest_time_diff:
@@ -140,6 +146,47 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
         bt.logging.info("-" * 50)  # Separator for readability
 
     return closest_odds
+
+def apply_pareto(all_scores: List[float], all_uids: List[int]) -> List[float]:
+    """
+    Apply a Pareto distribution to the scores.
+
+    :param all_scores: List of scores to apply the Pareto distribution to
+    :param all_uids: List of UIDs corresponding to the scores
+    :return: List of scores after applying the Pareto distribution
+    """
+    # Separate non-zero scores and their indices
+    non_zero_scores = []
+    non_zero_indices = []
+    for i, score in enumerate(all_scores):
+        if score > 0:
+            non_zero_scores.append(score)
+            non_zero_indices.append(i)
+
+    pareto_scores = []
+    # Apply Pareto distribution to the non-zero scores
+    if non_zero_scores:
+        # Fit a Pareto distribution to the non-zero scores
+        xmin = min(non_zero_scores)
+        alpha = 1 + len(non_zero_scores) / sum(np.log(np.array(non_zero_scores) / xmin))
+        pareto = stats.pareto(alpha, scale=xmin)
+        
+        # Transform non-zero scores using the Pareto CDF
+        transformed_scores = pareto.cdf(non_zero_scores)
+        
+        # Normalize the transformed scores
+        total_transformed = sum(transformed_scores)
+        normalized_scores = [score / total_transformed for score in transformed_scores]
+
+        # Update pareto_scores with the Pareto-distributed scores
+        pareto_scores = [0.0] * len(all_uids)
+        for i, score in zip(non_zero_indices, normalized_scores):
+            pareto_scores[i] = score
+    else:
+        bt.logging.warning("No non-zero scores to apply Pareto distribution. All scores remain zero.")
+        pareto_scores = [0.0] * len(all_uids)
+
+    return pareto_scores
 
 def calculate_incentives_and_update_scores(vali):
     """
@@ -205,16 +252,13 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.error(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculationg of this prediction.")
                         continue
                 
-                # Calculate our time delta
+                # Calculate our time delta expressed in minutes
                 delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60)
-                # Calculate z, 1 for correct team picked or -1 for incorrect
-                z = 1 if (pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner()) else -1
                 # Calculate closing line value
                 clv = calculate_clv(match_odds, pwmd)
 
                 v = calculate_incentive_score(
                     delta_t=delta_t,
-                    z=z,
                     clv=clv,
                     kappa=TRANSITION_KAPPA, 
                     beta=EXTREMIS_BETA,
@@ -239,10 +283,14 @@ def calculate_incentives_and_update_scores(vali):
     for i in range(len(all_uids)):
         all_scores[i] = sum(league_scores[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
 
+    # Apply Pareto to all scores
+    #final_scores = apply_pareto(all_scores, all_uids)
+    final_scores = all_scores
+    
     # Update our main self.scores, which scatters the scores
     update_miner_scores(
         vali, 
-        torch.FloatTensor(all_scores).to(vali.device),
+        torch.FloatTensor(final_scores).to(vali.device),
         all_uids
     )
 
@@ -283,18 +331,11 @@ def update_miner_scores(vali, rewards: torch.FloatTensor, uids: List[int]):
 
     # Compute forward pass rewards, assumes uids are mutually exclusive.
     # shape: [ metagraph.n ]
-    scattered_rewards: torch.FloatTensor = vali.scores.scatter(
+    vali.scores: torch.FloatTensor = vali.scores.scatter(
         0, uids_tensor, rewards
     ).to(vali.device)
-    bt.logging.debug(f"Scattered rewards: {rewards}")
-
-    # Update scores with rewards produced by this step.
-    # shape: [ metagraph.n ]
-    alpha: float = vali.config.neuron.moving_average_alpha
-    vali.scores: torch.FloatTensor = alpha * scattered_rewards + (
-        1 - alpha
-    ) * vali.scores.to(vali.device)
-    bt.logging.debug(f"Updated moving avg scores: {vali.scores}")
+    bt.logging.debug(f"Scattered rewards. self.scores: {vali.scores}")
+    bt.logging.debug(f"UIDs: {uids_tensor}")
 
 
 if __name__ == "__main__":
