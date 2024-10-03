@@ -14,6 +14,7 @@ GET_MATCH_QUERY = """
         m.matchDate,
         m.homeTeamName,
         m.awayTeamName,
+        m.sport,
         m.homeTeamScore,
         m.awayTeamScore,
         m.matchLeague,
