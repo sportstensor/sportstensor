@@ -47,6 +47,10 @@ from common.constants import (
     ACTIVE_LEAGUES,
     NO_LEAGUE_COMMITMENT_PENALTY,
     LEAGUE_SCORING_PERCENTAGES,
+    SENSITIVITY_ALPHA,
+    GAMMA,
+    TRANSITION_KAPPA,
+    EXTREMIS_BETA,
 )
 import vali_utils.utils as utils
 import vali_utils.scoring_utils as scoring_utils
@@ -93,6 +97,16 @@ class Validator(BaseValidatorNeuron):
         self.load_league_controls_start = dt.datetime.now()
         bt.logging.info(f"Loading league controls from URL: {self.league_controls_url}")
         self.load_league_controls()
+
+        # Load scoring controls from CSV URL
+        self.scoring_controls_url = (
+            "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJcedkDc0c3rijp6gX9eSiq1QDRpMlbiZMywPc3amzznLyiLSOqc6dfbz5Hd18dqPgQVbvp91NSCSE/pub?gid=1135799581&single=true&output=csv"
+            if self.config.subtensor.network == "test"
+            else "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJcedkDc0c3rijp6gX9eSiq1QDRpMlbiZMywPc3amzznLyiLSOqc6dfbz5Hd18dqPgQVbvp91NSCSE/pub?gid=420555119&single=true&output=csv"
+        )
+        self.load_scoring_controls_start = dt.datetime.now()
+        bt.logging.info(f"Loading scoring controls from URL: {self.scoring_controls_url}")
+        self.load_scoring_controls()
 
         api_root = (
             "https://dev-api.sportstensor.com"
@@ -217,6 +231,49 @@ class Validator(BaseValidatorNeuron):
             self.LEAGUE_SCORING_PERCENTAGES = LEAGUE_SCORING_PERCENTAGES
             # Validate the league scoring percentages to make sure we're good.
             self.validate_league_percentages(self.LEAGUE_SCORING_PERCENTAGES)
+
+
+    def load_scoring_controls(self):
+        # get scoring constant controls from CSV URL and load them into our settings
+        try:
+            response = requests.get(self.scoring_controls_url)
+            response.raise_for_status()
+
+            # split the response text into lines
+            lines = response.text.split("\n")
+            
+            # Dictionary to store our constants
+            constants = {}
+
+            # Skip the header row
+            for line in lines[1:]:
+                # Split each line by comma and unpack
+                constant, value, *_ = line.split(',')
+                # Strip any quotation marks and convert value to float
+                constants[constant.strip('"')] = float(value.strip('"'))
+
+            # Set class attributes based on CSV data
+            self.SENSITIVITY_ALPHA = constants.get('SENSITIVITY_ALPHA', SENSITIVITY_ALPHA)
+            self.GAMMA = constants.get('GAMMA', GAMMA)
+            self.TRANSITION_KAPPA = constants.get('TRANSITION_KAPPA', TRANSITION_KAPPA)
+            self.EXTREMIS_BETA = constants.get('EXTREMIS_BETA', EXTREMIS_BETA)
+
+            bt.logging.info("************ Setting scoring controls ************")
+            bt.logging.info(f" SENSITIVITY_ALPHA: {self.SENSITIVITY_ALPHA}")
+            bt.logging.info(f" GAMMA: {self.GAMMA}")
+            bt.logging.info(f" TRANSITION_KAPPA: {self.TRANSITION_KAPPA}")
+            bt.logging.info(f" EXTREMIS_BETA: {self.EXTREMIS_BETA}")
+            bt.logging.info("************************************************")
+
+            bt.logging.info(f"Loaded scoring controls successfully.")
+
+        except Exception as e:
+            bt.logging.error(f"Error loading scoring controls from URL {self.scoring_controls_url}: {e}")
+            bt.logging.info(f"Using fallback control constants.")
+            self.SENSITIVITY_ALPHA = SENSITIVITY_ALPHA
+            self.GAMMA = GAMMA
+            self.TRANSITION_KAPPA = TRANSITION_KAPPA
+            self.EXTREMIS_BETA = EXTREMIS_BETA
 
 
     def new_wandb_run(self):

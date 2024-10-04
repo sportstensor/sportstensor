@@ -210,6 +210,14 @@ class BaseValidatorNeuron(BaseNeuron):
                     self.load_league_controls()
                     self.load_league_controls_start = dt.datetime.now()
 
+                # Check if we should reload the scoring-specific controls.
+                if (dt.datetime.now() - self.load_scoring_controls_start) >= dt.timedelta(
+                    hours=1
+                ):
+                    bt.logging.info("Reloading scoring controls after 1 hour.")
+                    self.load_scoring_controls()
+                    self.load_scoring_controls_start = dt.datetime.now()
+
                 # Sleep for the remaining time in the step.
                 elapsed = time.time() - start_time
                 if elapsed < self.config.neuron.timeout:

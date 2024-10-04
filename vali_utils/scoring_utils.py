@@ -15,15 +15,6 @@ from common.constants import (
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE
 )
 
-# ALPHA controls how many predictions are needed to start getting rewards.
-SENSITIVITY_ALPHA = 0.025
-# GAMMA controls the time decay of CLV.
-GAMMA = 0.00125
-# KAPPA controls the sharpness of the interchange between CLV and Time.
-TRANSITION_KAPPA = 35
-# BETA controls the ranges that the CLV component lives within.
-EXTREMIS_BETA = 0.25
-
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, consensus_closing_odds: float) -> Tuple[float, int]:
     """
     Calculate the edge for a prediction on a two-sided market.
@@ -41,7 +32,7 @@ def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: st
     return reward_punishment * edge, 1 if reward_punishment == 1 else 0
 
 
-def compute_significance_score(num_miner_predictions: int, num_threshold_predictions: int, alpha: float=SENSITIVITY_ALPHA) -> float:
+def compute_significance_score(num_miner_predictions: int, num_threshold_predictions: int, alpha: float) -> float:
     """
     Based on the number of predictions, calculate the statistical signifigance score.
 
@@ -54,7 +45,7 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
-def calculate_incentive_score(delta_t: int, clv: float, gamma: float=GAMMA, kappa: float=TRANSITION_KAPPA, beta: float=EXTREMIS_BETA) -> float:
+def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
     """
     Calculate the incentive score considering time differential and closing line value.
 
@@ -230,7 +221,7 @@ def calculate_incentives_and_update_scores(vali):
             rho = compute_significance_score(
                 num_miner_predictions=len(predictions_with_match_data),
                 num_threshold_predictions=ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league],
-                alpha=SENSITIVITY_ALPHA
+                alpha=vali.SENSITIVITY_ALPHA
             )
             # Calculate sigma
             sigma = calculate_sigma(predictions_with_match_data)
@@ -255,8 +246,9 @@ def calculate_incentives_and_update_scores(vali):
                 v = calculate_incentive_score(
                     delta_t=delta_t,
                     clv=clv,
-                    kappa=TRANSITION_KAPPA, 
-                    beta=EXTREMIS_BETA,
+                    gamma=vali.GAMMA,
+                    kappa=vali.TRANSITION_KAPPA, 
+                    beta=vali.EXTREMIS_BETA,
                 )
                 total_score += v * sigma
 

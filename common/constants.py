@@ -75,3 +75,12 @@ LEAGUE_SCORING_PERCENTAGES = {
     League.MLS: 0.10,
     League.NFL: 0.35
 }
+
+# ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the more predictions needed.
+SENSITIVITY_ALPHA = 0.025
+# GAMMA controls the time decay of CLV. Higher the GAMMA, the faster the decay.
+GAMMA = 0.00125
+# KAPPA controls the sharpness of the interchange between CLV and Time. Higher the KAPPA, the sharper the interchange.
+TRANSITION_KAPPA = 35
+# BETA controls the ranges that the CLV component lives within. Higher the BETA, the tighter the range.
+EXTREMIS_BETA = 0.25
