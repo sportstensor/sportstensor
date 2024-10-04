@@ -504,7 +504,7 @@ async def send_predictions_to_miners(
                     working_miner_uids.append(uid)
                     response.match_prediction.minerId = uid
                     response.match_prediction.hotkey = response.axon.hotkey
-                    response.match_prediction.predictionDate = dt.datetime.now()
+                    response.match_prediction.predictionDate = dt.datetime.now(dt.timezone.utc)
                     finished_responses.append(response)
 
         if len(working_miner_uids) == 0:
@@ -654,6 +654,14 @@ def is_match_prediction_valid(
             f"Away team score {prediction.awayTeamScore} is a negative integer",
         )
     """
+
+    # Check that the current time is before the match date
+    current_time = dt.datetime.now(dt.timezone.utc)
+    if current_time >= prediction.matchDate:
+        return (
+            False,
+            f"Current time {current_time} is not before start of match date {prediction.matchDate}",
+        )
 
     # Check that the prediction response matches the prediction request
     if (
