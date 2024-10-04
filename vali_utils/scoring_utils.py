@@ -244,7 +244,7 @@ def calculate_incentives_and_update_scores(vali):
                     # Try and grab match odds from API
                     match_odds = utils.sync_match_odds_data(vali.match_odds_endpoint, pwmd.prediction.matchId)
                     if match_odds is None:
-                        bt.logging.error(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculationg of this prediction.")
+                        bt.logging.error(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                         continue
                 
                 # Calculate our time delta expressed in minutes
@@ -274,6 +274,10 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.info(f"No non-zero scores for {league.name}")
 
     # Update all_scores with weighted sum of league scores for each miner
+    bt.logging.info("************ Applying leagues scoring percentages to scores ************")
+    for league, percentage in vali.LEAGUE_SCORING_PERCENTAGES.items():
+        bt.logging.info(f"  • {league}: {percentage*100}%")
+    bt.logging.info("*************************************************************")
     all_scores = [0.0] * len(all_uids)
     for i in range(len(all_uids)):
         all_scores[i] = sum(league_scores[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
