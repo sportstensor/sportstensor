@@ -35,7 +35,7 @@ NUM_MINERS_TO_SEND_TO = 20
 MIN_PREDICTION_TIME_THRESHOLD = 60 * 5
 
 # Max number of days in the future for allowable predictions. 
-MAX_PREDICTION_DAYS_THRESHOLD = 2
+MAX_PREDICTION_DAYS_THRESHOLD = 1
 
 # Max number of predictions that can be scored at a time
 MAX_BATCHSIZE_FOR_SCORING = 500

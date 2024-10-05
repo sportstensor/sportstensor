@@ -367,7 +367,7 @@ def get_match_prediction_requests(vali: Validator) -> List[MatchPrediction]:
         # If the match is not in the match_prediction_requests, add it
         if match.matchId not in match_prediction_requests:
             match_prediction_requests[match.matchId] = {
-                '48_hour': False,
+                '24_hour': False,
                 '12_hour': False,
                 '4_hour': False,
                 '10_min': False
@@ -379,7 +379,7 @@ def get_match_prediction_requests(vali: Validator) -> List[MatchPrediction]:
 
         """
         print(f"Match: {match.matchId}, Time until match: {time_until_match}")
-        print(f"48_hour: {match_prediction_requests[match.matchId]['48_hour']}")
+        print(f"24_hour: {match_prediction_requests[match.matchId]['24_hour']}")
         print(f"12_hour: {match_prediction_requests[match.matchId]['12_hour']}")
         print(f"4_hour: {match_prediction_requests[match.matchId]['4_hour']}")
         print(f"10_min: {match_prediction_requests[match.matchId]['10_min']}")
@@ -387,25 +387,11 @@ def get_match_prediction_requests(vali: Validator) -> List[MatchPrediction]:
 
         # Define prediction windows
         prediction_windows = [
-            ('48_hour', timedelta(hours=48), timedelta(hours=47), 'prediction_48_hour'),
+            ('24_hour', timedelta(hours=24), timedelta(hours=23), 'prediction_24_hour'),
             ('12_hour', timedelta(hours=12), timedelta(hours=11), 'prediction_12_hour'),
             ('4_hour', timedelta(hours=4), timedelta(hours=3), 'prediction_4_hour'),
             ('10_min', timedelta(minutes=15), timedelta(minutes=5), 'prediction_10_min')
         ]
-
-        if match.matchId == "2786eecc25d70b5a4091d22364a16a0f":
-            if (not match_prediction_requests[match.matchId]['12_hour']):
-                match_predictions.append(
-                    MatchPrediction(
-                        matchId=match.matchId,
-                        matchDate=str(match.matchDate),
-                        sport=match.sport,
-                        league=match.league,
-                        homeTeamName=match.homeTeamName,
-                        awayTeamName=match.awayTeamName
-                    )
-                )
-                storage.update_match_prediction_request(match.matchId, 'prediction_12_hour')
 
         # Create match predictions for each prediction window, if the match has not been predicted in that window
         for window, upper_bound, lower_bound, update_key in prediction_windows:
@@ -657,10 +643,15 @@ def is_match_prediction_valid(
 
     # Check that the current time is before the match date
     current_time = dt.datetime.now(dt.timezone.utc)
-    if current_time >= prediction.matchDate:
+    # Ensure prediction.matchDate is offset-aware
+    if prediction.matchDate.tzinfo is None:
+        prediction_match_date = prediction.matchDate.replace(tzinfo=dt.timezone.utc)
+    else:
+        prediction_match_date = prediction.matchDate
+    if current_time >= prediction_match_date:
         return (
             False,
-            f"Current time {current_time} is not before start of match date {prediction.matchDate}",
+            f"Current time {current_time} is not before start of match date {prediction_match_date}",
         )
 
     # Check that the prediction response matches the prediction request

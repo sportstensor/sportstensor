@@ -73,7 +73,7 @@ class SqliteValidatorStorage(ValidatorStorage):
     
     MATCHPREDICTIONREQUESTS_TABLE_CREATE = """CREATE TABLE IF NOT EXISTS MatchPredictionRequests (
                             matchId             VARCHAR(50) PRIMARY KEY,
-                            prediction_48_hour  BOOLEAN     DEFAULT FALSE,
+                            prediction_24_hour  BOOLEAN     DEFAULT FALSE,
                             prediction_12_hour  BOOLEAN     DEFAULT FALSE,
                             prediction_4_hour   BOOLEAN     DEFAULT FALSE,
                             prediction_10_min   BOOLEAN     DEFAULT FALSE,
@@ -494,7 +494,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 if matchId:
                     cursor.execute(
                         """
-                        SELECT mpr.matchId, mpr.prediction_48_hour, mpr.prediction_12_hour, mpr.prediction_4_hour, mpr.prediction_10_min
+                        SELECT mpr.matchId, mpr.prediction_24_hour, mpr.prediction_12_hour, mpr.prediction_4_hour, mpr.prediction_10_min
                         FROM MatchPredictionRequests mpr
                         WHERE mpr.matchId = ?
                         """,
@@ -503,7 +503,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     row = cursor.fetchone()
                     if row:
                         return {row[0]: {
-                            '48_hour': bool(row[1]),
+                            '24_hour': bool(row[1]),
                             '12_hour': bool(row[2]),
                             '4_hour': bool(row[3]),
                             '10_min': bool(row[4])
@@ -513,12 +513,12 @@ class SqliteValidatorStorage(ValidatorStorage):
                 else:
                     cursor.execute(
                         """
-                        SELECT mpr.matchId, mpr.prediction_48_hour, mpr.prediction_12_hour, mpr.prediction_4_hour, mpr.prediction_10_min
+                        SELECT mpr.matchId, mpr.prediction_24_hour, mpr.prediction_12_hour, mpr.prediction_4_hour, mpr.prediction_10_min
                         FROM MatchPredictionRequests mpr
                         """
                     )
                     return {row[0]: {
-                        '48_hour': bool(row[1]),
+                        '24_hour': bool(row[1]),
                         '12_hour': bool(row[2]),
                         '4_hour': bool(row[3]),
                         '10_min': bool(row[4])
