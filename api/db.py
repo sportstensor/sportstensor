@@ -27,9 +27,14 @@ GET_MATCH_QUERY = """
             m.awayTeamScore,
             m.matchLeague,
             m.isComplete,
-            ml.oddsapiMatchId
+            odds.oddsapiMatchId
         FROM matches m
-        LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+        LEFT JOIN odds
+        ON
+            m.homeTeamName = odds.homeTeamName AND
+            m.awayTeamName = odds.awayTeamName AND
+            m.matchLeague = odds.league AND
+            Date(m.matchDate) = Date(odds.commence_time)
     ) mlo
     LEFT JOIN (
         SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
@@ -131,16 +136,67 @@ def get_upcoming_matches():
         if conn is not None:
             conn.close()
 
+def get_stored_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        # Set the current time in UTC
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
+
+        query = """
+            SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time
+            FROM (
+                SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+                FROM match_odds
+                WHERE (oddsapiMatchId, lastUpdated) IN (
+                    SELECT oddsapiMatchId, MAX(lastUpdated)
+                    FROM match_odds
+                    GROUP BY oddsapiMatchId 
+                )
+            ) mo
+            LEFT JOIN odds o
+            ON mo.oddsapiMatchId = o.oddsapiMatchId
+        """
+
+        cursor.execute(query)
+        stored_odds = cursor.fetchall()
+
+        return stored_odds
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 def get_match_odds_by_id(match_id):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
         if match_id:
             query = """
-                SELECT mo.*, ml.matchId
+                SELECT mo.*, mlo.matchId
                 FROM match_odds mo
-                LEFT JOIN matches_lookup ml ON mo.oddsapiMatchId = ml.oddsapiMatchId
-                WHERE ml.matchId = %s
+                LEFT JOIN
+                    (
+                        SELECT
+                            m.*,
+                            odds.oddsapiMatchId
+                        FROM matches m
+                        LEFT JOIN odds
+                        ON
+                            m.homeTeamName = odds.homeTeamName AND
+                            m.awayTeamName = odds.awayTeamName AND
+                            m.matchLeague = odds.league AND
+                            Date(m.matchDate) = Date(odds.commence_time)
+                    ) mlo
+                ON mo.oddsapiMatchId = mlo.oddsapiMatchId
+                WHERE mlo.matchId = %s
                 ORDER BY mo.lastUpdated ASC
             """
             cursor.execute(query, (match_id,))
@@ -162,13 +218,26 @@ def get_match_odds_by_id(match_id):
                 FROM (
                     SELECT
                         mo.id,
-                        ml.matchId,
+                        mlo.matchId,
                         mo.homeTeamOdds,
                         mo.awayTeamOdds,
                         mo.drawOdds,
                         mo.lastUpdated
                     FROM match_odds mo
-                    LEFT JOIN matches_lookup as ml ON ml.oddsapiMatchId = mo.oddsapiMatchId
+                    LEFT JOIN
+                        (
+                            SELECT
+                                m.*,
+                                odds.oddsapiMatchId
+                            FROM matches m
+                            LEFT JOIN odds
+                            ON
+                                m.homeTeamName = odds.homeTeamName AND
+                                m.awayTeamName = odds.awayTeamName AND
+                                m.matchLeague = odds.league AND
+                                Date(m.matchDate) = Date(odds.commence_time)
+                        ) mlo
+                    ON mlo.oddsapiMatchId = mo.oddsapiMatchId
                     ORDER BY
                         mo.lastUpdated ASC
                 ) AS ordered
@@ -200,7 +269,7 @@ def get_match_by_id(match_id):
         cursor = conn.cursor(dictionary=True)
 
         query = GET_MATCH_QUERY + """
-            WHERE matchId = %s
+            WHERE mlo.matchId = %s
         """
         cursor.execute(query, (match_id,))
         match = cursor.fetchone()
@@ -346,6 +415,31 @@ def insert_match_lookups_bulk(match_lookup_data):
 
     except Exception as e:
         logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_odds_bulk(odds_to_store):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO odds (oddsapiMatchId, league, homeTeamName, awayTeamName, commence_time, lastUpdated)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                commence_time=VALUES(commence_time),
+                lastUpdated=VALUES(lastUpdated);
+            """,
+            odds_to_store,
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert odds in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -1082,6 +1176,18 @@ def create_tables():
             homeTeamOdds FLOAT,
             awayTeamOdds FLOAT,
             drawOdds FLOAT,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS odds (
+            oddsapiMatchId VARCHAR(50) PRIMARY KEY,
+            league VARCHAR(30) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            commence_time TIMESTAMP NOT NULL,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )

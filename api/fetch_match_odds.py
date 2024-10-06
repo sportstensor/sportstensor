@@ -66,8 +66,8 @@ def fetch_odds():
         for odds in all_odds:
             api_id = odds["id"]  # Get the odds ID
             sport_title = league_mapping.get(odds["sport_title"], odds["sport_title"])
-            home_team = odds["home_team"]
-            away_team = odds["away_team"]
+            home_team = mismatch_teams_mapping.get(odds["home_team"], odds["home_team"])
+            away_team = mismatch_teams_mapping.get(odds["away_team"], odds["away_team"])
             commence_time = odds["commence_time"]
             home_team_odds = None
             away_team_odds = None
@@ -80,9 +80,9 @@ def fetch_odds():
 
                             # Map odds to the correct columns
                             for outcome in outcomes:
-                                if outcome["name"] == home_team:
+                                if outcome["name"] == odds["home_team"]:
                                     home_team_odds = outcome["price"]
-                                elif outcome["name"] == away_team:
+                                elif outcome["name"] == odds["away_team"]:
                                     away_team_odds = outcome["price"]
                                 elif outcome["name"] == "Draw":
                                     draw_odds = outcome["price"]
@@ -103,41 +103,28 @@ def fetch_odds():
         logging.error("Failed getting reduced odds data", exc_info=True)
         return []
 
-def get_odds_by_match(all_odds, match):
-    homeTeamName = match.get("homeTeamName")
-    awayTeamName = match.get("awayTeamName")
-    matchDate = match.get("matchDate")
-    matchLeague = match.get("matchLeague")
-    homeTeamOdds = match.get("homeTeamOdds")
-    awayTeamOdds = match.get("awayTeamOdds")
-    drawOdds = match.get("drawOdds")
-    # Extract just the date part from match_date
-    match_date_only = matchDate.date()
+def check_if_odds_should_be_stored(stored_odds, odds):
+    api_id = odds.get('api_id')
+    home_team_odds = odds.get('home_team_odds')
+    away_team_odds = odds.get('away_team_odds')
+    draw_odds = odds.get('draw_odds')
+    commence_time = odds.get('commence_time')
 
-    matching_odds = []
-
-    for odds in all_odds:
-        # Extract date from commence_time
-        commence_time_only = datetime.strptime(odds["commence_time"], '%Y-%m-%dT%H:%M:%SZ').date()
-
-        if (mismatch_teams_mapping.get(odds["home_team"], odds["home_team"]) == homeTeamName and
-            mismatch_teams_mapping.get(odds["away_team"], odds["away_team"]) == awayTeamName and
-            commence_time_only == match_date_only and
-            odds["sport_title"] == matchLeague):
-            matching_odds.append(odds)
-
-    # Check if there are any matching odds
-    if matching_odds:
-        match_odds = matching_odds[0]
-        should_update = (match_odds['home_team_odds'] != homeTeamOdds or
-                        match_odds['away_team_odds'] != awayTeamOdds or
-                        match_odds['draw_odds'] != drawOdds)
+    # Use a generator expression to find the first matching odds
+    matched_odds = next((item for item in stored_odds if item['oddsapiMatchId'] == api_id), None)
+    if matched_odds:
+        # Check if any of the odds have changed
+        should_update_match_odds = (
+            matched_odds['homeTeamOdds'] != home_team_odds or
+            matched_odds['awayTeamOdds'] != away_team_odds or
+            matched_odds['drawOdds'] != draw_odds
+        )
+        # Check if commence_time has changed
+        should_update_odds = matched_odds['commence_time'] != commence_time
+        return should_update_match_odds, should_update_odds
     else:
-        match_odds = None
-        should_update = False
-
-    return match_odds, should_update
-
+        # If no match found, indicate that new odds should be stored
+        return True, True
 
 def create_match__odds_id():
     # generate a unique uuid for the match. make sure it does not already exist.
@@ -152,39 +139,37 @@ def fetch_and_store_match_odds():
     all_odds = fetch_odds()
     current_utc_time = datetime.now(timezone.utc)
     current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
-    match_list = db.get_upcoming_matches()
-
+    stored_odds = db.get_stored_odds()
     match_odds_data = []
-    match_lookup_data = []
+    odds_to_store = []
     
     try:
-        for match in match_list:
-            match_id = match.get("matchId")
-
+        for odds in all_odds:
             match_odds_id = db.generate_uuid()
-            odds, should_update = get_odds_by_match(all_odds, match)  # Get odd for the current match
-            if odds and should_update:
+            should_update_match_odds, should_update_odds = check_if_odds_should_be_stored(stored_odds, odds)  # Get odd for the current match
+            if should_update_match_odds:
                 match_odds_data.append((match_odds_id, odds['api_id'], odds['home_team_odds'], odds['away_team_odds'], odds['draw_odds'], current_utc_time))
-                if match.get('oddsapi_id') is None:
-                    match_lookup_data.append((match_id, odds['api_id']))
+            if should_update_odds:
+                odds_to_store.append((odds['api_id'], odds['sport_title'], odds['home_team'], odds['away_team'], odds['commence_time'], current_utc_time))
 
         if match_odds_data:
-            result1 = db.insert_match_odds_bulk(match_odds_data)
-            result2 = db.insert_match_lookups_bulk(match_lookup_data)
-            if result1:
+            result = db.insert_match_odds_bulk(match_odds_data)
+            if result:
                 logging.info(f"Inserted odds data for {len(match_odds_data)} matches into the match odds database")
                 for match_odd in match_odds_data:
                     logging.info(f"Inserted odds data {match_odd[1]} into the match odds database")
-            if result2:
-                logging.info(f"Inserted odds data for {len(match_lookup_data)} matches into the match odds database")
-                for match_lookup in match_lookup_data:
-                    logging.info(f"Inserted {match_lookup[0]} match and {match_lookup[1]} odds into the match odds lookup database")
+        if odds_to_store:
+            result = db.insert_odds_bulk(odds_to_store)
+            if result:
+                logging.info(f"Inserted odds data for {len(odds_to_store)} matches into the match odds database")
+                for odds in odds_to_store:
+                    logging.info(f"Inserted {odds[0]} odds for a match(homeTeam: {odds[2]}, awayTeam: {odds[3]}) into the odds database")
     except Exception as e:
         logging.error("Failed inserting odds data into the MySQL database", exc_info=True)
 
 if __name__ == "__main__":
     # Schedule the function to run every 1 minute
-    schedule.every(1).minutes.do(fetch_and_store_match_odds)
+    schedule.every(4).minutes.do(fetch_and_store_match_odds)
 
     # Initial fetch and store to ensure setup is correct
     fetch_and_store_match_odds()
