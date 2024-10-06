@@ -390,7 +390,7 @@ def get_match_prediction_requests(vali: Validator) -> List[MatchPrediction]:
             ('24_hour', timedelta(hours=24), timedelta(hours=23), 'prediction_24_hour'),
             ('12_hour', timedelta(hours=12), timedelta(hours=11), 'prediction_12_hour'),
             ('4_hour', timedelta(hours=4), timedelta(hours=3), 'prediction_4_hour'),
-            ('10_min', timedelta(minutes=15), timedelta(minutes=5), 'prediction_10_min')
+            ('10_min', timedelta(minutes=10), timedelta(minutes=5), 'prediction_10_min')
         ]
 
         # Create match predictions for each prediction window, if the match has not been predicted in that window

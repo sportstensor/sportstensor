@@ -2,6 +2,7 @@ import math
 from scipy import stats
 import numpy as np
 import torch
+import datetime as dt
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
 from tabulate import tabulate
@@ -119,6 +120,13 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
 
         if odds is None:
             continue
+        
+        # Ensure our dates are offset-aware
+        if odds_datetime.tzinfo is None:
+            odds_datetime = odds_datetime.replace(tzinfo=dt.timezone.utc)
+        # Ensure prediction_time is offset-aware
+        if prediction_time.tzinfo is None:
+            prediction_time = prediction_time.replace(tzinfo=dt.timezone.utc)
 
         time_diff = abs((odds_datetime - prediction_time).total_seconds())
 
@@ -239,7 +247,19 @@ def calculate_incentives_and_update_scores(vali):
                         continue
                 
                 # Calculate our time delta expressed in minutes
-                delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60)
+                # Ensure prediction.matchDate is offset-aware
+                if pwmd.prediction.matchDate.tzinfo is None:
+                    match_date = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
+                else:
+                    match_date = pwmd.prediction.matchDate
+                # Ensure prediction.predictionDate is offset-aware
+                if pwmd.prediction.predictionDate.tzinfo is None:
+                    prediction_date = pwmd.prediction.predictionDate.replace(tzinfo=dt.timezone.utc)
+                else:
+                    prediction_date = pwmd.prediction.predictionDate
+
+                # Calculate time delta in minutes    
+                delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
                 # Calculate closing line value
                 clv = calculate_clv(match_odds, pwmd)
 
