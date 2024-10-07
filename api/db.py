@@ -27,14 +27,9 @@ GET_MATCH_QUERY = """
             m.awayTeamScore,
             m.matchLeague,
             m.isComplete,
-            odds.oddsapiMatchId
+            ml.oddsapiMatchId
         FROM matches m
-        LEFT JOIN odds
-        ON
-            m.homeTeamName = odds.homeTeamName AND
-            m.awayTeamName = odds.awayTeamName AND
-            m.matchLeague = odds.league AND
-            Date(m.matchDate) = Date(odds.commence_time)
+        LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
     ) mlo
     LEFT JOIN (
         SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
@@ -136,15 +131,42 @@ def get_upcoming_matches():
         if conn is not None:
             conn.close()
 
+def get_matches_with_no_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT ml.*, m.*
+            FROM matches_lookup ml
+            LEFT JOIN matches m
+            ON ml.matchId = m.matchId
+            WHERE ml.oddsapiMatchId IS NULL
+        """
+
+        cursor.execute(query)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 def get_stored_odds():
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
-        # Set the current time in UTC
-        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
 
         query = """
-            SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time
+            SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
             FROM (
                 SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
                 FROM match_odds
@@ -154,7 +176,7 @@ def get_stored_odds():
                     GROUP BY oddsapiMatchId 
                 )
             ) mo
-            LEFT JOIN odds o
+            INNER JOIN odds o
             ON mo.oddsapiMatchId = o.oddsapiMatchId
         """
 
@@ -180,23 +202,10 @@ def get_match_odds_by_id(match_id):
         cursor = conn.cursor(dictionary=True)
         if match_id:
             query = """
-                SELECT mo.*, mlo.matchId
+                SELECT mo.*, ml.matchId
                 FROM match_odds mo
-                LEFT JOIN
-                    (
-                        SELECT
-                            m.*,
-                            odds.oddsapiMatchId
-                        FROM matches m
-                        LEFT JOIN odds
-                        ON
-                            m.homeTeamName = odds.homeTeamName AND
-                            m.awayTeamName = odds.awayTeamName AND
-                            m.matchLeague = odds.league AND
-                            Date(m.matchDate) = Date(odds.commence_time)
-                    ) mlo
-                ON mo.oddsapiMatchId = mlo.oddsapiMatchId
-                WHERE mlo.matchId = %s
+                LEFT JOIN matches_lookup ml ON mo.oddsapiMatchId = ml.oddsapiMatchId
+                WHERE ml.matchId = %s
                 ORDER BY mo.lastUpdated ASC
             """
             cursor.execute(query, (match_id,))
@@ -218,26 +227,13 @@ def get_match_odds_by_id(match_id):
                 FROM (
                     SELECT
                         mo.id,
-                        mlo.matchId,
+                        ml.matchId,
                         mo.homeTeamOdds,
                         mo.awayTeamOdds,
                         mo.drawOdds,
                         mo.lastUpdated
                     FROM match_odds mo
-                    LEFT JOIN
-                        (
-                            SELECT
-                                m.*,
-                                odds.oddsapiMatchId
-                            FROM matches m
-                            LEFT JOIN odds
-                            ON
-                                m.homeTeamName = odds.homeTeamName AND
-                                m.awayTeamName = odds.awayTeamName AND
-                                m.matchLeague = odds.league AND
-                                Date(m.matchDate) = Date(odds.commence_time)
-                        ) mlo
-                    ON mlo.oddsapiMatchId = mo.oddsapiMatchId
+                    LEFT JOIN matches_lookup as ml ON ml.oddsapiMatchId = mo.oddsapiMatchId
                     ORDER BY
                         mo.lastUpdated ASC
                 ) AS ordered
