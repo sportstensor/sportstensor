@@ -29,7 +29,7 @@ def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: st
     model_prediction_correct = (prediction_team == actual_team)
     reward_punishment = 1 if model_prediction_correct else -1
     
-    edge = (1 / prediction_prob) - consensus_closing_odds
+    edge = consensus_closing_odds - (1 / prediction_prob)
     return reward_punishment * edge, 1 if reward_punishment == 1 else 0
 
 
