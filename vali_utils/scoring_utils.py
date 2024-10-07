@@ -111,9 +111,9 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
     closest_odds_time = None
 
     for _, homeTeamOdds, awayTeamOdds, drawOdds, odds_datetime in match_odds:
-        if probability_choice == ProbabilityChoice.HOMETEAM:
+        if probability_choice == ProbabilityChoice.HOMETEAM or probability_choice == ProbabilityChoice.HOMETEAM.value:
             odds = homeTeamOdds
-        elif probability_choice == ProbabilityChoice.AWAYTEAM:
+        elif probability_choice == ProbabilityChoice.AWAYTEAM or probability_choice == ProbabilityChoice.AWAYTEAM.value:
             odds = awayTeamOdds
         else:
             odds = drawOdds
