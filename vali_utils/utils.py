@@ -568,6 +568,7 @@ def find_and_score_edge_match_predictions(batchsize: int) -> Tuple[List[float], 
         storage.update_match_predictions(predictions)
 
     return [
+        predictions,
         edge_scores,
         correct_winner_results,
         miner_uids,
@@ -721,52 +722,57 @@ async def post_prediction_edge_results(
                 )
 
 
-async def post_prediction_results(
+async def post_scored_predictions(
     vali,
-    prediction_results_endpoint,
-    prediction_scores,
-    correct_winner_results,
-    prediction_rewards_uids,
-    prediction_results_hotkeys,
-    prediction_sports,
-    prediction_leagues,
+    scored_predictions_endpoint,
+    predictions_with_match_data,
 ):
     keypair = vali.dendrite.keypair
     hotkey = keypair.ss58_address
     signature = f"0x{keypair.sign(hotkey).hex()}"
     max_retries = 3
 
+    # Filter down our scored predictions to only those predicted within 10 minutes of the match start
+    predictions = []
+    for pwmd in predictions_with_match_data:
+        # Ensure our dates are offset-aware
+        if pwmd.prediction.matchDate.tzinfo is None:
+            match_datetime = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
+        if pwmd.prediction.predictionDate.tzinfo is None:
+            prediction_datetime = pwmd.prediction.predictionDate.replace(tzinfo=dt.timezone.utc)
+
+        # Filter down our predictions to only those predicted within 10 minutes of the match start
+        if (match_datetime - prediction_datetime).total_seconds() < 600:
+            pwmd.prediction.predictionDate = str(pwmd.prediction.predictionDate) # convert predictionDate to string for serialization
+            pwmd.prediction.matchDate = str(pwmd.prediction.matchDate) # convert matchDate to string for serialization
+            predictions.append(pwmd.prediction)
+
     for attempt in range(max_retries):
         try:
-            # Post the scoring results back to the api
-            scoring_results = {
-                "scores": prediction_scores,
-                "correct_winner_results": correct_winner_results,
-                "uids": prediction_rewards_uids,
-                "hotkeys": prediction_results_hotkeys,
-                "sports": prediction_sports,
-                "leagues": prediction_leagues,
+            # Post the scored predictions back to the api
+            results = {
+                "predictions": predictions,
             }
             async with ClientSession() as session:
                 async with session.post(
-                    prediction_results_endpoint,
+                    scored_predictions_endpoint,
                     auth=BasicAuth(hotkey, signature),
-                    json=scoring_results,
+                    json=results,
                 ) as response:
                     response.raise_for_status()
-                    bt.logging.info("Successfully posted prediction results to API.")
+                    bt.logging.info("Successfully posted scored predictions to API.")
                     return response
 
         except Exception as e:
             bt.logging.error(
-                f"Error posting prediction results to API, attempt {attempt + 1}: {e}"
+                f"Error posting scored predictions to API, attempt {attempt + 1}: {e}"
             )
             if attempt < max_retries - 1:
                 # Wait before retrying
                 await asyncio.sleep(2)
             else:
                 bt.logging.error(
-                    f"Max retries attempted posting prediction results to API. Contact a Sportstensor admin."
+                    f"Max retries attempted posting scored predictions to API. Contact a Sportstensor admin."
                 )
 
 

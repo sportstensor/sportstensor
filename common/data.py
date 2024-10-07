@@ -210,7 +210,6 @@ class MatchPrediction(Prediction):
     probabilityChoice: Optional[ProbabilityChoice]
     probability: Optional[float]
     
-    drawOdds: Optional[float]
     closingEdge: Optional[float]
 
     def get_predicted_team(self) -> str:

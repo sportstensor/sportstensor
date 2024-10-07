@@ -118,6 +118,7 @@ class Validator(BaseValidatorNeuron):
         self.match_odds_endpoint = f"{api_root}/matchOdds"
         self.prediction_results_endpoint = f"{api_root}/predictionResults"
         self.prediction_edge_results_endpoint = f"{api_root}/predictionEdgeResults"
+        self.scored_predictions_endpoint = f"{api_root}/scoredPredictions"
         self.app_prediction_requests_endpoint = f"{api_root}/AppMatchPredictionsForValidators"
         self.app_prediction_responses_endpoint = f"{api_root}/AppMatchPredictionsForValidators"
         
@@ -473,6 +474,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(f"*** Checking if there are predictions to score. ***")
 
             (
+                predictions_with_match_data,
                 edge_scores,
                 correct_winner_results,
                 prediction_miner_uids,
@@ -506,6 +508,13 @@ class Validator(BaseValidatorNeuron):
                     prediction_leagues,
                 )
                 """
+
+                # Post scored predictions to API for storage/analysis
+                post_result = await utils.post_scored_predictions(
+                    self,
+                    self.scored_predictions_endpoint,
+                    predictions_with_match_data,
+                )
 
             else:
                 bt.logging.info("No predictions to score.")
