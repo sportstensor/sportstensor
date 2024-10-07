@@ -131,6 +131,71 @@ def get_upcoming_matches():
         if conn is not None:
             conn.close()
 
+def get_matches_with_no_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT ml.*, m.*
+            FROM matches_lookup ml
+            LEFT JOIN matches m
+            ON ml.matchId = m.matchId
+            WHERE ml.oddsapiMatchId IS NULL
+        """
+
+        cursor.execute(query)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_stored_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+            FROM (
+                SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+                FROM match_odds
+                WHERE (oddsapiMatchId, lastUpdated) IN (
+                    SELECT oddsapiMatchId, MAX(lastUpdated)
+                    FROM match_odds
+                    GROUP BY oddsapiMatchId 
+                )
+            ) mo
+            INNER JOIN odds o
+            ON mo.oddsapiMatchId = o.oddsapiMatchId
+        """
+
+        cursor.execute(query)
+        stored_odds = cursor.fetchall()
+
+        return stored_odds
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 def get_match_odds_by_id(match_id):
     try:
         conn = get_db_conn()
@@ -200,7 +265,7 @@ def get_match_by_id(match_id):
         cursor = conn.cursor(dictionary=True)
 
         query = GET_MATCH_QUERY + """
-            WHERE matchId = %s
+            WHERE mlo.matchId = %s
         """
         cursor.execute(query, (match_id,))
         match = cursor.fetchone()
@@ -346,6 +411,31 @@ def insert_match_lookups_bulk(match_lookup_data):
 
     except Exception as e:
         logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_odds_bulk(odds_to_store):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO odds (oddsapiMatchId, league, homeTeamName, awayTeamName, commence_time, lastUpdated)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                commence_time=VALUES(commence_time),
+                lastUpdated=VALUES(lastUpdated);
+            """,
+            odds_to_store,
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert odds in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -1082,6 +1172,18 @@ def create_tables():
             homeTeamOdds FLOAT,
             awayTeamOdds FLOAT,
             drawOdds FLOAT,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS odds (
+            oddsapiMatchId VARCHAR(50) PRIMARY KEY,
+            league VARCHAR(30) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            commence_time TIMESTAMP NOT NULL,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
