@@ -4,7 +4,8 @@ import numpy as np
 import torch
 import datetime as dt
 from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
+import pytz
+from typing import List, Dict, Tuple, Optional
 from tabulate import tabulate
 
 import bittensor as bt
@@ -95,40 +96,46 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
         return None
 
     # clv is the distance between the odds at the time of prediction to the closing odds. Anything above 0 is derived value based on temporal drift of information
+    bt.logging.debug(f"  • Closing Odds: {pwmd.get_actual_winner_odds()}")
     return prediction_odds - pwmd.get_actual_winner_odds()
 
-def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: ProbabilityChoice) -> float:
+def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: ProbabilityChoice) -> Optional[float]:
     """
-    Find the closest odds to the prediction time.
+    Find the closest odds to the prediction time, ensuring the odds are after the prediction.
 
     :param match_odds: List of tuples (matchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated)
     :param prediction_time: DateTime of the prediction
     :param probability_choice: ProbabilityChoice selection of the prediction
-    :return: The closest odds value, or None if no suitable odds are found
+    :return: The closest odds value after the prediction time, or None if no suitable odds are found
     """
     closest_odds = None
     smallest_time_diff = float('inf')
     closest_odds_time = None
 
+    # Ensure prediction_time is offset-aware
+    if prediction_time.tzinfo is None:
+        prediction_time = prediction_time.replace(tzinfo=pytz.UTC)
+
     for _, homeTeamOdds, awayTeamOdds, drawOdds, odds_datetime in match_odds:
-        if probability_choice == ProbabilityChoice.HOMETEAM or probability_choice == ProbabilityChoice.HOMETEAM.value:
+        # Ensure odds_datetime is offset-aware
+        if odds_datetime.tzinfo is None:
+            odds_datetime = odds_datetime.replace(tzinfo=pytz.UTC)
+
+        # Skip odds that are before or equal to the prediction time
+        if odds_datetime <= prediction_time:
+            continue
+
+        if probability_choice in [ProbabilityChoice.HOMETEAM, ProbabilityChoice.HOMETEAM.value]:
             odds = homeTeamOdds
-        elif probability_choice == ProbabilityChoice.AWAYTEAM or probability_choice == ProbabilityChoice.AWAYTEAM.value:
+        elif probability_choice in [ProbabilityChoice.AWAYTEAM, ProbabilityChoice.AWAYTEAM.value]:
             odds = awayTeamOdds
         else:
             odds = drawOdds
 
         if odds is None:
             continue
-        
-        # Ensure our dates are offset-aware
-        if odds_datetime.tzinfo is None:
-            odds_datetime = odds_datetime.replace(tzinfo=dt.timezone.utc)
-        # Ensure prediction_time is offset-aware
-        if prediction_time.tzinfo is None:
-            prediction_time = prediction_time.replace(tzinfo=dt.timezone.utc)
 
-        time_diff = abs((odds_datetime - prediction_time).total_seconds())
+        time_diff = (odds_datetime - prediction_time).total_seconds()
 
         if time_diff < smallest_time_diff:
             smallest_time_diff = time_diff
@@ -138,11 +145,12 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
     if closest_odds is not None:
         time_diff_readable = str(timedelta(seconds=int(smallest_time_diff)))
         bt.logging.debug(f"  • Prediction Time: {prediction_time}")
-        #bt.logging.debug(f"  • Closest Odds Time: {closest_odds_time}")
-        #bt.logging.debug(f"  • Time Difference: {time_diff_readable}")
+        bt.logging.debug(f"  • Closest Odds Time: {closest_odds_time}")
+        bt.logging.debug(f"  • Time Difference: {time_diff_readable}")
         bt.logging.debug(f"  • Prediction Time Odds: {closest_odds}")
-        #bt.logging.debug(f"  • Probability Choice: {probability_choice}")
-        #bt.logging.info("-" * 50)  # Separator for readability
+        bt.logging.debug(f"  • Probability Choice: {probability_choice}")
+    else:
+        bt.logging.warning(f"No suitable odds found after the prediction time: {prediction_time}")
 
     return closest_odds
 
@@ -269,7 +277,10 @@ def calculate_incentives_and_update_scores(vali):
                 
                 # Calculate closing line value
                 clv = calculate_clv(match_odds, pwmd)
-                bt.logging.debug(f"  • Closing line value: {clv:.4f}")
+                if clv is None:
+                    continue
+                else:
+                    bt.logging.debug(f"  • Closing line value: {clv:.4f}")
 
                 v = calculate_incentive_score(
                     delta_t=delta_t,
