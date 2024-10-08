@@ -1218,7 +1218,7 @@ def create_tables():
        )"""
        )
 
-       c.execute(
+        c.execute(
             """
         CREATE TABLE IF NOT EXISTS MatchPredictionsScored (
             miner_id INTEGER NOT NULL,
