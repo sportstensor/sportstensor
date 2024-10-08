@@ -510,7 +510,7 @@ def upload_prediction_edge_results(prediction_results):
         conn.close()
 
 
-def upload_prediction_results(prediction_results):
+def upload_scored_predictions(predictions, vali_hotkey):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -520,59 +520,89 @@ def upload_prediction_results(prediction_results):
 
         """
         {
-            'scores': prediction_scores,
-            'correct_winner_results': correct_winner_results,
-            'uids': prediction_rewards_uids,
-            'hotkeys': prediction_results_hotkeys,
-            'sports': prediction_sports,
-            'leagues': prediction_leagues
+            [
+                {
+                    'minerId': miner_id,
+                    'hotkey': hotkey,
+                    'predictionDate': prediction_date,
+                    'matchId': match_id,
+                    'matchDate': match_date,
+                    'sport': sport,
+                    'league': league,
+                    'isScored': is_scored,
+                    'scoredDate': scored_date,
+                    'homeTeamName': home_team_name,
+                    'awayTeamName': away_team_name,
+                    'homeTeamScore': home_team_score,
+                    'awayTeamScore': away_team_score,
+                    'probabilityChoice': probability_choice,
+                    'probability': probability,
+                    'closingEdge': closing_edge,
+                },
+            ]
         }
         """
 
         # Prepare the data for executemany
-        data_to_insert = list(
-            zip(
-                prediction_results["hotkeys"],
-                prediction_results["uids"],
-                prediction_results["leagues"],
-                prediction_results["sports"],
-                [1] * len(prediction_results["uids"]),
-                prediction_results["correct_winner_results"],
-                prediction_results["scores"],
+        data_to_insert = [
+            (
+                prediction["minerId"],
+                prediction["hotkey"],
+                vali_hotkey,
+                prediction["predictionDate"],
+                prediction["matchId"],
+                prediction["matchDate"],
+                prediction["sport"],
+                prediction["league"],
+                prediction["isScored"],
+                prediction["scoredDate"],
+                prediction["homeTeamName"],
+                prediction["awayTeamName"],
+                prediction["homeTeamScore"],
+                prediction["awayTeamScore"],
+                prediction["probabilityChoice"],
+                prediction["probability"],
+                prediction["closingEdge"],
             )
-        )
+            for prediction in predictions
+        ]
 
-        prediction_scores_table_name = "MatchPredictionResults"
+        prediction_scores_table_name = "MatchPredictionsScored"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
         c.executemany(
             f"""
-            INSERT INTO {prediction_scores_table_name} (
+            INSERT IGNORE INTO {prediction_scores_table_name} (
+                miner_id,
                 miner_hotkey,
-                miner_uid,
-                league,
+                vali_hotkey,
+                predictionDate,
+                matchId,
+                matchDate,
                 sport,
-                total_predictions,
-                winner_predictions,
-                avg_score,
-                last_updated
+                league,
+                isScored,
+                scoredDate,
+                homeTeamName,
+                awayTeamName,
+                homeTeamScore,
+                awayTeamScore,
+                probabilityChoice,
+                probability,
+                closingEdge,
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, NOW()
-            ) ON DUPLICATE KEY UPDATE
-                total_predictions = total_predictions + VALUES(total_predictions),
-                winner_predictions = winner_predictions + VALUES(winner_predictions),
-                avg_score = ((avg_score * (total_predictions - VALUES(total_predictions))) + (VALUES(avg_score) * VALUES(total_predictions))) / total_predictions,
-                last_updated = NOW();
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            );
             """,
             data_to_insert,
         )
 
         conn.commit()
-        logging.info("Prediction results data inserted or updated in database")
+        logging.info("Scored predictions inserted in database")
         return True
 
     except Exception as e:
-        logging.error("Failed to insert match in MySQL database", exc_info=True)
+        logging.error("Failed to insert scored predictions in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -1185,6 +1215,56 @@ def create_tables():
             awayTeamName VARCHAR(30) NOT NULL,
             commence_time TIMESTAMP NOT NULL,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+       )"""
+       )
+
+       c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MatchPredictionsScored (
+            miner_id INTEGER NOT NULL,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            vali_hotkey VARCHAR(64) NOT NULL,
+            predictionDate TIMESTAMP NOT NULL,
+            matchId VARCHAR(50) NOT NULL,
+            matchDate TIMESTAMP NOT NULL,
+            sport INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            homeTeamScore INTEGER,
+            awayTeamScore INTEGER,
+            probabilityChoice VARCHAR(10) NOT NULL,
+            probability FLOAT NOT NULL,
+            closingEdge FLOAT NOT NULL,
+            isScored BOOLEAN DEFAULT FALSE,
+            scoredDate TIMESTAMP DEFAULT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (miner_hotkey, vali_hotkey, matchId)
+        )"""
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MatchPredictionsScored_test (
+            miner_id INTEGER NOT NULL,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            vali_hotkey VARCHAR(64) NOT NULL,
+            predictionDate TIMESTAMP NOT NULL,
+            matchId VARCHAR(50) NOT NULL,
+            matchDate TIMESTAMP NOT NULL,
+            sport INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            homeTeamScore INTEGER,
+            awayTeamScore INTEGER,
+            probabilityChoice VARCHAR(10) NOT NULL,
+            probability FLOAT NOT NULL,
+            closingEdge FLOAT NOT NULL,
+            isScored BOOLEAN DEFAULT FALSE,
+            scoredDate TIMESTAMP DEFAULT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (miner_hotkey, vali_hotkey, matchId)
         )"""
         )
 

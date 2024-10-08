@@ -416,9 +416,9 @@ async def main():
             logging.error(f"Error posting predictionEdgeResults: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
     
-    @app.post("/predictionResults")
-    async def upload_prediction_results(
-        prediction_results: dict = Body(...),
+    @app.post("/scoredPredictions")
+    async def upload_scored_predictions(
+        predictions: dict = Body(...),
         hotkey: Annotated[str, Depends(get_hotkey)] = None,
     ):
         if not authenticate_with_bittensor(hotkey, metagraph):
@@ -431,19 +431,19 @@ async def main():
         uid = metagraph.hotkeys.index(hotkey)
 
         try:
-            result = db.upload_prediction_results(prediction_results)
+            result = db.upload_scored_predictions(predictions, hotkey)
             if result:
                 return {
-                    "message": "Prediction results uploaded successfully from validator "
+                    "message": "Scored predictions uploaded successfully from validator "
                     + str(uid)
                 }
             else:
                 raise HTTPException(
-                    status_code=500, detail="Failed to upload prediction results from validator "
+                    status_code=500, detail="Failed to upload scored predictions from validator "
                     + str(uid)
                 )
         except Exception as e:
-            logging.error(f"Error posting predictionResults: {e}")
+            logging.error(f"Error posting scoredPredictions: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
 
     @app.get("/predictionResults")
