@@ -2,16 +2,14 @@ from aiohttp import ClientSession, BasicAuth
 import asyncio
 import requests
 import bittensor as bt
-import torch
 import random
 import traceback
-from typing import List, Optional, Tuple, Type, Union
+from typing import List, Optional, Tuple, Dict
 import datetime as dt
 from datetime import timedelta, timezone
-from collections import defaultdict
 import copy
 
-from common.data import Sport, League, Match, MatchPrediction, ProbabilityChoice, get_probablity_choice_from_string
+from common.data import League, Match, MatchPrediction, ProbabilityChoice, get_probablity_choice_from_string
 from common.protocol import GetLeagueCommitments, GetMatchPrediction
 import storage.validator_storage as storage
 from storage.sqlite_validator_storage import SqliteValidatorStorage
@@ -287,118 +285,116 @@ async def send_league_commitments_to_miners(
 ):
     try:
         random.shuffle(miner_uids)
-        axons = [vali.metagraph.axons[uid] for uid in miner_uids]
         
-        responses = await vali.dendrite(
-            # Send the query to selected miner axons in the network.
-            axons=axons,
-            synapse=input_synapse,
-            deserialize=True,
-            timeout=VALIDATOR_TIMEOUT,
-        )
-
-        working_miner_uids = []
-        finished_responses = []
-        uid_league_updates = {}
-        for response in responses:
+        async def process_batch(batch_uids: List[int]):
+            axons = [vali.metagraph.axons[uid] for uid in batch_uids]
             
-            if (
-                response is None
-                or response.leagues is None
-                or response.axon is None
-                or response.axon.hotkey is None
-            ):
-                bt.logging.info(
-                    f"{response.axon.hotkey}: Miner failed to respond to league commitments."
-                )
-                continue
-            else:
-                uid = [
-                    uid
-                    for uid, axon in zip(miner_uids, axons)
-                    if axon.hotkey == response.axon.hotkey
-                ][0]
-                working_miner_uids.append(uid)
-                finished_responses.append(response)
-                # check if the leagues are valid. throw out any invalid leagues
-                valid_leagues = []
-                for league in response.leagues:
-                    if league in League:
-                        valid_leagues.append(league)
-                    else:
+            responses = await vali.dendrite(
+                axons=axons,
+                synapse=input_synapse,
+                deserialize=True,
+                timeout=VALIDATOR_TIMEOUT,
+            )
+
+            working_miner_uids = []
+            finished_responses = []
+            uid_league_updates = {}
+
+            for response, uid in zip(responses, batch_uids):
+                if (
+                    response is None
+                    or response.leagues is None
+                    or response.axon is None
+                    or response.axon.hotkey is None
+                ):
+                    bt.logging.info(
+                        f"UID {uid}: Miner failed to respond to league commitments."
+                    )
+                    continue
+                else:
+                    working_miner_uids.append(uid)
+                    finished_responses.append(response)
+                    valid_leagues = [league for league in response.leagues if league in League]
+                    if len(valid_leagues) != len(response.leagues):
                         bt.logging.info(
-                            f"{response.axon.hotkey}: League {league} is not valid. Throwing out."
+                            f"UID {uid}: Some leagues were invalid and have been filtered out."
                         )
-                uid_league_updates[uid] = valid_leagues
+                    uid_league_updates[uid] = valid_leagues
 
-        if len(working_miner_uids) == 0:
+            return finished_responses, working_miner_uids, uid_league_updates
+
+        all_finished_responses = []
+        all_working_miner_uids = []
+        all_uid_league_updates: Dict[int, List[League]] = {}
+
+        for i in range(0, len(miner_uids), vali.config.neuron.batch_size):
+            batch = miner_uids[i:i+vali.config.neuron.batch_size]
+            finished_responses, working_miner_uids, uid_league_updates = await process_batch(batch)
+            
+            all_finished_responses.extend(finished_responses)
+            all_working_miner_uids.extend(working_miner_uids)
+            all_uid_league_updates.update(uid_league_updates)
+
+        if len(all_working_miner_uids) == 0:
             bt.logging.info("No miner responses available.")
-            return (finished_responses, working_miner_uids)
+            return (all_finished_responses, all_working_miner_uids)
 
-        bt.logging.info(f"Received responses: {responses}")
+        bt.logging.info(f"Received responses from {len(all_working_miner_uids)} miners")
         bt.logging.info(f"Storing miner league commitments to validator storage.")
+        
         # Bulk update of uids_to_leagues
         with vali.uids_to_leagues_lock:
-            for uid, leagues in uid_league_updates.items():
+            for uid, leagues in all_uid_league_updates.items():
                 vali.uids_to_leagues[uid] = leagues
 
-        return
+        return (all_finished_responses, all_working_miner_uids)
 
-    except Exception:
+    except Exception as e:
         bt.logging.error(
-            f"Failed to send predictions to miners and store in validator database.",
+            f"Failed to send predictions to miners and store in validator database: {str(e)}",
             traceback.format_exc(),
         )
         return None
 
 
-def get_match_prediction_requests(vali: Validator) -> List[MatchPrediction]:
-    # Get all eligible matches that can be predicted
+def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction], str]:
     matches = storage.get_matches_to_predict()
     if not matches:
-        return []
+        return [], "No upcoming matches scheduled."
     
     current_time = dt.datetime.now(dt.timezone.utc)
-    # Get all the match prediction request data
     match_prediction_requests = storage.get_match_prediction_requests()
 
     match_predictions = []
+    next_match = None
+    next_match_time = None
+    next_match_window = None
+
+    prediction_windows = [
+        ('24_hour', timedelta(hours=24), timedelta(hours=23), 'prediction_24_hour'),
+        ('12_hour', timedelta(hours=12), timedelta(hours=11), 'prediction_12_hour'),
+        ('4_hour', timedelta(hours=4), timedelta(hours=3), 'prediction_4_hour'),
+        ('10_min', timedelta(minutes=10), timedelta(minutes=5), 'prediction_10_min')
+    ]
+
     for match in matches:
-        # Skip any matches from non-active leagues
         if match.league not in vali.ACTIVE_LEAGUES:
             continue
 
-        # If the match is not in the match_prediction_requests, add it
         if match.matchId not in match_prediction_requests:
-            match_prediction_requests[match.matchId] = {
-                '24_hour': False,
-                '12_hour': False,
-                '4_hour': False,
-                '10_min': False
-            }
+            match_prediction_requests[match.matchId] = {window[0]: False for window in prediction_windows}
 
-        # Calculate the time until the match
         match_date_aware = match.matchDate.replace(tzinfo=timezone.utc)
         time_until_match = match_date_aware - current_time
 
-        """
-        print(f"Match: {match.matchId}, Time until match: {time_until_match}")
-        print(f"24_hour: {match_prediction_requests[match.matchId]['24_hour']}")
-        print(f"12_hour: {match_prediction_requests[match.matchId]['12_hour']}")
-        print(f"4_hour: {match_prediction_requests[match.matchId]['4_hour']}")
-        print(f"10_min: {match_prediction_requests[match.matchId]['10_min']}")
-        """
-
-        # Define prediction windows
-        prediction_windows = [
-            ('24_hour', timedelta(hours=24), timedelta(hours=23), 'prediction_24_hour'),
-            ('12_hour', timedelta(hours=12), timedelta(hours=11), 'prediction_12_hour'),
-            ('4_hour', timedelta(hours=4), timedelta(hours=3), 'prediction_4_hour'),
-            ('10_min', timedelta(minutes=10), timedelta(minutes=5), 'prediction_10_min')
-        ]
-
-        # Create match predictions for each prediction window, if the match has not been predicted in that window
         for window, upper_bound, lower_bound, update_key in prediction_windows:
+            # Check for the next match, regardless of whether it needs a prediction now
+            if time_until_match > lower_bound and (next_match is None or match_date_aware < next_match_time):
+                next_match = match
+                next_match_time = match_date_aware
+                next_match_window = window
+
+            # Check if this match needs a prediction in the current cycle
             if (not match_prediction_requests[match.matchId][window] and
                 upper_bound >= time_until_match > lower_bound):
                 bt.logging.debug(f"Match found in prediction window {window}: {match.awayTeamName} at {match.homeTeamName} on {match.matchDate}")
@@ -414,60 +410,63 @@ def get_match_prediction_requests(vali: Validator) -> List[MatchPrediction]:
                 )
                 storage.update_match_prediction_request(match.matchId, update_key)
                 break  # Only one prediction per match per cycle
-    
-    return match_predictions
+
+    # Prepare next match info string
+    next_match_info = ""
+    if next_match:
+        time_until_next = next_match_time - current_time
+        hours, remainder = divmod(time_until_next.total_seconds(), 3600)
+        minutes, _ = divmod(remainder, 60)
+        
+        window_display = {
+            '24_hour': 'T-24h',
+            '12_hour': 'T-12h',
+            '4_hour': 'T-4h',
+            '10_min': 'T-10m'
+        }
+
+        next_match_info = (
+            f"Next match prediction request: "
+            f"{int(hours)}h {int(minutes)}m | "
+            f"{window_display.get(next_match_window, '?')} | "
+            f"{next_match.homeTeamName} vs {next_match.awayTeamName} "
+            f"({next_match_time.strftime('%Y-%m-%d %H:%M')} UTC) | "
+            f"{next_match.league}"
+        )
+    else:
+        next_match_info = "No upcoming matches scheduled for prediction requests."
+
+    return match_predictions, next_match_info
 
 
 async def send_predictions_to_miners(
     vali: Validator, input_synapse: GetMatchPrediction, miner_uids: List[int]
 ) -> Tuple[List[MatchPrediction], List[int]]:
     try:
-        if IS_DEV:
-            # For now, just return a list of random MatchPrediction responses
-            responses = [
-                GetMatchPrediction(
-                    match_prediction=MatchPrediction(
-                        matchId=input_synapse.match_prediction.matchId,
-                        matchDate=input_synapse.match_prediction.matchDate,
-                        sport=input_synapse.match_prediction.sport,
-                        league=input_synapse.match_prediction.league,
-                        homeTeamName=input_synapse.match_prediction.homeTeamName,
-                        awayTeamName=input_synapse.match_prediction.awayTeamName,
-                        homeTeamScore=random.randint(0, 10),
-                        awayTeamScore=random.randint(0, 10),
-                    )
-                )
-                for uid in miner_uids
-            ]
-        else:
+        random.shuffle(miner_uids)
 
-            random.shuffle(miner_uids)
-            axons = [vali.metagraph.axons[uid] for uid in miner_uids]
+        async def process_batch(batch_uids: List[int]):
+            axons = [vali.metagraph.axons[uid] for uid in batch_uids]
 
             # convert matchDate to string for serialization
             input_synapse.match_prediction.matchDate = str(
                 input_synapse.match_prediction.matchDate
             )
             responses = await vali.dendrite(
-                # Send the query to selected miner axons in the network.
                 axons=axons,
                 synapse=input_synapse,
                 deserialize=True,
                 timeout=VALIDATOR_TIMEOUT,
             )
 
-        working_miner_uids = []
-        finished_responses = []
-        for response in responses:
-            is_prediction_valid, error_msg = is_match_prediction_valid(
-                response.match_prediction,
-                input_synapse,
-            )
-            if IS_DEV:
-                uid = miner_uids.pop(random.randrange(len(miner_uids)))
-                working_miner_uids.append(uid)
-                finished_responses.append(response)
-            else:
+            working_miner_uids = []
+            finished_responses = []
+            
+            for response, uid in zip(responses, batch_uids):
+                is_prediction_valid, error_msg = is_match_prediction_valid(
+                    response.match_prediction,
+                    input_synapse,
+                )
                 if (
                     response is None
                     or response.match_prediction is None
@@ -477,40 +476,49 @@ async def send_predictions_to_miners(
                     or response.axon.hotkey is None
                 ):
                     bt.logging.info(
-                        f"{response.axon.hotkey}: Miner failed to respond with a valid prediction."
+                        f"UID {uid}: Miner failed to respond with a valid prediction."
                     )
                     continue
                 elif not is_prediction_valid:
                     bt.logging.info(
-                        f"{response.axon.hotkey}: Miner prediction failed validation: {error_msg}"
+                        f"UID {uid}: Miner prediction failed validation: {error_msg}"
                     )
                     continue
                 else:
-                    uid = [
-                        uid
-                        for uid, axon in zip(miner_uids, axons)
-                        if axon.hotkey == response.axon.hotkey
-                    ][0]
                     working_miner_uids.append(uid)
                     response.match_prediction.minerId = uid
                     response.match_prediction.hotkey = response.axon.hotkey
                     response.match_prediction.predictionDate = dt.datetime.now(dt.timezone.utc)
                     finished_responses.append(response)
 
-        if len(working_miner_uids) == 0:
-            bt.logging.info("No miner responses available.")
-            return (finished_responses, working_miner_uids)
+            return finished_responses, working_miner_uids
 
-        bt.logging.info(f"Received responses: {redact_scores(responses)}")
+        all_finished_responses = []
+        all_working_miner_uids = []
+
+        for i in range(0, len(miner_uids), vali.config.neuron.batch_size):
+            batch = miner_uids[i:i+vali.config.neuron.batch_size]
+            finished_responses, working_miner_uids = await process_batch(batch)
+            
+            all_finished_responses.extend(finished_responses)
+            all_working_miner_uids.extend(working_miner_uids)
+
+        if len(all_working_miner_uids) == 0:
+            bt.logging.info("No miner responses available.")
+            return (all_finished_responses, all_working_miner_uids)
+
+        bt.logging.info(f"Received responses from {len(all_working_miner_uids)} miners")
+        bt.logging.info(f"Responses: {redact_scores(all_finished_responses)}")
+        
         # store miner predictions in validator database to be scored when applicable
         bt.logging.info(f"Storing predictions in validator database.")
-        storage.insert_match_predictions(finished_responses)
+        storage.insert_match_predictions(all_finished_responses)
 
-        return (finished_responses, working_miner_uids)
+        return (all_finished_responses, all_working_miner_uids)
 
-    except Exception:
+    except Exception as e:
         bt.logging.error(
-            f"Failed to send predictions to miners and store in validator database.",
+            f"Failed to send predictions to miners and store in validator database: {str(e)}",
             traceback.format_exc(),
         )
         return None

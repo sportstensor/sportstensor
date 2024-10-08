@@ -163,7 +163,6 @@ class Validator(BaseValidatorNeuron):
                 except Exception as e:
                     bt.logging.error(f"Error calculating incentives: {str(e)}")
                     bt.logging.error(f"Error details: {traceback.format_exc()}")
-                    #bt.logging.error(f"Error calculating incentives in incentive_scoring_and_set_weights: {e}")
 
                 try:
                     if not self.config.neuron.disable_set_weights and not self.config.offline:
@@ -396,7 +395,7 @@ class Validator(BaseValidatorNeuron):
 
         """ START MATCH PREDICTION REQUESTS """
         # Get prediction requests to send to miners
-        match_prediction_requests = utils.get_match_prediction_requests(self)
+        match_prediction_requests, next_match_request_info = utils.get_match_prediction_requests(self)
 
         if len(match_prediction_requests) > 0:
             # The dendrite client queries the network.
@@ -439,6 +438,7 @@ class Validator(BaseValidatorNeuron):
                     )
         else:
             bt.logging.info("No matches available to send for predictions.")
+            bt.logging.info(f"{next_match_request_info}")
         """ END MATCH PREDICTION REQUESTS """
 
         """ START MATCH PREDICTIONS CLEANUP """
