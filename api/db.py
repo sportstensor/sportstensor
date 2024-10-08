@@ -1137,7 +1137,32 @@ def create_tables():
             isScored BOOLEAN DEFAULT FALSE,
             scoredDate TIMESTAMP DEFAULT NULL,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (miner_hotkey, matchId)
+            PRIMARY KEY (miner_hotkey, vali_hotkey, matchId)
+        )"""
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MatchPredictionsScored_test (
+            miner_id INTEGER NOT NULL,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            vali_hotkey VARCHAR(64) NOT NULL,
+            predictionDate TIMESTAMP NOT NULL,
+            matchId VARCHAR(50) NOT NULL,
+            matchDate TIMESTAMP NOT NULL,
+            sport INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            homeTeamScore INTEGER,
+            awayTeamScore INTEGER,
+            probabilityChoice VARCHAR(10) NOT NULL,
+            probability FLOAT NOT NULL,
+            closingEdge FLOAT NOT NULL,
+            isScored BOOLEAN DEFAULT FALSE,
+            scoredDate TIMESTAMP DEFAULT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (miner_hotkey, vali_hotkey, matchId)
         )"""
         )
 
