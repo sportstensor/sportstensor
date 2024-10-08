@@ -73,31 +73,33 @@ def fetch_odds():
             home_team_odds = None
             away_team_odds = None
             draw_odds = None
-            for bookmaker in odds["bookmakers"]:
-                if bookmaker["key"] == "pinnacle":
-                    for market in bookmaker["markets"]:
-                        if market["key"] == "h2h":
-                            outcomes = market["outcomes"]
+            if odds["bookmakers"]:
+                for bookmaker in odds["bookmakers"]:
+                    if bookmaker["key"] == "pinnacle":
+                        for market in bookmaker["markets"]:
+                            if market["key"] == "h2h":
+                                outcomes = market["outcomes"]
 
-                            # Map odds to the correct columns
-                            for outcome in outcomes:
-                                if outcome["name"] == odds["home_team"]:
-                                    home_team_odds = outcome["price"]
-                                elif outcome["name"] == odds["away_team"]:
-                                    away_team_odds = outcome["price"]
-                                elif outcome["name"] == "Draw":
-                                    draw_odds = outcome["price"]
-            
-            reduced_odds.append({
-                "api_id": api_id,
-                "sport_title": sport_title,
-                "home_team": home_team,
-                "away_team": away_team,
-                "home_team_odds": home_team_odds,
-                "away_team_odds": away_team_odds,
-                "draw_odds": draw_odds,
-                "commence_time": commence_time
-            })
+                                # Map odds to the correct columns
+                                for outcome in outcomes:
+                                    if outcome["name"] == odds["home_team"]:
+                                        home_team_odds = outcome["price"]
+                                    elif outcome["name"] == odds["away_team"]:
+                                        away_team_odds = outcome["price"]
+                                    elif outcome["name"] == "Draw":
+                                        draw_odds = outcome["price"]
+
+                # Append the odds directly since they will not be None
+                reduced_odds.append({
+                    "api_id": api_id,
+                    "sport_title": sport_title,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "home_team_odds": home_team_odds,
+                    "away_team_odds": away_team_odds,
+                    "draw_odds": draw_odds,
+                    "commence_time": commence_time
+                })
         return reduced_odds
 
     except Exception as e:
