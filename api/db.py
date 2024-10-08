@@ -1215,10 +1215,10 @@ def create_tables():
             awayTeamName VARCHAR(30) NOT NULL,
             commence_time TIMESTAMP NOT NULL,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-       )"""
-       )
+        )"""
+        )
 
-       c.execute(
+        c.execute(
             """
         CREATE TABLE IF NOT EXISTS MatchPredictionsScored (
             miner_id INTEGER NOT NULL,
