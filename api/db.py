@@ -517,52 +517,35 @@ def upload_scored_predictions(predictions, vali_hotkey):
 
         current_utc_time = dt.datetime.now(timezone.utc)
         current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        print(f"Content of predictions: {predictions}")
 
-        """
-        {
-            [
-                {
-                    'minerId': miner_id,
-                    'hotkey': hotkey,
-                    'predictionDate': prediction_date,
-                    'matchId': match_id,
-                    'matchDate': match_date,
-                    'sport': sport,
-                    'league': league,
-                    'isScored': is_scored,
-                    'scoredDate': scored_date,
-                    'homeTeamName': home_team_name,
-                    'awayTeamName': away_team_name,
-                    'homeTeamScore': home_team_score,
-                    'awayTeamScore': away_team_score,
-                    'probabilityChoice': probability_choice,
-                    'probability': probability,
-                    'closingEdge': closing_edge,
-                },
-            ]
-        }
-        """
+        predictions = predictions.get('predictions', [])
+
+        # Ensure predictions is a list
+        if not isinstance(predictions, list):
+            raise ValueError("predictions must be a list of dictionaries")
 
         # Prepare the data for executemany
         data_to_insert = [
             (
-                prediction["minerId"],
-                prediction["hotkey"],
+                int(prediction.get("minerId")),
+                prediction.get("hotkey"),
                 vali_hotkey,
-                prediction["predictionDate"],
-                prediction["matchId"],
-                prediction["matchDate"],
-                prediction["sport"],
-                prediction["league"],
-                prediction["isScored"],
-                prediction["scoredDate"],
-                prediction["homeTeamName"],
-                prediction["awayTeamName"],
-                prediction["homeTeamScore"],
-                prediction["awayTeamScore"],
-                prediction["probabilityChoice"],
-                prediction["probability"],
-                prediction["closingEdge"],
+                prediction.get("predictionDate"),
+                prediction.get("matchId"),
+                prediction.get("matchDate"),
+                int(prediction.get("sport")),
+                prediction.get("league"),
+                1,
+                current_utc_time,
+                prediction.get("homeTeamName"),
+                prediction.get("awayTeamName"),
+                prediction.get("homeTeamScore"),
+                prediction.get("awayTeamScore"),
+                prediction.get("probabilityChoice"),
+                float(prediction.get("probability")),
+                float(prediction.get("closingEdge")) if prediction.get("closingEdge") is not None else None,
             )
             for prediction in predictions
         ]
@@ -589,7 +572,7 @@ def upload_scored_predictions(predictions, vali_hotkey):
                 awayTeamScore,
                 probabilityChoice,
                 probability,
-                closingEdge,
+                closingEdge
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             );

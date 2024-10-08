@@ -474,7 +474,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(f"*** Checking if there are predictions to score. ***")
 
             (
-                predictions_with_match_data,
+                predictions,
                 edge_scores,
                 correct_winner_results,
                 prediction_miner_uids,
@@ -484,10 +484,10 @@ class Validator(BaseValidatorNeuron):
 
             if len(edge_scores) > 0:
                 bt.logging.info(
-                    f"Scoring (calculating CLV Edge) {len(prediction_miner_uids)} predictions for miners {prediction_miner_uids}."
+                    f"Scoring (calculating Closing Edge) {len(prediction_miner_uids)} predictions for miners {prediction_miner_uids}."
                 )
                 bt.logging.info(
-                    f"CLV Edge scores: {edge_scores}"
+                    f"Closing Edge scores: {edge_scores}"
                 )
 
                 # Get hotkeys associated with returned prediction reward uids
@@ -513,7 +513,7 @@ class Validator(BaseValidatorNeuron):
                 post_result = await utils.post_scored_predictions(
                     self,
                     self.scored_predictions_endpoint,
-                    predictions_with_match_data,
+                    predictions,
                 )
 
             else:

@@ -535,7 +535,7 @@ def archive_deregistered_match_predictions(active_miner_hotkeys: List[str], acti
 def find_and_score_edge_match_predictions(batchsize: int) -> Tuple[List[float], List[int], List[int], List[str], List[str]]:
     """Query the validator's local storage for a list of qualifying MatchPredictions that can be scored.
 
-    Then run CLV Edge calculations and return results
+    Then run Closing Edge calculations and return results
     """
 
     # Query for scorable match predictions with actual match data
@@ -551,7 +551,7 @@ def find_and_score_edge_match_predictions(batchsize: int) -> Tuple[List[float], 
         prediction = pwmd.prediction
         uid = prediction.minerId
 
-        # Calculate the CLV Edge for the prediction
+        # Calculate the Closing Edge for the prediction
         edge, correct_winner_score = scoring_utils.calculate_edge(
             prediction_team=prediction.get_predicted_team(),
             prediction_prob=prediction.probability,
@@ -729,7 +729,7 @@ async def post_prediction_edge_results(
 async def post_scored_predictions(
     vali,
     scored_predictions_endpoint,
-    predictions_with_match_data,
+    predictions,
 ):
     keypair = vali.dendrite.keypair
     hotkey = keypair.ss58_address
@@ -737,25 +737,29 @@ async def post_scored_predictions(
     max_retries = 3
 
     # Filter down our scored predictions to only those predicted within 10 minutes of the match start
-    predictions = []
-    for pwmd in predictions_with_match_data:
+    filtered_predictions = []
+    for prediction in predictions:
         # Ensure our dates are offset-aware
-        if pwmd.prediction.matchDate.tzinfo is None:
-            match_datetime = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
-        if pwmd.prediction.predictionDate.tzinfo is None:
-            prediction_datetime = pwmd.prediction.predictionDate.replace(tzinfo=dt.timezone.utc)
+        match_datetime = prediction.matchDate
+        if prediction.matchDate.tzinfo is None:
+            match_datetime = prediction.matchDate.replace(tzinfo=dt.timezone.utc)
+        prediction_datetime = prediction.predictionDate
+        if prediction.predictionDate.tzinfo is None:
+            prediction_datetime = prediction.predictionDate.replace(tzinfo=dt.timezone.utc)
 
         # Filter down our predictions to only those predicted within 10 minutes of the match start
         if (match_datetime - prediction_datetime).total_seconds() < 600:
-            pwmd.prediction.predictionDate = str(pwmd.prediction.predictionDate) # convert predictionDate to string for serialization
-            pwmd.prediction.matchDate = str(pwmd.prediction.matchDate) # convert matchDate to string for serialization
-            predictions.append(pwmd.prediction)
+            prediction_dict = prediction.__dict__
+            prediction_dict["predictionDate"] = str(prediction_dict["predictionDate"]) # convert predictionDate to string for serialization
+            prediction_dict["matchDate"] = str(prediction_dict["matchDate"]) # convert matchDate to string for serialization
+            prediction_dict["scoredDate"] = str(prediction_dict["scoredDate"]) # convert scoredDate to string for serialization
+            filtered_predictions.append(prediction_dict)
 
     for attempt in range(max_retries):
         try:
             # Post the scored predictions back to the api
             results = {
-                "predictions": predictions,
+                "predictions": filtered_predictions,
             }
             async with ClientSession() as session:
                 async with session.post(
