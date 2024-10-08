@@ -111,9 +111,9 @@ def sync_match_odds_data(match_odds_data_endpoint: str, matchId: str = None) -> 
             if not storage.check_match_odds(item["matchId"]):
                 odds_to_insert.append((
                     item["matchId"],
-                    float(item["homeTeamOdds"]),
-                    float(item["awayTeamOdds"]),
-                    float(item["drawOdds"]),
+                    float(item.get("homeTeamOdds", 0) or 0),
+                    float(item.get("awayTeamOdds", 0) or 0),
+                    float(item.get("drawOdds", 0) or 0),
                     dt.datetime.strptime(item["lastUpdated"], "%Y-%m-%dT%H:%M:%S")
                 ))
 
@@ -122,6 +122,10 @@ def sync_match_odds_data(match_odds_data_endpoint: str, matchId: str = None) -> 
             bt.logging.info(f"Inserted {len(odds_to_insert)} odds for matches.")
 
         return odds_to_insert
+
+    except ValueError as e:
+        bt.logging.error(f"Error processing odds data: {e}")
+        return None
 
     except requests.RequestException as e:
         bt.logging.error(f"Error getting odds data: {e}")

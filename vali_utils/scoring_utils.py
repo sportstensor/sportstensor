@@ -29,7 +29,7 @@ def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: st
     model_prediction_correct = (prediction_team == actual_team)
     reward_punishment = 1 if model_prediction_correct else -1
     
-    edge = (1 / prediction_prob) - consensus_closing_odds
+    edge = consensus_closing_odds - (1 / prediction_prob)
     return reward_punishment * edge, 1 if reward_punishment == 1 else 0
 
 
@@ -111,9 +111,9 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
     closest_odds_time = None
 
     for _, homeTeamOdds, awayTeamOdds, drawOdds, odds_datetime in match_odds:
-        if probability_choice == ProbabilityChoice.HOMETEAM:
+        if probability_choice == ProbabilityChoice.HOMETEAM or probability_choice == ProbabilityChoice.HOMETEAM.value:
             odds = homeTeamOdds
-        elif probability_choice == ProbabilityChoice.AWAYTEAM:
+        elif probability_choice == ProbabilityChoice.AWAYTEAM or probability_choice == ProbabilityChoice.AWAYTEAM.value:
             odds = awayTeamOdds
         else:
             odds = drawOdds
@@ -137,12 +137,12 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
 
     if closest_odds is not None:
         time_diff_readable = str(timedelta(seconds=int(smallest_time_diff)))
-        bt.logging.info(f"Prediction Time: {prediction_time}")
-        bt.logging.info(f"Closest Odds Time: {closest_odds_time}")
-        bt.logging.info(f"Time Difference: {time_diff_readable}")
-        bt.logging.info(f"Chosen Odds: {closest_odds}")
-        bt.logging.info(f"Probability Choice: {probability_choice}")
-        bt.logging.info("-" * 50)  # Separator for readability
+        bt.logging.debug(f"  • Prediction Time: {prediction_time}")
+        #bt.logging.debug(f"  • Closest Odds Time: {closest_odds_time}")
+        #bt.logging.debug(f"  • Time Difference: {time_diff_readable}")
+        bt.logging.debug(f"  • Prediction Time Odds: {closest_odds}")
+        #bt.logging.debug(f"  • Probability Choice: {probability_choice}")
+        #bt.logging.info("-" * 50)  # Separator for readability
 
     return closest_odds
 
@@ -234,6 +234,11 @@ def calculate_incentives_and_update_scores(vali):
             # Calculate sigma
             sigma = calculate_sigma(predictions_with_match_data)
 
+            bt.logging.debug(f"Scoring predictions for miner {uid} in league {league.name}:")
+            bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
+            bt.logging.debug(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
+            bt.logging.debug(f"  • Rho: {rho:.4f}")
+            bt.logging.debug(f"  • Sigma: {sigma:.4f}")
             total_score = 0
             for pwmd in predictions_with_match_data:
                 # Grab the match odds from local db
@@ -260,8 +265,11 @@ def calculate_incentives_and_update_scores(vali):
 
                 # Calculate time delta in minutes    
                 delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
+                bt.logging.debug(f"  • Time delta: {delta_t:.4f}")
+                
                 # Calculate closing line value
                 clv = calculate_clv(match_odds, pwmd)
+                bt.logging.debug(f"  • Closing line value: {clv:.4f}")
 
                 v = calculate_incentive_score(
                     delta_t=delta_t,
@@ -270,10 +278,15 @@ def calculate_incentives_and_update_scores(vali):
                     kappa=vali.TRANSITION_KAPPA, 
                     beta=vali.EXTREMIS_BETA,
                 )
+                bt.logging.debug(f"  • Incentive score (v): {v:.4f}")
                 total_score += v * sigma
+                bt.logging.debug(f"  • Total score: {total_score:.4f}")
+                bt.logging.debug("-" * 50)
 
             final_score = rho * total_score
             league_scores[league][index] = final_score
+            bt.logging.debug(f"  • Final score: {final_score:.4f}")
+            bt.logging.debug("-" * 50)
 
             if final_score > 0:
                 league_table_data.append([uid, final_score])
