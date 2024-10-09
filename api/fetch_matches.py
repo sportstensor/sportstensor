@@ -57,9 +57,9 @@ def create_match_id_deprecated(home_team, away_team, match_date):
 
 def fetch_and_store_events():
     api_endpoints_url = (
-        "https://docs.google.com/spreadsheets/d/e/2PACX-1vTHtmeoWU0e7YqyDBtcSxsE-ocUG-ciPaLX4dZyQDkGQWxnth6GltLiO1a8uInq9nmRSpOSfyg2I45K/pub?gid=1997764475&single=true&output=csv"
+        "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJcedkDc0c3rijp6gX9eSiq1QDRpMlbiZMywPc3amzznLyiLSOqc6dfbz5Hd18dqPgQVbvp91NSCSE/pub?gid=1997764475&single=true&output=csv"
         if NETWORK == "test"
-        else "https://docs.google.com/spreadsheets/d/e/2PACX-1vTHtmeoWU0e7YqyDBtcSxsE-ocUG-ciPaLX4dZyQDkGQWxnth6GltLiO1a8uInq9nmRSpOSfyg2I45K/pub?gid=0&single=true&output=csv"
+        else "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJcedkDc0c3rijp6gX9eSiq1QDRpMlbiZMywPc3amzznLyiLSOqc6dfbz5Hd18dqPgQVbvp91NSCSE/pub?gid=0&single=true&output=csv"
     )
 
     # get event API endpoints from CSV URL and load them into our urls list
@@ -71,9 +71,9 @@ def fetch_and_store_events():
         lines = response.text.split("\n")
         # filter the lines to include only those where column C is "Active"
         urls = [
-            line.split(",")[0].strip()
-            for line in lines
-            if line.split(",")[2].strip() == "Active"
+            line.split(",")[4].strip()
+            for line in lines[1:]
+            if line.split(",")[5].strip() == "Active"
         ]
         logging.info(f"Loaded {len(urls)} API endpoints from {api_endpoints_url}")
 
