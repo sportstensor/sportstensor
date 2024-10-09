@@ -71,9 +71,9 @@ def fetch_and_store_events():
         lines = response.text.split("\n")
         # filter the lines to include only those where column C is "Active"
         urls = [
-            line.split(",")[3].strip()
+            line.split(",")[4].strip()
             for line in lines[1:]
-            if line.split(",")[2].strip() == "Active"
+            if line.split(",")[5].strip() == "Active"
         ]
         logging.info(f"Loaded {len(urls)} API endpoints from {api_endpoints_url}")
 
