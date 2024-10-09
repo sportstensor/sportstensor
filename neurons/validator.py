@@ -47,10 +47,13 @@ from common.constants import (
     ACTIVE_LEAGUES,
     NO_LEAGUE_COMMITMENT_PENALTY,
     LEAGUE_SCORING_PERCENTAGES,
+    ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     SENSITIVITY_ALPHA,
     GAMMA,
     TRANSITION_KAPPA,
     EXTREMIS_BETA,
+    PARETO_XMIN,
+    PARETO_ALPHA,
 )
 import vali_utils.utils as utils
 import vali_utils.scoring_utils as scoring_utils
@@ -199,16 +202,24 @@ class Validator(BaseValidatorNeuron):
             active_leagues = [
                 line.split(",")[0].strip()
                 for line in lines[1:]
-                if line.split(",")[2].strip() == "Active"
+                if line.split(",")[3].strip() == "Active"
             ]
             active_league_percentages = [
                 float(line.split(",")[1].strip())
                 for line in lines[1:]
-                if line.split(",")[2].strip() == "Active"
+                if line.split(",")[3].strip() == "Active"
+            ]
+            active_league_rolling_thresholds = [
+                int(line.split(",")[2].strip())
+                for line in lines[1:]
+                if line.split(",")[3].strip() == "Active"
             ]
             self.ACTIVE_LEAGUES = [get_league_from_string(league) for league in active_leagues]
             self.LEAGUE_SCORING_PERCENTAGES = {
                 get_league_from_string(league): percentage for league, percentage in zip(active_leagues, active_league_percentages)
+            }
+            self.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
+                get_league_from_string(league): rolling_threshold for league, rolling_threshold in zip(active_leagues, active_league_rolling_thresholds)
             }
             bt.logging.info("************ Setting active leagues ************")
             for league in self.ACTIVE_LEAGUES:
@@ -220,6 +231,11 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.info(f"  • {league}: {percentage*100}%")
             bt.logging.info("*************************************************************")
 
+            bt.logging.info("************ Setting leagues rolling prediction thresholds ************")
+            for league, rolling_threshold in self.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE.items():
+                bt.logging.info(f"  • {league}: {rolling_threshold}")
+            bt.logging.info("*************************************************************")
+
             # Validate the league scoring percentages to make sure we're good.
             self.validate_league_percentages(self.LEAGUE_SCORING_PERCENTAGES)
             bt.logging.info(f"Loaded league controls successfully.")
@@ -228,9 +244,11 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Error loading league controls from URL {self.league_controls_url}: {e}")
             bt.logging.info(f"Using fallback control constants.")
             self.ACTIVE_LEAGUES = ACTIVE_LEAGUES
+            self.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE
             self.LEAGUE_SCORING_PERCENTAGES = LEAGUE_SCORING_PERCENTAGES
             # Validate the league scoring percentages to make sure we're good.
             self.validate_league_percentages(self.LEAGUE_SCORING_PERCENTAGES)
+            
 
 
     def load_scoring_controls(self):
@@ -257,12 +275,16 @@ class Validator(BaseValidatorNeuron):
             self.GAMMA = constants.get('GAMMA', GAMMA)
             self.TRANSITION_KAPPA = constants.get('TRANSITION_KAPPA', TRANSITION_KAPPA)
             self.EXTREMIS_BETA = constants.get('EXTREMIS_BETA', EXTREMIS_BETA)
+            self.PARETO_XMIN = constants.get('PARETO_XMIN', PARETO_XMIN)
+            self.PARETO_ALPHA = constants.get('PARETO_ALPHA', PARETO_ALPHA)
 
             bt.logging.info("************ Setting scoring controls ************")
             bt.logging.info(f" SENSITIVITY_ALPHA: {self.SENSITIVITY_ALPHA}")
             bt.logging.info(f" GAMMA: {self.GAMMA}")
             bt.logging.info(f" TRANSITION_KAPPA: {self.TRANSITION_KAPPA}")
             bt.logging.info(f" EXTREMIS_BETA: {self.EXTREMIS_BETA}")
+            bt.logging.info(f" PARETO_XMIN: {self.PARETO_XMIN}")
+            bt.logging.info(f" PARETO_ALPHA: {self.PARETO_ALPHA}")
             bt.logging.info("************************************************")
 
             bt.logging.info(f"Loaded scoring controls successfully.")

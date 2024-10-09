@@ -156,19 +156,16 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
 
     return closest_odds
 
-def apply_pareto(all_scores: List[float], all_uids: List[int]) -> List[float]:
+def apply_pareto(all_scores: List[float], all_uids: List[int], xmin: float, alpha: int) -> List[float]:
     """
     Apply a Pareto distribution to the scores.
 
     :param all_scores: List of scores to apply the Pareto distribution to
     :param all_uids: List of UIDs corresponding to the scores
+    :param xmin: Minimum value for the Pareto distribution
+    :param alpha: Shape parameter for the Pareto distribution
     :return: List of scores after applying the Pareto distribution
     """
-    # Constants
-    ##Note:  it is ok to use MLE!   But for now lets use our own numbers and figure out if MLE is the best approach,  it locks you into an estimation.
-    xmin = 1
-    alpha = 1000000
-
     # Convert all_scores to numpy array for efficient operations
     scores_array = np.array(all_scores)
 
@@ -312,8 +309,7 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.debug(f"  • Final score: {final_score:.4f}")
             bt.logging.debug("-" * 50)
 
-            if final_score > 0:
-                league_table_data.append([uid, final_score])
+            league_table_data.append([uid, final_score])
 
         # Log league scores
         if league_table_data:
@@ -333,7 +329,7 @@ def calculate_incentives_and_update_scores(vali):
 
     # Apply Pareto to all scores
     #bt.logging.info("Applying Pareto distribution to scores...")
-    #final_scores = apply_pareto(all_scores, all_uids)
+    #final_scores = apply_pareto(all_scores, all_uids, vali.PARETO_XMIN, vali.PARETO_ALPHA)
     final_scores = all_scores
     
     # Update our main self.scores, which scatters the scores
