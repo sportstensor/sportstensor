@@ -14,7 +14,8 @@ from vali_utils import utils
 from common.data import MatchPrediction, League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
-    ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE
+    ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
+    NO_LEAGUE_COMMITMENT_PENALTY
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, consensus_closing_odds: float) -> Tuple[float, int]:
@@ -204,6 +205,81 @@ def apply_pareto(all_scores: List[float], all_uids: List[int], xmin: float, alph
     else:
         bt.logging.info("No non-zero scores to apply Pareto distribution. All scores remain zero.")
         return [0.0] * len(all_uids)
+    
+def check_and_apply_league_commitment_penalties(vali, all_scores: List[float], all_uids: List[int]) -> List[float]:
+    """
+    Check if all miners have at least one league commitment. If not, penalize to ensure that miners are committed to at least one league.
+
+    :param vali: Validator, the validator object
+    :param all_scores: List of scores to check and penalize
+    :param all_uids: List of UIDs corresponding to the scores
+    :return: List of scores after penalizing miners not committed to any active leagues
+    """
+    no_commitment_miner_uids = []
+    
+    for i, uid in enumerate(all_uids):
+        with vali.accumulated_league_commitment_penalties_lock:
+            # Initialize penalty for this UID if it doesn't exist
+            if uid not in vali.accumulated_league_commitment_penalties:
+                vali.accumulated_league_commitment_penalties[uid] = 0.0
+
+            if uid not in vali.uids_to_leagues:
+                vali.accumulated_league_commitment_penalties[uid] += NO_LEAGUE_COMMITMENT_PENALTY
+                no_commitment_miner_uids.append(uid)
+            else:
+                miner_leagues = vali.uids_to_leagues[uid]
+                # Remove any leagues that are not active
+                active_leagues = [league for league in miner_leagues if league in vali.ACTIVE_LEAGUES]
+                if len(active_leagues) == 0:
+                    vali.accumulated_league_commitment_penalties[uid] += NO_LEAGUE_COMMITMENT_PENALTY
+                    no_commitment_miner_uids.append(uid)
+                else:
+                    # Reset penalty if miner is now compliant
+                    vali.accumulated_league_commitment_penalties[uid] = 0.0
+
+            # Apply the accumulated penalty to the score
+            all_scores[i] += vali.accumulated_league_commitment_penalties[uid]
+
+    if no_commitment_miner_uids:
+        bt.logging.info(
+            f"Penalizing miners {no_commitment_miner_uids} that are not committed to any active leagues.\n"
+            f"Accumulated penalties: {[vali.accumulated_league_commitment_penalties[uid] for uid in no_commitment_miner_uids]}"
+        )
+    
+    return all_scores
+
+def apply_no_prediction_response_penalties(vali, all_scores: List[float], all_uids: List[int]) -> List[float]:
+    """
+    Apply any penalties for miners that have not responded to prediction requests.
+
+    :param vali: Validator, the validator object
+    :param all_scores: List of scores to check and penalize
+    :param all_uids: List of UIDs corresponding to the scores
+    :return: List of scores after penalizing miners that have not responded to prediction requests
+    """
+    no_response_miner_uids = []
+    no_response_miner_penalties = []
+    
+    for i, uid in enumerate(all_uids):
+        with vali.accumulated_no_response_penalties_lock:
+            # Initialize penalty for this UID if it doesn't exist
+            if uid not in vali.accumulated_no_response_penalties:
+                vali.accumulated_no_response_penalties[uid] = 0.0
+            elif vali.accumulated_no_response_penalties[uid] < 0.0:
+                # Apply the penalty to the score
+                all_scores[i] += vali.accumulated_no_response_penalties[uid]
+                no_response_miner_uids.append(uid)
+                no_response_miner_penalties.append(vali.accumulated_no_response_penalties[uid])
+                # Clear the penalty for this UID because it has been applied
+                vali.accumulated_no_response_penalties[uid] = 0.0
+
+    if no_response_miner_uids:
+        bt.logging.info(
+            f"Penalizing miners {no_response_miner_uids} that did not respond to prediction requests this run step.\n"
+            f"Accumulated penalties: {no_response_miner_penalties}"
+        )
+    
+    return all_scores
 
 def calculate_incentives_and_update_scores(vali):
     """
@@ -326,6 +402,11 @@ def calculate_incentives_and_update_scores(vali):
     all_scores = [0.0] * len(all_uids)
     for i in range(len(all_uids)):
         all_scores[i] = sum(league_scores[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
+
+    # Check and penalize miners that are not committed to any active leagues
+    all_scores = check_and_apply_league_commitment_penalties(vali, all_scores, all_uids)
+    # Apply penalties for miners that have not responded to prediction requests
+    all_scores = apply_no_prediction_response_penalties(vali, all_scores, all_uids)
 
     # Apply Pareto to all scores
     #bt.logging.info("Applying Pareto distribution to scores...")

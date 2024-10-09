@@ -366,9 +366,9 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
     match_prediction_requests = storage.get_match_prediction_requests()
 
     match_predictions = []
-    next_match = None
-    next_match_time = None
-    next_match_window = None
+    next_prediction_time = None
+    next_prediction_match = None
+    next_prediction_window = None
 
     prediction_windows = [
         ('24_hour', timedelta(hours=24), timedelta(hours=23), 'prediction_24_hour'),
@@ -388,11 +388,13 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
         time_until_match = match_date_aware - current_time
 
         for window, upper_bound, lower_bound, update_key in prediction_windows:
-            # Check for the next match, regardless of whether it needs a prediction now
-            if time_until_match > lower_bound and (next_match is None or match_date_aware < next_match_time):
-                next_match = match
-                next_match_time = match_date_aware
-                next_match_window = window
+            if not match_prediction_requests[match.matchId][window]:
+                prediction_time = match_date_aware - upper_bound
+                if prediction_time > current_time:
+                    if next_prediction_time is None or prediction_time < next_prediction_time:
+                        next_prediction_time = prediction_time
+                        next_prediction_match = match
+                        next_prediction_window = window
 
             # Check if this match needs a prediction in the current cycle
             if (not match_prediction_requests[match.matchId][window] and
@@ -413,8 +415,8 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
 
     # Prepare next match info string
     next_match_info = ""
-    if next_match:
-        time_until_next = next_match_time - current_time
+    if next_prediction_match:
+        time_until_next = next_prediction_time - current_time
         hours, remainder = divmod(time_until_next.total_seconds(), 3600)
         minutes, _ = divmod(remainder, 60)
         
@@ -428,10 +430,10 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
         next_match_info = (
             f"Next match prediction request: "
             f"{int(hours)}h {int(minutes)}m | "
-            f"{window_display.get(next_match_window, '?')} | "
-            f"{next_match.homeTeamName} vs {next_match.awayTeamName} "
-            f"({next_match_time.strftime('%Y-%m-%d %H:%M')} UTC) | "
-            f"{next_match.league}"
+            f"{window_display.get(next_prediction_window, '?')} | "
+            f"{next_prediction_match.homeTeamName} vs {next_prediction_match.awayTeamName} "
+            f"({next_prediction_time.strftime('%Y-%m-%d %H:%M')} UTC) | "
+            f"{next_prediction_match.league}"
         )
     else:
         next_match_info = "No upcoming matches scheduled for prediction requests."

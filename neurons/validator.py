@@ -38,14 +38,12 @@ from common.constants import (
     ENABLE_APP,
     DATA_SYNC_INTERVAL_IN_MINUTES,
     APP_DATA_SYNC_INTERVAL_IN_MINUTES,
-    VALIDATOR_TIMEOUT,
     PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES,
-    NUM_MINERS_TO_SEND_TO,
-    BASE_MINER_PREDICTION_SCORE,
     MAX_BATCHSIZE_FOR_SCORING,
     SCORING_INTERVAL_IN_MINUTES,
+    NO_PREDICTION_RESPONSE_PENALTY,
     ACTIVE_LEAGUES,
-    NO_LEAGUE_COMMITMENT_PENALTY,
+    LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES,
     LEAGUE_SCORING_PERCENTAGES,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     SENSITIVITY_ALPHA,
@@ -130,6 +128,12 @@ class Validator(BaseValidatorNeuron):
         self.next_league_commitments_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
+
+        
+        self.accumulated_league_commitment_penalties = {}
+        self.accumulated_league_commitment_penalties_lock = threading.RLock()
+        self.accumulated_no_response_penalties = {}
+        self.accumulated_no_response_penalties_lock = threading.RLock()
 
         # Create a set of uids to corresponding leagues that miners are committed to.
         self.uids_to_leagues: Dict[int, List[League]] = {}
@@ -341,12 +345,12 @@ class Validator(BaseValidatorNeuron):
         """
         Validator forward pass. Consists of:
         - Periodically updating match data.
-        - Generating the prediction query
         - Querying the miners for league commitments
+        - Generating the prediction queries
         - Querying the miners for predictions
-        - Getting the responses and updating base scoring for returning valid prediction
+        - Getting the responses and validating predictions
         - Storing prediction responses
-        - Scoring past prediction responsess
+        - Scoring (calculating closing edge) on eligible past prediction responses
 
         The forward function is called by the validator every run step.
 
@@ -371,7 +375,7 @@ class Validator(BaseValidatorNeuron):
             ) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END MATCH SYNCING """
 
-        """ START LEAGUE COMMITMENTS REQUESTS AND CHECKS """
+        """ START LEAGUE COMMITMENTS REQUESTS """
         if self.next_league_commitments_datetime <= dt.datetime.now(dt.timezone.utc):
             # Get all miner uids by passing in high number (300)
             miner_uids = utils.get_random_uids(self, k=300)
@@ -384,36 +388,10 @@ class Validator(BaseValidatorNeuron):
             await utils.send_league_commitments_to_miners(
                 self, input_synapse, miner_uids
             )
-            
-            # @TODO: Should we run the no commitment penalty check every 30 minutes but get the league commitments every 5 minutes?
-            # Check if all miners have at least one league commitment. If not, penalize to ensure that miners are committed to at least one league.
-            no_commitment_miner_uids = []
-            no_commitment_penalties = []
-            for uid in miner_uids:
-                if uid not in self.uids_to_leagues:
-                    no_commitment_miner_uids.append(uid)
-                    no_commitment_penalties.append(NO_LEAGUE_COMMITMENT_PENALTY)
-                    continue
-                
-                miner_leagues = self.uids_to_leagues[uid]
-                # Remove any leagues that are not active
-                active_leagues = [league for league in miner_leagues if league in self.ACTIVE_LEAGUES]
-                if len(active_leagues) == 0:
-                    no_commitment_miner_uids.append(uid)
-                    no_commitment_penalties.append(NO_LEAGUE_COMMITMENT_PENALTY)
-
-            if len(no_commitment_miner_uids) > 0:
-                bt.logging.info(
-                    f"Penalizing miners {no_commitment_miner_uids} that are not committed to any active leagues."
-                )
-                self.update_scores(
-                    torch.FloatTensor(no_commitment_penalties).to(self.device),
-                    no_commitment_miner_uids,
-                )
             self.next_league_commitments_datetime = dt.datetime.now(
                 dt.timezone.utc
-            ) + dt.timedelta(minutes=DATA_SYNC_INTERVAL_IN_MINUTES)
-        """ END LEAGUE COMMITMENTS REQUESTS AND CHECKS """
+            ) + dt.timedelta(minutes=LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES)
+        """ END LEAGUE COMMITMENTS REQUESTS """
 
         """ START MATCH PREDICTION REQUESTS """
         # Get prediction requests to send to miners
@@ -445,18 +423,17 @@ class Validator(BaseValidatorNeuron):
 
                 # Update the scores of miner uids NOT working. Default to 0. Miners who commit to a league but don't respond to a prediction request will be penalized.
                 not_working_miner_uids = []
-                no_rewards = []
                 for uid in miner_uids:
                     if uid not in working_miner_uids:
                         not_working_miner_uids.append(uid)
-                        no_rewards.append(0.0)
+                        with self.accumulated_no_response_penalties_lock:
+                            if uid not in self.accumulated_no_response_penalties:
+                                self.accumulated_no_response_penalties[uid] = 0.0
+                            self.accumulated_no_response_penalties[uid] += NO_PREDICTION_RESPONSE_PENALTY
+                        
                 if len(not_working_miner_uids) > 0:
                     bt.logging.info(
                         f"Penalizing miners {not_working_miner_uids} that did not respond."
-                    )
-                    self.update_scores(
-                        torch.FloatTensor(no_rewards).to(self.device),
-                        not_working_miner_uids,
                     )
         else:
             bt.logging.info("No matches available to send for predictions.")

@@ -10,6 +10,9 @@ PROTOCOL_VERSION = 1
 # Interval in minutes that we sync match data
 DATA_SYNC_INTERVAL_IN_MINUTES = 30
 
+# Interval in minutes that we ask for league commitments from miners
+LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES = 15
+
 # Interval in minutes that we poll the api for prediction requests from the app
 APP_DATA_SYNC_INTERVAL_IN_MINUTES = 1
 
@@ -24,12 +27,6 @@ VALI_REFRESH_MATCHES = 60 * 30
 
 # Have Validators run the cleaning process every X minutes.
 PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES = 5
-
-# The base FloatTensor score for all miners that return a valid prediction
-BASE_MINER_PREDICTION_SCORE = 0.01
-
-# Number of miners to send predictions to. -1 == all
-NUM_MINERS_TO_SEND_TO = 20
 
 # Minimum time in seconds predictions are allowed before match begins
 MIN_PREDICTION_TIME_THRESHOLD = 60 * 5
@@ -50,7 +47,8 @@ SCORING_INTERVAL_IN_MINUTES = 1
 MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
-NO_LEAGUE_COMMITMENT_PENALTY = -1.0
+NO_LEAGUE_COMMITMENT_PENALTY = -0.1
+NO_PREDICTION_RESPONSE_PENALTY = -0.1
 
 ACTIVE_LEAGUES = [
     League.MLB,
