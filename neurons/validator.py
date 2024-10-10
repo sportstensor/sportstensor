@@ -28,12 +28,11 @@ import requests
 
 # Bittensor
 import bittensor as bt
-import torch
 import wandb
 
 # Bittensor Validator Template:
 from common.protocol import GetLeagueCommitments, GetMatchPrediction
-from common.data import League, MatchPrediction, get_league_from_string
+from common.data import League, get_league_from_string
 from common.constants import (
     ENABLE_APP,
     DATA_SYNC_INTERVAL_IN_MINUTES,
@@ -50,7 +49,7 @@ from common.constants import (
     GAMMA,
     TRANSITION_KAPPA,
     EXTREMIS_BETA,
-    PARETO_XMIN,
+    PARETO_MU,
     PARETO_ALPHA,
 )
 import vali_utils.utils as utils
@@ -181,7 +180,9 @@ class Validator(BaseValidatorNeuron):
                 except asyncio.TimeoutError:
                     bt.logging.error(f"Failed to set weights after {ttl} seconds")
             else:
-                bt.logging.debug(f"Skipping setting weights. Only set weights at 20-minute marks.")
+                # only log every 5 minutes
+                if minutes % 5 == 0:
+                    bt.logging.debug(f"Skipping setting weights. Only set weights at 20-minute marks.")
 
             # sleep for 1 minute before checking again
             time.sleep(60)
@@ -279,7 +280,7 @@ class Validator(BaseValidatorNeuron):
             self.GAMMA = constants.get('GAMMA', GAMMA)
             self.TRANSITION_KAPPA = constants.get('TRANSITION_KAPPA', TRANSITION_KAPPA)
             self.EXTREMIS_BETA = constants.get('EXTREMIS_BETA', EXTREMIS_BETA)
-            self.PARETO_XMIN = constants.get('PARETO_XMIN', PARETO_XMIN)
+            self.PARETO_MU = constants.get('PARETO_MU', PARETO_MU)
             self.PARETO_ALPHA = constants.get('PARETO_ALPHA', PARETO_ALPHA)
 
             bt.logging.info("************ Setting scoring controls ************")
@@ -287,7 +288,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(f" GAMMA: {self.GAMMA}")
             bt.logging.info(f" TRANSITION_KAPPA: {self.TRANSITION_KAPPA}")
             bt.logging.info(f" EXTREMIS_BETA: {self.EXTREMIS_BETA}")
-            bt.logging.info(f" PARETO_XMIN: {self.PARETO_XMIN}")
+            bt.logging.info(f" PARETO_MU: {self.PARETO_MU}")
             bt.logging.info(f" PARETO_ALPHA: {self.PARETO_ALPHA}")
             bt.logging.info("************************************************")
 
@@ -545,19 +546,6 @@ class Validator(BaseValidatorNeuron):
                     dt.timezone.utc
                 ) + dt.timedelta(minutes=APP_DATA_SYNC_INTERVAL_IN_MINUTES)
         """ END APP PREDICTION FLOW """
-
-
-    async def get_basic_match_prediction_rewards(
-        self,
-        input_synapse: GetMatchPrediction,
-        responses: List[MatchPrediction],
-    ) -> torch.FloatTensor:
-        """
-        Returns a tensor of rewards for the given query and responses.
-        """
-        # Create a list of fixed rewards for all responses
-        rewards = [BASE_MINER_PREDICTION_SCORE for _ in responses]
-        return torch.FloatTensor(rewards).to(self.device)
 
 
 # The main function parses the configuration and runs the validator.

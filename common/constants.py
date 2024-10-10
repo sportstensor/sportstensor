@@ -47,8 +47,8 @@ SCORING_INTERVAL_IN_MINUTES = 1
 MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
-NO_LEAGUE_COMMITMENT_PENALTY = -0.1
-NO_PREDICTION_RESPONSE_PENALTY = -0.1
+NO_LEAGUE_COMMITMENT_PENALTY = -1.0
+NO_PREDICTION_RESPONSE_PENALTY = -1.0
 
 ACTIVE_LEAGUES = [
     League.MLB,
@@ -82,7 +82,7 @@ GAMMA = 0.00125
 TRANSITION_KAPPA = 35
 # BETA controls the ranges that the CLV component lives within. Higher the BETA, the tighter the range.
 EXTREMIS_BETA = 0.25
-# PARETO_XMIN is the minimum value for the Pareto distribution
-PARETO_XMIN = 1.0
+# PARETO_MU is the minimum value for the Pareto distribution
+PARETO_MU = 1.0
 # PARETO_ALPHA is the shape of the Pareto distribution. The lower the ALPHA, the more suppressed the distribution.
-PARETO_ALPHA = 1000000
+PARETO_ALPHA = 1.0
