@@ -11,7 +11,7 @@ from tabulate import tabulate
 import bittensor as bt
 from storage.sqlite_validator_storage import get_storage
 from vali_utils import utils
-from common.data import MatchPrediction, League, MatchPredictionWithMatchData, ProbabilityChoice
+from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
@@ -93,7 +93,7 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
     prediction_odds = find_closest_odds(match_odds, pwmd.prediction.predictionDate, pwmd.prediction.probabilityChoice)
     
     if prediction_odds is None:
-        bt.logging.error(f"Unable to find suitable odds for matchId {pwmd.prediction.matchId} at prediction time. Skipping calculation of this prediction.")
+        bt.logging.debug(f"Unable to find suitable odds for matchId {pwmd.prediction.matchId} at prediction time. Skipping calculation of this prediction.")
         return None
 
     bt.logging.debug(f"  • Implied odds: {(1/pwmd.prediction.probability):.4f}")
@@ -153,7 +153,7 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
         bt.logging.debug(f"  • Prediction Time Odds: {closest_odds}")
         bt.logging.debug(f"  • Probability Choice: {probability_choice}")
     else:
-        bt.logging.warning(f"No suitable odds found after the prediction time: {prediction_time}")
+        bt.logging.debug(f"No suitable odds found after the prediction time: {prediction_time}")
 
     return closest_odds
 
@@ -342,7 +342,7 @@ def calculate_incentives_and_update_scores(vali):
                     # Try and grab match odds from API
                     match_odds = utils.sync_match_odds_data(vali.match_odds_endpoint, pwmd.prediction.matchId)
                     if match_odds is None:
-                        bt.logging.error(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
+                        bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                         continue
                 
                 # Calculate our time delta expressed in minutes
@@ -385,12 +385,12 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.debug(f"  • Final score: {final_score:.4f}")
             bt.logging.debug("-" * 50)
 
-            league_table_data.append([uid, final_score])
+            league_table_data.append([uid, final_score, len(predictions_with_match_data)])
 
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions'], tablefmt='grid'))
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 

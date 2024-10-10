@@ -214,9 +214,9 @@ class MatchPrediction(Prediction):
 
     def get_predicted_team(self) -> str:
         """Get the predicted team based on the probability choice."""
-        if self.probabilityChoice == ProbabilityChoice.HOMETEAM:
+        if self.probabilityChoice == ProbabilityChoice.HOMETEAM or self.probabilityChoice == ProbabilityChoice.HOMETEAM.value:
             return self.homeTeamName
-        elif self.probabilityChoice == ProbabilityChoice.AWAYTEAM:
+        elif self.probabilityChoice == ProbabilityChoice.AWAYTEAM or self.probabilityChoice == ProbabilityChoice.AWAYTEAM.value:
             return self.awayTeamName
         return "Draw"
 
