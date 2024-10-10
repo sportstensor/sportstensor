@@ -169,18 +169,15 @@ def apply_pareto(all_scores: List[float], all_uids: List[int], mu: float, alpha:
     """
     scores_array = np.array(all_scores)
     
-    # Treat all non-positive scores as zero
-    positive_mask = scores_array > 0
+    # Treat all non-positive scores less than 1 as zero
+    positive_mask = scores_array >= 1
     positive_scores = scores_array[positive_mask]
     
     transformed_scores = np.zeros_like(scores_array, dtype=float)
     
     if len(positive_scores) > 0:
-        # Apply range normalization
-        range_normalized_scores = (positive_scores - np.min(positive_scores)) + 1
-        
         # Transform positive scores
-        transformed_positive = mu * np.power(range_normalized_scores, alpha)
+        transformed_positive = mu * np.power(positive_scores, alpha)
         transformed_scores[positive_mask] = transformed_positive
     
     return transformed_scores
@@ -386,17 +383,9 @@ def calculate_incentives_and_update_scores(vali):
     all_scores = check_and_apply_league_commitment_penalties(vali, all_scores, all_uids)
     # Apply penalties for miners that have not responded to prediction requests
     all_scores = apply_no_prediction_response_penalties(vali, all_scores, all_uids)
-
-    # Log scores before pareto
-    pre_pareto_scores_table = []
-    for i, uid in enumerate(all_uids):
-        pre_pareto_scores_table.append([uid, all_scores[i]])
-    # Log final scores
-    bt.logging.info("\nPre-Pareto Scores:")
-    bt.logging.info("\n" + tabulate(pre_pareto_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
     
     # Apply Pareto to all scores
-    bt.logging.info("Applying Pareto distribution to scores...")
+    bt.logging.info(f"Applying Pareto distribution (mu: {vali.PARETO_MU}, alpha: {vali.PARETO_ALPHA}) to scores...")
     final_scores = apply_pareto(all_scores, all_uids, vali.PARETO_MU, vali.PARETO_ALPHA)
     
     # Update our main self.scores, which scatters the scores
@@ -409,11 +398,11 @@ def calculate_incentives_and_update_scores(vali):
     # Prepare final scores table
     final_scores_table = []
     for i, uid in enumerate(all_uids):
-        final_scores_table.append([uid, vali.scores[i]])
+        final_scores_table.append([uid, all_scores[i], vali.scores[i]])
 
     # Log final scores
     bt.logging.info("\nFinal Weighted Scores:")
-    bt.logging.info("\n" + tabulate(final_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
+    bt.logging.info("\n" + tabulate(final_scores_table, headers=['UID', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in vali.scores if score > 0]
