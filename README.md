@@ -1,3 +1,4 @@
+
 <div align="center">
 
 # Sportstensor: The world's most accurate sports prediction algorithm <!-- omit in toc -->
@@ -56,11 +57,28 @@ Traditionally, the most accurate sports prediction models have been proprietary,
 - Utilizes trained machine learning models to analyze the data and predict outcomes such as match scores.
 -  Submits the predicted score and relevant analysis back to the Validator for confirmation and further action.
 
+Miners must return two key pieces of information when responding to prediction requests:
+1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
+2. **probability**: The probability for that outcome, as a float.
+
+Miners who fail to respond or provide incorrect responses will be penalized.
+
 ### Validator
 
-- Collects predictions from the Miner, which include the anticipated outcomes and relevant statistical analyses of sports events.
-- Compares the Miner's predictions with the actual outcomes of the matches, which are sourced from trusted sports databases and official results.
-- Logs the results of the validations for auditing and continuous improvement of the predictive system on the Sportstensor platform
+- **Main Loop**: The validator operates in an endless loop, syncing match data every 30 minutes. This includes checking upcoming, in-progress, and completed games.
+- **League Commitment**: Validators send requests every 30 minutes to miners for them to commit to active leagues. Miners must respond with predictions for matches in the committed leagues or they receive a penalty score of 0. Miners who fail to commit to any league are penalized -1.
+- **Match Prediction Requests**: Prediction requests are sent out at specific time intervals (24 hours, 12 hours, 4 hours, and 10 minutes before a match). Miners are penalized for non-responses.
+- **Closing Edge Scoring**: After match completion, the validator calculates the closing edge scores for each prediction and updates the local database.
+- **Prediction Cleanup**: Non-registered miners and outdated predictions are regularly cleaned from the system to ensure only valid data is kept.
+
+### Scoring and Weights
+
+- **Incentive Mechanism**: 
+   - The validator calculates incentives based on miners’ commitments to leagues and their prediction accuracy.
+   - Incentives and scores are updated every 20 minutes. League-specific scoring percentages are applied, and scores are aggregated and logged. 
+   - Validators adjust the miners' weights on the chain based on these scores.
+   - The max number of predictions included for a miner per league is determined by the league’s **ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE** * 2.
+   - A separate background thread handles the processing of calculating scores and setting weights, which runs every 20 minutes.
 
 ## Roadmap
 
@@ -89,6 +107,7 @@ Traditionally, the most accurate sports prediction models have been proprietary,
 - [ ] Build super secret Sportstensor tool 😉
 
 ## Running Miners and Validators
+
 ### Running a Miner
 #### Requirements
 - Python 3.8+
@@ -104,34 +123,19 @@ cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
 3. Next, install the `Sportstensor` package: `pip install -e .`
-
-#### Run with PM2
+4. Copy the example environment file for miner configuration:
 ```bash
-pm2 start neurons/miner.py --name Sportstensor-miner -- \
-    --netuid {netuid} \
-    --wallet.name {wallet} \
-    --wallet.hotkey {hotkey} \
-    --axon.port {port} \
-    --axon.external_ip {ip} \
-    --blacklist.force_validator_permit
+cp neurons/example.miner.env neurons/miner.env
 ```
+5. Update `miner.env` with your league commitments. Ensure that your commitments reflect the leagues you are participating in. This will enable the system to send you predictions for the appropriate matches.
 
-#### Scoring Mechanism
-1. Home and Away Score Accuracy (Max 0.25 each):
+#### Prediction Return Format
 
-The scoring function calculates the absolute difference between the predicted and actual scores for both the home and away teams.
-The difference for each team is normalized by a maximum score difference parameter to maintain a scale between 0 and 1.
-Each team's score accuracy contributes up to 0.25 to the total score. A smaller difference results in a higher score, meaning a perfect prediction (no difference) results in the full 0.25 points.
+When responding to prediction requests, miners need to provide two key pieces of information:
+1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
+2. **probability**: The probability for that outcome, as a float.
 
-2. Correct Winner Prediction (Max 0.5):
-
-The function determines the winner based on the predicted scores and compares this to the actual match outcome.
-If the predicted winner matches the actual winner, the full 0.5 points are awarded. If not, no points are awarded for this part of the prediction.
-Total Score Calculation:
-
-The total prediction score is the sum of the individual scores for the home team, away team, and the correct winner prediction.
-The maximum possible score is 1.0, achieved by perfectly predicting the home and away scores (0.25 + 0.25) and correctly identifying the match winner (0.5).
-
+Failure to respond or incorrectly formatted responses will result in penalties as described in the scoring and incentive mechanisms.
 
 ### Running a Validator
 #### Requirements
@@ -149,28 +153,20 @@ The maximum possible score is 1.0, achieved by perfectly predicting the home and
 git clone https://github.com/xzistance/sportstensor/
 cd sportstensor
 ```
-2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
+2. Install pm2 if you don't already have it: [pm2.io/docs/runtime/guide/installation/].
 3. Next, install the `Sportstensor` package: `pip install -e .`
 
 #### Run auto-updating validator with PM2 (recommended)
 ```bash
-pm2 start vali_auto_update.sh --name Sportstensor-validator -- \
-    --netuid {netuid} \
-    --wallet.name {wallet} \
-    --wallet.hotkey {hotkey} \
-    --axon.port {port} \
-    --logging.trace
+pm2 start vali_auto_update.sh --name Sportstensor-validator --     --netuid {netuid}     --wallet.name {wallet}     --wallet.hotkey {hotkey}     --axon.port {port}     --logging.trace
 ```
 Note: you might need to adjust "python" to "python3" within the `vali_auto_update.sh` depending on your preferred system python.
 
+Additionally, validators can use the flag --neuron.batch_size X to set a different batch size for sending requests to miners.
+
 #### Run basic validator with PM2
 ```bash
-pm2 start neurons/validator.py --name Sportstensor-validator -- \
-    --netuid {netuid} \
-    --wallet.name {wallet} \
-    --wallet.hotkey {hotkey} \
-    --axon.port {port} \
-    --logging.trace
+pm2 start neurons/validator.py --name Sportstensor-validator --     --netuid {netuid}     --wallet.name {wallet}     --wallet.hotkey {hotkey}     --axon.port {port}     --logging.trace
 ```
 
 ## Community
