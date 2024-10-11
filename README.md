@@ -65,20 +65,24 @@ Miners who fail to respond or provide incorrect responses will be penalized.
 
 ### Validator
 
-- **Main Loop**: The validator operates in an endless loop, syncing match data every 30 minutes. This includes checking upcoming, in-progress, and completed games.
+- **Match Syncing**: The validator operates in an endless loop, syncing match data every 30 minutes. This includes checking upcoming, in-progress, and completed games.
 - **League Commitment**: Validators send requests every 15 minutes to acquire the active leagues a miner is committed to. Miners are required to respond with predictions for all matches in their committed leagues or receive a penalty. Miners who fail to commit to at least one league will be incrementally penalized until committing or deregistering.
 - **Match Prediction Requests**: Prediction requests are sent out at specific time intervals (24 hours, 12 hours, 4 hours, and 10 minutes before a match). Miners are penalized for non-responses.
-- **Closing Edge Scoring**: After match completion, the validator calculates the closing edge scores for each prediction and updates the local database.
+- **Closing Edge Scoring**: After match completion, the validator calculates the closing edge scores for each prediction and updates the local database to be used later in the scoring and weights logic.
 - **Prediction Cleanup**: Non-registered miners and outdated predictions are regularly cleaned from the system to ensure only valid data is kept.
 
 ### Scoring and Weights
 
 - **Incentive Mechanism**: 
-   - The validator calculates incentives based on miners’ commitments to leagues and their prediction accuracy.
-   - Incentives and scores are updated every 20 minutes. League-specific scoring percentages are applied, and scores are aggregated and logged. 
+   - Incentives and scores are calculated every 20 minutes in a background thread.
+   - Each active league is iterated through to calculate scores for that league.
+   - During each league iteration, every miner is scored for their prediction accuracy.
+   - The max number of predictions included for a miner per league is determined by the league’s **ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE** multiplied by 2.
+      - This creates a constantly rolling forward set of predictions per miner per league, so older predictions outside these thresholds will not be scored.
+   - Incentive scores are calculated through a series of complex algorithms. Please see our whitepaper for more details. Also analyze `vali_utils/scoring_utils.py`.
+   - After all active leagues have been scored, league-specific scoring percentages are applied.
+   - Final scores are aggregated and logged for weight setting.
    - Validators set the miners' weights on the chain based on these scores.
-   - The max number of predictions included for a miner per league is determined by the league’s **ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE** * 2.
-   - A separate background thread handles the processing of calculating scores and setting weights, which runs every 20 minutes.
 
 ## Roadmap
 
