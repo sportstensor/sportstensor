@@ -60,25 +60,20 @@ def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: flo
     :return: float, the calculated incentive score
     """
     time_component = math.exp(-gamma * delta_t)
-    clv_component = (1 - (2 * beta)) / (1 + math.exp(-kappa * clv)) + beta
-    incentive_score = time_component + (1 - time_component) * clv_component
-    return incentive_score
+    clv_component = (1 - (2 * beta)) / (1 + math.exp(kappa * clv)) + beta
+    return time_component + (1 - time_component) * clv_component
 
-def calculate_sigma(predictions: List[MatchPredictionWithMatchData]) -> float:
+def calculate_sigma(pwmd: MatchPredictionWithMatchData) -> float:
     """
     Calculate the incentive sigma as a function of skill.
-    
-    This function computes the average closing edge per game and multiplies it
-    by the number of games predicted.
 
-    :param predictions: List[MatchPredictionWithMatchData], a list of prediction with match data objects
+    np.sign(score of team chose - score of team not chosen) * (odds at close - 1 / probability of team chosen)
+    
     :return: float, the calculated incentive score (sigma)
     """
-    num_predictions = len(predictions)
-    total_edge = sum(p.prediction.closingEdge for p in predictions)
-    average_edge = total_edge / num_predictions
-    sigma = average_edge * num_predictions
-    return sigma
+    model_prediction_correct = 1 if (pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner()) else -1
+    closing_odds = pwmd.get_actual_winner_odds()
+    return model_prediction_correct * (closing_odds - (1 / pwmd.prediction.probability))
 
 def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData):
     """
@@ -169,8 +164,8 @@ def apply_pareto(all_scores: List[float], all_uids: List[int], mu: float, alpha:
     """
     scores_array = np.array(all_scores)
     
-    # Treat all non-positive scores less than 1 as zero
-    positive_mask = scores_array >= 1
+    # Treat all non-positive scores as zero
+    positive_mask = scores_array > 0
     positive_scores = scores_array[positive_mask]
     
     transformed_scores = np.zeros_like(scores_array, dtype=float)
@@ -301,14 +296,11 @@ def calculate_incentives_and_update_scores(vali):
                 num_threshold_predictions=ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league],
                 alpha=vali.SENSITIVITY_ALPHA
             )
-            # Calculate sigma
-            sigma = calculate_sigma(predictions_with_match_data)
 
             bt.logging.debug(f"Scoring predictions for miner {uid} in league {league.name}:")
             bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
             bt.logging.debug(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
             bt.logging.debug(f"  • Rho: {rho:.4f}")
-            bt.logging.debug(f"  • Sigma: {sigma:.4f}")
             total_score = 0
             for pwmd in predictions_with_match_data:
                 # Grab the match odds from local db
@@ -352,6 +344,12 @@ def calculate_incentives_and_update_scores(vali):
                     beta=vali.EXTREMIS_BETA,
                 )
                 bt.logging.debug(f"  • Incentive score (v): {v:.4f}")
+
+                # Calculate sigma
+                sigma = calculate_sigma(pwmd)
+                bt.logging.debug(f"  • Sigma: {sigma:.4f}")
+
+                # Apply sigma to v
                 total_score += v * sigma
                 bt.logging.debug(f"  • Total score: {total_score:.4f}")
                 bt.logging.debug("-" * 50)
