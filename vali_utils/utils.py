@@ -355,6 +355,14 @@ async def send_league_commitments_to_miners(
             traceback.format_exc(),
         )
         return None
+    
+
+def clean_up_unscored_deregistered_match_predictions(active_miner_hotkeys: List[str]):
+    """Deletes unscored predictions returned from miners that are no longer registered."""
+    try:
+        storage.delete_unscored_deregistered_match_predictions(active_miner_hotkeys)
+    except Exception as e:
+        bt.logging.error(f"Error cleaning up unscored deregistered predictions: {e}")
 
 
 def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction], str]:

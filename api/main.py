@@ -221,6 +221,18 @@ async def main():
         except Exception as e:
             logging.error(f"Error retrieving matches: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
+        
+    @app.get("/matches/all")
+    def get_all_matches():
+        try:
+            match_list = db.get_matches(all=True)
+            if match_list:
+                return {"matches": match_list}
+            else:
+                return {"matches": []}
+        except Exception as e:
+            logging.error(f"Error retrieving matches: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
 
     @app.get("/matches/upcoming")
     def get_upcoming_matches():

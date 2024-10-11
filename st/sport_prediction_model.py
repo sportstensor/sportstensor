@@ -55,6 +55,7 @@ def make_match_prediction(prediction: MatchPrediction):
     from st.models.soccer_mls import MLSSoccerPredictionModel
     from st.models.baseball_mlb import MLBBaseballPredictionModel
     from st.models.soccer_epl import EPLSoccerPredictionModel
+    from st.models.football_nfl import NFLFootballPredictionModel
 
     sport_classes = {
         Sport.SOCCER: SoccerPredictionModel,
@@ -66,6 +67,7 @@ def make_match_prediction(prediction: MatchPrediction):
         League.MLS: MLSSoccerPredictionModel,
         League.MLB: MLBBaseballPredictionModel,
         League.EPL: EPLSoccerPredictionModel,
+        League.NFL: NFLFootballPredictionModel,
     }
 
     # Convert the league string back to the League enum
