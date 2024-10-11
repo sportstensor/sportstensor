@@ -2,12 +2,9 @@
 <div align="center">
 
 # Sportstensor: The future of sports prediction algorithms <!-- omit in toc -->
-[![Sportstensor](/docs/sportstensor_header.png)](https://sportstensor.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 </div>
 
----
 - [Introduction](#introduction)
 - [Why is this important?](#why-is-this-important)
 - [Miner and Validator Functionality](#miner-and-validator-functionality)
@@ -20,7 +17,6 @@
 - [Community](#community)
 - [License](#license)
 
----
 ## Introduction
 
 Welcome to Sportstensor—the convergence of cutting-edge technology and sports data analytics. We are pioneering unprecedented innovation in sports prediction algorithms, powered by the Bittensor network.
