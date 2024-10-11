@@ -172,7 +172,8 @@ def apply_pareto(all_scores: List[float], all_uids: List[int], mu: float, alpha:
     
     if len(positive_scores) > 0:
         # Transform positive scores
-        transformed_positive = mu * np.power(positive_scores, alpha)
+        range_transformed = (positive_scores - np.min(positive_scores)) + 1
+        transformed_positive = mu * np.power(range_transformed, alpha)
         transformed_scores[positive_mask] = transformed_positive
     
     return transformed_scores
