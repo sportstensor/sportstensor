@@ -129,6 +129,17 @@ cp neurons/example.miner.env neurons/miner.env
 ```
 5. Update `miner.env` with your league commitments. Ensure that your commitments reflect the leagues you are participating in. This will enable the system to send you predictions for the appropriate matches.
 
+#### Run with PM2
+```bash
+pm2 start neurons/miner.py --name Sportstensor-miner -- \
+    --netuid {netuid} \
+    --wallet.name {wallet} \
+    --wallet.hotkey {hotkey} \
+    --axon.port {port} \
+    --axon.external_ip {ip} \
+    --blacklist.force_validator_permit
+```
+
 #### Prediction Return Format
 
 When responding to prediction requests, miners need to provide two key pieces of information:
@@ -158,16 +169,33 @@ cd sportstensor
 
 #### Run auto-updating validator with PM2 (recommended)
 ```bash
-pm2 start vali_auto_update.sh --name Sportstensor-validator --     --netuid {netuid}     --wallet.name {wallet}     --wallet.hotkey {hotkey}     --axon.port {port}     --logging.trace
+pm2 start vali_auto_update.sh --name Sportstensor-validator -- \
+    --netuid {netuid} \
+    --wallet.name {wallet} \
+    --wallet.hotkey {hotkey} \
+    --axon.port {port} \
+    --logging.trace
 ```
 Note: you might need to adjust "python" to "python3" within the `vali_auto_update.sh` depending on your preferred system python.
 
-Additionally, validators can use the flag --neuron.batch_size X to set a different batch size for sending requests to miners.
+Additionally, validators can use the flag `--neuron.batch_size X` to set a different batch size for sending requests to miners.
 
 #### Run basic validator with PM2
 ```bash
-pm2 start neurons/validator.py --name Sportstensor-validator --     --netuid {netuid}     --wallet.name {wallet}     --wallet.hotkey {hotkey}     --axon.port {port}     --logging.trace
+pm2 start neurons/validator.py --name Sportstensor-validator -- \
+    --netuid {netuid} \
+    --wallet.name {wallet} \
+    --wallet.hotkey {hotkey} \
+    --axon.port {port} \
+    --logging.trace
 ```
+
+## Environments
+
+| Network | Netuid |
+| ----------- | -----: |
+| Mainnet     |     41 |
+| Testnet     |    172 |
 
 ## Community
 
