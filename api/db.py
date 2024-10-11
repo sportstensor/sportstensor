@@ -1,12 +1,46 @@
 import mysql.connector
 import logging
 import datetime as dt
-from datetime import timezone
+from datetime import timezone, datetime
 from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
 
 def generate_uuid():
     return os.urandom(16).hex()
+
+GET_MATCH_QUERY = """
+    SELECT
+        mlo.*,
+        mo.homeTeamOdds,
+        mo.awayTeamOdds,
+        mo.drawOdds,
+        mo.lastUpdated,
+        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count
+    FROM (
+        SELECT
+            m.matchId,
+            m.matchDate,
+            m.homeTeamName,
+            m.awayTeamName,
+            m.sport,
+            m.homeTeamScore,
+            m.awayTeamScore,
+            m.matchLeague,
+            m.isComplete,
+            ml.oddsapiMatchId
+        FROM matches m
+        LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+    ) mlo
+    LEFT JOIN (
+        SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+        FROM match_odds
+        WHERE (oddsapiMatchId, lastUpdated) IN (
+            SELECT oddsapiMatchId, MAX(lastUpdated)
+            FROM match_odds
+            GROUP BY oddsapiMatchId 
+        )
+    ) mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId
+"""
 
 def match_id_exists(match_id):
     try:
@@ -25,23 +59,193 @@ def match_id_exists(match_id):
         cursor.close()
         conn.close()
 
+def match_odds_id_exists(match_odds_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM match_odds WHERE id = %s", (match_odds_id,))
+        count = cursor.fetchone()[0]
+
+        return count > 0
+
+    except Exception as e:
+        logging.error("Failed to check if match_odds exists in MySQL database", exc_info=True)
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 def get_matches(all=False):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
+        query = GET_MATCH_QUERY
 
-        if all:
-            cursor.execute("SELECT * FROM matches")
-        else:
-            cursor.execute(
-                """
-                SELECT * FROM matches
-                WHERE matchDate BETWEEN NOW() - INTERVAL 10 DAY AND NOW() + INTERVAL 48 HOUR
+        if not all:
+            query += """
+                WHERE mlo.matchDate BETWEEN @current_time_utc - INTERVAL 10 DAY AND @current_time_utc + INTERVAL 48 HOUR
             """
-        )
+        
+        cursor.execute(query)
         match_list = cursor.fetchall()
 
         return match_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_upcoming_matches():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        # Set the current time in UTC
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
+
+        query = GET_MATCH_QUERY + """
+           WHERE mlo.matchDate BETWEEN @current_time_utc AND @current_time_utc + INTERVAL 48 HOUR
+        """
+
+        cursor.execute(query)
+        match_list = cursor.fetchall()
+
+        return match_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_matches_with_no_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT ml.*, m.*
+            FROM matches_lookup ml
+            LEFT JOIN matches m
+            ON ml.matchId = m.matchId
+            WHERE ml.oddsapiMatchId IS NULL
+        """
+
+        cursor.execute(query)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_stored_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+            FROM (
+                SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+                FROM match_odds
+                WHERE (oddsapiMatchId, lastUpdated) IN (
+                    SELECT oddsapiMatchId, MAX(lastUpdated)
+                    FROM match_odds
+                    GROUP BY oddsapiMatchId 
+                )
+            ) mo
+            INNER JOIN odds o
+            ON mo.oddsapiMatchId = o.oddsapiMatchId
+        """
+
+        cursor.execute(query)
+        stored_odds = cursor.fetchall()
+
+        return stored_odds
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_match_odds_by_id(match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        if match_id:
+            query = """
+                SELECT mo.*, ml.matchId
+                FROM match_odds mo
+                LEFT JOIN matches_lookup ml ON mo.oddsapiMatchId = ml.oddsapiMatchId
+                WHERE ml.matchId = %s
+                ORDER BY mo.lastUpdated ASC
+            """
+            cursor.execute(query, (match_id,))
+            match_odds = cursor.fetchall()
+        else:
+            query = """
+                SELECT 
+                    ordered.matchId,
+                    JSON_ARRAYAGG(
+                        JSON_OBJECT(
+                            "id", ordered.id,
+                            "matchId", ordered.matchId,
+                            "homeTeamOdds", ordered.homeTeamOdds,
+                            "awayTeamOdds", ordered.awayTeamOdds,
+                            "drawOdds", ordered.drawOdds,
+                            "lastUpdated", ordered.lastUpdated
+                        )
+                    ) AS oddsData
+                FROM (
+                    SELECT
+                        mo.id,
+                        ml.matchId,
+                        mo.homeTeamOdds,
+                        mo.awayTeamOdds,
+                        mo.drawOdds,
+                        mo.lastUpdated
+                    FROM match_odds mo
+                    LEFT JOIN matches_lookup as ml ON ml.oddsapiMatchId = mo.oddsapiMatchId
+                    ORDER BY
+                        mo.lastUpdated ASC
+                ) AS ordered
+                GROUP BY
+                    ordered.matchId
+                ORDER BY
+                    MAX(ordered.lastUpdated) ASC
+            """
+            cursor.execute(query)
+            match_odds = cursor.fetchall()
+        
+        return match_odds
 
     except Exception as e:
         logging.error(
@@ -60,7 +264,10 @@ def get_match_by_id(match_id):
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM matches WHERE matchId = %s", (match_id,))
+        query = GET_MATCH_QUERY + """
+            WHERE mlo.matchId = %s
+        """
+        cursor.execute(query, (match_id,))
         match = cursor.fetchone()
 
         return match
@@ -117,7 +324,6 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
         c.close()
         conn.close()
 
-
 def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
     try:
         conn = get_db_conn()
@@ -129,7 +335,7 @@ def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
             """,
             (
                 match_id,
-                sportsdb_match_id,
+                sportsdb_match_id
             ),
         )
 
@@ -162,10 +368,80 @@ def query_sportsdb_match_lookup(sportsdb_match_id):
         return None
     finally:
         cursor.close()
-        conn.close()        
+        conn.close()
 
+def insert_match_odds_bulk(match_data):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO match_odds (id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            match_data,
+        )
 
-def upload_prediction_results(prediction_results):
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_match_lookups_bulk(match_lookup_data):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO matches_lookup (matchId, oddsapiMatchId) 
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE
+                oddsapiMatchId=VALUES(oddsapiMatchId)
+            """,
+            match_lookup_data,
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_odds_bulk(odds_to_store):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO odds (oddsapiMatchId, league, homeTeamName, awayTeamName, commence_time, lastUpdated)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                commence_time=VALUES(commence_time),
+                lastUpdated=VALUES(lastUpdated);
+            """,
+            odds_to_store,
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert odds in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def upload_prediction_edge_results(prediction_results):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -175,7 +451,7 @@ def upload_prediction_results(prediction_results):
 
         """
         {
-            'scores': prediction_scores,
+            'edge_scores': edge_scores,
             'correct_winner_results': correct_winner_results,
             'uids': prediction_rewards_uids,
             'hotkeys': prediction_results_hotkeys,
@@ -193,41 +469,123 @@ def upload_prediction_results(prediction_results):
                 prediction_results["sports"],
                 [1] * len(prediction_results["uids"]),
                 prediction_results["correct_winner_results"],
-                prediction_results["scores"],
+                prediction_results["edge_scores"],
             )
         )
 
-        prediction_scores_table_name = "MatchPredictionResults"
+        prediction_edge_scores_table_name = "MatchPredictionEdgeResults"
         if not IS_PROD:
-            prediction_scores_table_name += "_test"
+            prediction_edge_scores_table_name += "_test"
         c.executemany(
             f"""
-            INSERT INTO {prediction_scores_table_name} (
+            INSERT INTO {prediction_edge_scores_table_name} (
                 miner_hotkey,
                 miner_uid,
                 league,
                 sport,
                 total_predictions,
                 winner_predictions,
-                avg_score,
+                avg_edge,
                 last_updated
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, NOW()
             ) ON DUPLICATE KEY UPDATE
                 total_predictions = total_predictions + VALUES(total_predictions),
                 winner_predictions = winner_predictions + VALUES(winner_predictions),
-                avg_score = ((avg_score * (total_predictions - VALUES(total_predictions))) + (VALUES(avg_score) * VALUES(total_predictions))) / total_predictions,
+                avg_edge = ((avg_edge * (total_predictions - VALUES(total_predictions))) + (VALUES(avg_edge) * VALUES(total_predictions))) / total_predictions,
                 last_updated = NOW();
             """,
             data_to_insert,
         )
 
         conn.commit()
-        logging.info("Prediction results data inserted or updated in database")
+        logging.info("Prediction edge results data inserted or updated in database")
         return True
 
     except Exception as e:
-        logging.error("Failed to insert match in MySQL database", exc_info=True)
+        logging.error("Failed to insert prediction edge results data in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+
+def upload_scored_predictions(predictions, vali_hotkey):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+
+        current_utc_time = dt.datetime.now(timezone.utc)
+        current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        print(f"Content of predictions: {predictions}")
+
+        predictions = predictions.get('predictions', [])
+
+        # Ensure predictions is a list
+        if not isinstance(predictions, list):
+            raise ValueError("predictions must be a list of dictionaries")
+
+        # Prepare the data for executemany
+        data_to_insert = [
+            (
+                int(prediction.get("minerId")),
+                prediction.get("hotkey"),
+                vali_hotkey,
+                prediction.get("predictionDate"),
+                prediction.get("matchId"),
+                prediction.get("matchDate"),
+                int(prediction.get("sport")),
+                prediction.get("league"),
+                1,
+                current_utc_time,
+                prediction.get("homeTeamName"),
+                prediction.get("awayTeamName"),
+                prediction.get("homeTeamScore"),
+                prediction.get("awayTeamScore"),
+                prediction.get("probabilityChoice"),
+                float(prediction.get("probability")),
+                float(prediction.get("closingEdge")) if prediction.get("closingEdge") is not None else None,
+            )
+            for prediction in predictions
+        ]
+
+        prediction_scores_table_name = "MatchPredictionsScored"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+        c.executemany(
+            f"""
+            INSERT IGNORE INTO {prediction_scores_table_name} (
+                miner_id,
+                miner_hotkey,
+                vali_hotkey,
+                predictionDate,
+                matchId,
+                matchDate,
+                sport,
+                league,
+                isScored,
+                scoredDate,
+                homeTeamName,
+                awayTeamName,
+                homeTeamScore,
+                awayTeamScore,
+                probabilityChoice,
+                probability,
+                closingEdge
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            );
+            """,
+            data_to_insert,
+        )
+
+        conn.commit()
+        logging.info("Scored predictions inserted in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert scored predictions in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -807,7 +1165,7 @@ def create_tables():
             awayTeamScore INTEGER,
             matchLeague VARCHAR(50),
             isComplete BOOLEAN DEFAULT FALSE,
-            lastUpdated TIMESTAMP NOT NULL
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
         c.execute(
@@ -818,6 +1176,81 @@ def create_tables():
             oddsapiMatchId VARCHAR(50) DEFAULT NULL
         )"""
         )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS match_odds (
+            id VARCHAR(50) PRIMARY KEY,
+            oddsapiMatchId VARCHAR(50) DEFAULT NULL,
+            homeTeamOdds FLOAT,
+            awayTeamOdds FLOAT,
+            drawOdds FLOAT,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS odds (
+            oddsapiMatchId VARCHAR(50) PRIMARY KEY,
+            league VARCHAR(30) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            commence_time TIMESTAMP NOT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+       )"""
+       )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MatchPredictionsScored (
+            miner_id INTEGER NOT NULL,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            vali_hotkey VARCHAR(64) NOT NULL,
+            predictionDate TIMESTAMP NOT NULL,
+            matchId VARCHAR(50) NOT NULL,
+            matchDate TIMESTAMP NOT NULL,
+            sport INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            homeTeamScore INTEGER,
+            awayTeamScore INTEGER,
+            probabilityChoice VARCHAR(10) NOT NULL,
+            probability FLOAT NOT NULL,
+            closingEdge FLOAT NOT NULL,
+            isScored BOOLEAN DEFAULT FALSE,
+            scoredDate TIMESTAMP DEFAULT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (miner_hotkey, vali_hotkey, matchId)
+        )"""
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MatchPredictionsScored_test (
+            miner_id INTEGER NOT NULL,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            vali_hotkey VARCHAR(64) NOT NULL,
+            predictionDate TIMESTAMP NOT NULL,
+            matchId VARCHAR(50) NOT NULL,
+            matchDate TIMESTAMP NOT NULL,
+            sport INTEGER NOT NULL,
+            league VARCHAR(50) NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            homeTeamScore INTEGER,
+            awayTeamScore INTEGER,
+            probabilityChoice VARCHAR(10) NOT NULL,
+            probability FLOAT NOT NULL,
+            closingEdge FLOAT NOT NULL,
+            isScored BOOLEAN DEFAULT FALSE,
+            scoredDate TIMESTAMP DEFAULT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (miner_hotkey, vali_hotkey, matchId)
+        )"""
+        )
+
         c.execute(
             """
         CREATE TABLE IF NOT EXISTS MatchPredictionResults (
@@ -833,7 +1266,7 @@ def create_tables():
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, league)
+            UNIQUE (miner_hotkey, miner_uid, league)
         )"""
         )
         c.execute(
@@ -851,7 +1284,7 @@ def create_tables():
             winner_predictions INTEGER NOT NULL,
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, league)
+            UNIQUE (miner_hotkey, miner_uid, league)
         )"""
         )
         c.execute(
@@ -870,7 +1303,7 @@ def create_tables():
             total_predictions INTEGER,
             winner_predictions INTEGER,
             avg_score FLOAT,
-            last_updated TIMESTAMP
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
         conn.commit()
@@ -902,7 +1335,7 @@ def create_app_tables():
             homeTeamScore INTEGER,
             awayTeamScore INTEGER,
             isComplete BOOLEAN DEFAULT FALSE,
-            lastUpdated TIMESTAMP NOT NULL,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             miner_hotkey VARCHAR(64) NULL,
             vali_hotkey VARCHAR(64) NULL,
             valiLastUpdated TIMESTAMP NULL,

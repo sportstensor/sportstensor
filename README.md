@@ -1,14 +1,12 @@
+
 <div align="center">
 
-# Sportstensor: The world's most accurate sports prediction algorithm <!-- omit in toc -->
-[![Sportstensor](/docs/sportstensor_header.png)](https://sportstensor.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
+# Sportstensor: The future of sports prediction algorithms <!-- omit in toc -->
 
 </div>
 
----
 - [Introduction](#introduction)
-- [Key Features](#key-features)
+- [Why is this important?](#why-is-this-important)
 - [Miner and Validator Functionality](#miner-and-validator-functionality)
   - [Miner](#miner)
   - [Validator](#validator)
@@ -19,33 +17,19 @@
 - [Community](#community)
 - [License](#license)
 
----
 ## Introduction
 
-Welcome to Sportstensor, where cutting-edge technology meets sports analytics. We're pioneering the world's most accurate decentralized sports prediction algorithm, powered by the Bittensor network. Our subnet tackles the challenges of high-quality data sourcing, complex data analysis and limited access to advanced machine learning models.
+Welcome to Sportstensor—the convergence of cutting-edge technology and sports data analytics. We are pioneering unprecedented innovation in sports prediction algorithms, powered by the Bittensor network.
 
-Traditionally, the most accurate sports prediction models have been proprietary, restricting innovation to isolated silos. Collectively, miners and validators are redefining what's possible in this field with the collaborative power of decentralization.
+Our Sportstensor subnet is designed to incentivize the discovery of competitive advantages over closing market odds, enabling top miners within the network to establish machine-driven dominance across the sports prediction landscape.
 
-## Key Features
-🔑 **Open source model development**
-- Sportstensor continuously builds and develops base models for various sports
-- Available on HuggingFace for miners to train and improve on
-
-🏅 **Advanced sports analytics**
-- Strategic planning and performance analysis with predictions made
-- Insights and predictions based on historical and real-time data
-
-💰 **Performance-based incentives**
-- Rewards for comprehensive dataset sourcing
-- Incentives for developing high-performance predictive models
-
-🌐 **User-friendly integration**
-- Intuitive front-end application
-- Seamless access to miner predictions
-
-📈 **Scalable improvement**
-- Dashboard for miner rankings and proximity to target prediction accuracy
-- Designed to foster continous model enhancement for world class results
+## Why is this important?
+- Closing odds represent the pinnacle of market efficiency, determined by thousands of advanced machine learning algorithms.
+- Our subnet fosters the development of true machine intelligence by outperforming competing algorithms in a highly competitive AI-versus-AI environment.
+- Even with sophisticated models, bettors struggle to be profitable, as bookmakers frequently impose strict limits on consistent winners.
+- There is substantial demand for high-performing predictive AI from betting operators, financial firms, syndicates, and algorithmic traders seeking more accurate models.
+- We attract top AI and machine learning talent from diverse industries, encouraging them to revolutionize sports prediction markets.
+- By decentralizing the creation and improvement of predictive models, we reduce reliance on any single entity or algorithm, enhancing resilience and driving innovation in the sports prediction market.
 
 ## Miner and Validator Functionality
 
@@ -53,14 +37,35 @@ Traditionally, the most accurate sports prediction models have been proprietary,
 
 - Receives requests from the Validator containing specific information such as team names and match details.
 - Accesses historical data and current statistics relevant to the teams involved in the query from sports databases.
-- Utilizes trained machine learning models to analyze the data and predict outcomes such as match scores.
--  Submits the predicted score and relevant analysis back to the Validator for confirmation and further action.
+- Utilizes trained machine learning models to analyze the data and predict the team they think will win and the probability.
+- Returns the prediction back to the Validator for confirmation and further action.
+
+Miners must return two key pieces of information when responding to prediction requests:
+1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
+2. **probability**: The probability for that outcome, as a float between 0 and 1. e.g. 0.6 represents 60% probability.
+
+Miners who fail to respond or provide incorrect responses will be penalized.
 
 ### Validator
 
-- Collects predictions from the Miner, which include the anticipated outcomes and relevant statistical analyses of sports events.
-- Compares the Miner's predictions with the actual outcomes of the matches, which are sourced from trusted sports databases and official results.
-- Logs the results of the validations for auditing and continuous improvement of the predictive system on the Sportstensor platform
+- **Match Syncing**: The validator operates in an endless loop, syncing match data every 30 minutes. This includes checking upcoming, in-progress, and completed games.
+- **League Commitment**: Validators send requests every 15 minutes to acquire the active leagues a miner is committed to. Miners are required to respond with predictions for all matches in their committed leagues or receive a penalty. Miners who fail to commit to at least one league will be incrementally penalized until committing or deregistering.
+- **Match Prediction Requests**: Prediction requests are sent out at specific time intervals (24 hours, 12 hours, 4 hours, and 10 minutes before a match). Miners are penalized for non-responses.
+- **Closing Edge Scoring**: After match completion, the validator calculates the closing edge scores for each prediction and updates the local database to be used later in the scoring and weights logic.
+- **Prediction Cleanup**: Non-registered miners and outdated predictions are regularly cleaned from the system to ensure only valid data is kept.
+
+### Scoring and Weights
+
+- **Incentive Mechanism**: 
+   - Incentives and scores are calculated every 20 minutes in a background thread.
+   - Each active league is iterated through to calculate scores for that league.
+   - During each league iteration, every miner is scored for their prediction accuracy.
+   - The max number of predictions included for a miner per league is determined by the league’s **ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE** multiplied by 2.
+      - This creates a constantly rolling forward set of predictions per miner per league, so older predictions outside these thresholds will not be scored.
+   - Incentive scores are calculated through a series of complex algorithms. Please see our whitepaper for more details. Also analyze `vali_utils/scoring_utils.py`.
+   - After all active leagues have been scored, league-specific scoring percentages are applied.
+   - Final scores are aggregated and logged for weight setting.
+   - Validators set the miners' weights on the chain based on these scores.
 
 ## Roadmap
 
@@ -69,26 +74,26 @@ Traditionally, the most accurate sports prediction models have been proprietary,
 - [x] Develop baseline model for soccer (Major League Soccer)
 - [x] Develop baseline model for baseball (Major League Baseball)
 - [x] Launch website (sportstensor.com)
-- [ ] Begin marketing for brand awareness and interest
+- [x] Begin marketing for brand awareness and interest
+- [x] Build dashboard
+- [x] Launch front-end application
 
-### Phase 2: Expansion (Q4 2024)
-- [ ] Launch front-end application
-- [ ] Introduce next level of prediction queries and validation metrics
+### Phase 2: Upgrade (Q4 2024)
+- [ ] Upgrade incentive mechanism to v2
+- [ ] Upgrade dashboard to track miner performance and progress
+- [ ] Achieve machine learning dominance over the sports prediction market by our top miners
 - [ ] Collaborations and partnerships with synergistic companies and subnets
-- [ ] Build our proprietary database for miners
-- [ ] Achieve competitive baseline prediction accuracy
-- [ ] Build proprietary LLM chatbot hooked up to miner predictions
-- [ ] Monetize predictions through front-end
+- [ ] Build application to monetize validator bandwidth
+- [ ] Expand on commitable leagues
 
-### Phase 3: Refinement (Q1 2025)
-- [ ] Market and sales expansion
-- [ ] Further develop baseline models
-- [ ] Expand to basketball and NFL to cover the whole year for sports
-- [ ] Explore niche sports such as eSports and UFC
-- [ ] Monetize API access to predictions and proprietary database
-- [ ] Build super secret Sportstensor tool 😉
+### Phase 3: Expand (Q1 2025)
+- [ ] Market and B2B sales expansion
+- [ ] Grow the team
+- [ ] Explore niche sports offerings
+- [ ] Develop additional products
 
 ## Running Miners and Validators
+
 ### Running a Miner
 #### Requirements
 - Python 3.8+
@@ -99,11 +104,16 @@ Traditionally, the most accurate sports prediction models have been proprietary,
 #### Setup
 1. To start, clone the repository and `cd` to it:
 ```bash
-git clone https://github.com/xzistance/sportstensor/
+git clone https://github.com/sportstensor/sportstensor/
 cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
 3. Next, install the `Sportstensor` package: `pip install -e .`
+4. Copy the example environment file for miner configuration:
+```bash
+cp neurons/example.miner.env neurons/miner.env
+```
+5. Update `miner.env` with your league commitments. Ensure that your commitments reflect the leagues you are participating in. This will enable the system to send you predictions for the appropriate matches.
 
 #### Run with PM2
 ```bash
@@ -116,22 +126,21 @@ pm2 start neurons/miner.py --name Sportstensor-miner -- \
     --blacklist.force_validator_permit
 ```
 
-#### Scoring Mechanism
-1. Home and Away Score Accuracy (Max 0.25 each):
+#### League Committments Return Format
+When responding to league commentment requests, miners need to provide the active leagues they are committing to.
+The `miner.env` file will allow miners to define their league commitments without having to restart their miner.
+```bash
+# NFL, MLB, NBA, etc. -- check common/data.py for all available leagues
+LEAGUE_COMMITMENTS=NFL,MLB,EPL
+```
 
-The scoring function calculates the absolute difference between the predicted and actual scores for both the home and away teams.
-The difference for each team is normalized by a maximum score difference parameter to maintain a scale between 0 and 1.
-Each team's score accuracy contributes up to 0.25 to the total score. A smaller difference results in a higher score, meaning a perfect prediction (no difference) results in the full 0.25 points.
+#### Prediction Return Format
 
-2. Correct Winner Prediction (Max 0.5):
+When responding to prediction requests, miners need to provide two key pieces of information:
+1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
+2. **probability**: The probability for that outcome, as a float between 0 and 1. e.g. 0.6 represents 60% probability.
 
-The function determines the winner based on the predicted scores and compares this to the actual match outcome.
-If the predicted winner matches the actual winner, the full 0.5 points are awarded. If not, no points are awarded for this part of the prediction.
-Total Score Calculation:
-
-The total prediction score is the sum of the individual scores for the home team, away team, and the correct winner prediction.
-The maximum possible score is 1.0, achieved by perfectly predicting the home and away scores (0.25 + 0.25) and correctly identifying the match winner (0.5).
-
+Failure to respond or incorrectly formatted responses will result in penalties as described in the scoring and incentive mechanisms.
 
 ### Running a Validator
 #### Requirements
@@ -146,10 +155,10 @@ The maximum possible score is 1.0, achieved by perfectly predicting the home and
 #### Setup
 1. To start, clone the repository and `cd` to it:
 ```bash
-git clone https://github.com/xzistance/sportstensor/
+git clone https://github.com/sportstensor/sportstensor/
 cd sportstensor
 ```
-2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
+2. Install pm2 if you don't already have it: [pm2.io/docs/runtime/guide/installation/].
 3. Next, install the `Sportstensor` package: `pip install -e .`
 
 #### Run auto-updating validator with PM2 (recommended)
@@ -163,6 +172,8 @@ pm2 start vali_auto_update.sh --name Sportstensor-validator -- \
 ```
 Note: you might need to adjust "python" to "python3" within the `vali_auto_update.sh` depending on your preferred system python.
 
+Additionally, validators can use the flag `--neuron.batch_size X` to set a different batch size for sending requests to miners.
+
 #### Run basic validator with PM2
 ```bash
 pm2 start neurons/validator.py --name Sportstensor-validator -- \
@@ -172,6 +183,13 @@ pm2 start neurons/validator.py --name Sportstensor-validator -- \
     --axon.port {port} \
     --logging.trace
 ```
+
+## Environments
+
+| Network | Netuid |
+| ----------- | -----: |
+| Mainnet     |     41 |
+| Testnet     |    172 |
 
 ## Community
 

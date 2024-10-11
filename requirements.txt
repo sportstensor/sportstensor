@@ -7,3 +7,5 @@ scikit-learn
 matplotlib
 openpyxl
 wandb
+tabulate
+python-dotenv

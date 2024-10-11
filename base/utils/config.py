@@ -177,10 +177,10 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.sample_size",
+        "--neuron.batch_size",
         type=int,
-        help="The number of miners to query in a single step.",
-        default=50,
+        help="The max number of miners to query per batch.",
+        default=120,
     )
 
     parser.add_argument(
@@ -188,6 +188,18 @@ def add_validator_args(cls, parser):
         action="store_true",
         help="Disables setting weights.",
         default=False,
+    )
+   
+    parser.add_argument(
+        "--immediate",
+        action="store_true",
+        help="Triggers setting weights immediately. NOT RECOMMENDED FOR PRODUCTION. This is used internally by SN41 devs for faster testing.",
+    )
+
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Does not launch a wandb run, does not set weights, does not check that your key is registered.",
     )
 
     parser.add_argument(
