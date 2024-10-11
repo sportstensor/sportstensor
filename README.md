@@ -54,19 +54,19 @@ Traditionally, the most accurate sports prediction models have been proprietary,
 
 - Receives requests from the Validator containing specific information such as team names and match details.
 - Accesses historical data and current statistics relevant to the teams involved in the query from sports databases.
-- Utilizes trained machine learning models to analyze the data and predict outcomes such as match scores.
--  Submits the predicted score and relevant analysis back to the Validator for confirmation and further action.
+- Utilizes trained machine learning models to analyze the data and predict the team they think will win and the probability.
+- Returns the prediction back to the Validator for confirmation and further action.
 
 Miners must return two key pieces of information when responding to prediction requests:
 1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
-2. **probability**: The probability for that outcome, as a float.
+2. **probability**: The probability for that outcome, as a float between 0 and 1. e.g. 0.6 represents 60% probability.
 
 Miners who fail to respond or provide incorrect responses will be penalized.
 
 ### Validator
 
 - **Main Loop**: The validator operates in an endless loop, syncing match data every 30 minutes. This includes checking upcoming, in-progress, and completed games.
-- **League Commitment**: Validators send requests every 30 minutes to miners for them to commit to active leagues. Miners must respond with predictions for matches in the committed leagues or they receive a penalty score of 0. Miners who fail to commit to any league are penalized -1.
+- **League Commitment**: Validators send requests every 15 minutes to acquire the active leagues a miner is committed to. Miners are required to respond with predictions for all matches in their committed leagues or receive a penalty. Miners who fail to commit to at least one league will be incrementally penalized until committing or deregistering.
 - **Match Prediction Requests**: Prediction requests are sent out at specific time intervals (24 hours, 12 hours, 4 hours, and 10 minutes before a match). Miners are penalized for non-responses.
 - **Closing Edge Scoring**: After match completion, the validator calculates the closing edge scores for each prediction and updates the local database.
 - **Prediction Cleanup**: Non-registered miners and outdated predictions are regularly cleaned from the system to ensure only valid data is kept.
@@ -76,7 +76,7 @@ Miners who fail to respond or provide incorrect responses will be penalized.
 - **Incentive Mechanism**: 
    - The validator calculates incentives based on miners’ commitments to leagues and their prediction accuracy.
    - Incentives and scores are updated every 20 minutes. League-specific scoring percentages are applied, and scores are aggregated and logged. 
-   - Validators adjust the miners' weights on the chain based on these scores.
+   - Validators set the miners' weights on the chain based on these scores.
    - The max number of predictions included for a miner per league is determined by the league’s **ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE** * 2.
    - A separate background thread handles the processing of calculating scores and setting weights, which runs every 20 minutes.
 
@@ -118,7 +118,7 @@ Miners who fail to respond or provide incorrect responses will be penalized.
 #### Setup
 1. To start, clone the repository and `cd` to it:
 ```bash
-git clone https://github.com/xzistance/sportstensor/
+git clone https://github.com/sportstensor/sportstensor/
 cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io](https://pm2.io/docs/runtime/guide/installation/).
@@ -140,11 +140,19 @@ pm2 start neurons/miner.py --name Sportstensor-miner -- \
     --blacklist.force_validator_permit
 ```
 
+#### League Committments Return Format
+When responding to league commentment requests, miners need to provide the active leagues they are committing to.
+The `miner.env` file will allow miners to define their league commitments without having to restart their miner.
+```bash
+# NFL, MLB, NBA, etc. -- check common/data.py for all available leagues
+LEAGUE_COMMITMENTS=NFL,MLB,EPL
+```
+
 #### Prediction Return Format
 
 When responding to prediction requests, miners need to provide two key pieces of information:
 1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
-2. **probability**: The probability for that outcome, as a float.
+2. **probability**: The probability for that outcome, as a float between 0 and 1. e.g. 0.6 represents 60% probability.
 
 Failure to respond or incorrectly formatted responses will result in penalties as described in the scoring and incentive mechanisms.
 
@@ -161,7 +169,7 @@ Failure to respond or incorrectly formatted responses will result in penalties a
 #### Setup
 1. To start, clone the repository and `cd` to it:
 ```bash
-git clone https://github.com/xzistance/sportstensor/
+git clone https://github.com/sportstensor/sportstensor/
 cd sportstensor
 ```
 2. Install pm2 if you don't already have it: [pm2.io/docs/runtime/guide/installation/].
