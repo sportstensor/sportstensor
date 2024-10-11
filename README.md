@@ -1,7 +1,7 @@
 
 <div align="center">
 
-# Sportstensor: The world's most accurate sports prediction algorithm <!-- omit in toc -->
+# Sportstensor: The future of sports prediction algorithms <!-- omit in toc -->
 [![Sportstensor](/docs/sportstensor_header.png)](https://sportstensor.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
@@ -9,7 +9,7 @@
 
 ---
 - [Introduction](#introduction)
-- [Key Features](#key-features)
+- [Why is this important?](#why-is-this-important)
 - [Miner and Validator Functionality](#miner-and-validator-functionality)
   - [Miner](#miner)
   - [Validator](#validator)
@@ -23,30 +23,17 @@
 ---
 ## Introduction
 
-Welcome to Sportstensor, where cutting-edge technology meets sports analytics. We're pioneering the world's most accurate decentralized sports prediction algorithm, powered by the Bittensor network. Our subnet tackles the challenges of high-quality data sourcing, complex data analysis and limited access to advanced machine learning models.
+Welcome to Sportstensor—the convergence of cutting-edge technology and sports data analytics. We are pioneering unprecedented innovation in sports prediction algorithms, powered by the Bittensor network.
 
-Traditionally, the most accurate sports prediction models have been proprietary, restricting innovation to isolated silos. Collectively, miners and validators are redefining what's possible in this field with the collaborative power of decentralization.
+Our Sportstensor subnet is designed to incentivize the discovery of competitive advantages over closing market odds, enabling top miners within the network to establish machine-driven dominance across the sports prediction landscape.
 
-## Key Features
-🔑 **Open source model development**
-- Sportstensor continuously builds and develops base models for various sports
-- Available on HuggingFace for miners to train and improve on
-
-🏅 **Advanced sports analytics**
-- Strategic planning and performance analysis with predictions made
-- Insights and predictions based on historical and real-time data
-
-💰 **Performance-based incentives**
-- Rewards for comprehensive dataset sourcing
-- Incentives for developing high-performance predictive models
-
-🌐 **User-friendly integration**
-- Intuitive front-end application
-- Seamless access to miner predictions
-
-📈 **Scalable improvement**
-- Dashboard for miner rankings and proximity to target prediction accuracy
-- Designed to foster continous model enhancement for world class results
+## Why is this important?
+- Closing odds represent the pinnacle of market efficiency, determined by thousands of advanced machine learning algorithms.
+- Our subnet fosters the development of true machine intelligence by outperforming competing algorithms in a highly competitive AI-versus-AI environment.
+- Even with sophisticated models, bettors struggle to be profitable, as bookmakers frequently impose strict limits on consistent winners.
+- There is substantial demand for high-performing predictive AI from betting operators, financial firms, syndicates, and algorithmic traders seeking more accurate models.
+- We attract top AI and machine learning talent from diverse industries, encouraging them to revolutionize sports prediction markets.
+- By decentralizing the creation and improvement of predictive models, we reduce reliance on any single entity or algorithm, enhancing resilience and driving innovation in the sports prediction market.
 
 ## Miner and Validator Functionality
 
@@ -91,24 +78,23 @@ Miners who fail to respond or provide incorrect responses will be penalized.
 - [x] Develop baseline model for soccer (Major League Soccer)
 - [x] Develop baseline model for baseball (Major League Baseball)
 - [x] Launch website (sportstensor.com)
-- [ ] Begin marketing for brand awareness and interest
+- [x] Begin marketing for brand awareness and interest
+- [x] Build dashboard
+- [x] Launch front-end application
 
-### Phase 2: Expansion (Q4 2024)
-- [ ] Launch front-end application
-- [ ] Introduce next level of prediction queries and validation metrics
+### Phase 2: Upgrade (Q4 2024)
+- [ ] Upgrade incentive mechanism to v2
+- [ ] Upgrade dashboard to track miner performance and progress
+- [ ] Achieve machine learning dominance over the sports prediction market by our top miners
 - [ ] Collaborations and partnerships with synergistic companies and subnets
-- [ ] Build our proprietary database for miners
-- [ ] Achieve competitive baseline prediction accuracy
-- [ ] Build proprietary LLM chatbot hooked up to miner predictions
-- [ ] Monetize predictions through front-end
+- [ ] Build application to monetize validator bandwidth
+- [ ] Expand on commitable leagues
 
-### Phase 3: Refinement (Q1 2025)
-- [ ] Market and sales expansion
-- [ ] Further develop baseline models
-- [ ] Expand to basketball and NFL to cover the whole year for sports
-- [ ] Explore niche sports such as eSports and UFC
-- [ ] Monetize API access to predictions and proprietary database
-- [ ] Build super secret Sportstensor tool 😉
+### Phase 3: Expand (Q1 2025)
+- [ ] Market and B2B sales expansion
+- [ ] Grow the team
+- [ ] Explore niche sports offerings
+- [ ] Develop additional products
 
 ## Running Miners and Validators
 
