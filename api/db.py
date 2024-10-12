@@ -23,8 +23,14 @@ GET_MATCH_QUERY = """
             m.homeTeamName,
             m.awayTeamName,
             m.sport,
-            m.homeTeamScore,
-            m.awayTeamScore,
+            CASE 
+                WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                ELSE m.homeTeamScore 
+            END AS homeTeamScore,
+            CASE 
+                WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                ELSE m.awayTeamScore 
+            END AS awayTeamScore,
             m.matchLeague,
             m.isComplete,
             ml.oddsapiMatchId
@@ -293,8 +299,14 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
                 sport=VALUES(sport),
                 homeTeamName=VALUES(homeTeamName),
                 awayTeamName=VALUES(awayTeamName),
-                homeTeamScore=VALUES(homeTeamScore),
-                awayTeamScore=VALUES(awayTeamScore),
+                homeTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(homeTeamScore), 0)
+                    ELSE VALUES(homeTeamScore)
+                END,
+                awayTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(awayTeamScore), 0)
+                    ELSE VALUES(awayTeamScore)
+                END,
                 matchLeague=VALUES(matchLeague),
                 isComplete=VALUES(isComplete),
                 lastUpdated=VALUES(lastUpdated)
