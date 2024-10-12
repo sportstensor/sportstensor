@@ -1,5 +1,7 @@
 import wandb
+import schedule
 from datetime import datetime, timedelta
+import time
 
 # Set your wandb project and entity
 PROJECT_NAME = 'sportstensor-vali-logs'
@@ -39,10 +41,21 @@ def delete_old_runs():
             print(f"Deleting run {run.id} created at {run.created_at}")
             run.delete()
 
-# Delete old runs
-delete_old_runs()
+    print("\n")
+    print("Old logs and artifacts cleanup completed.")
+    print("\n--------------------------------------------------------------------")
 
-# Delete old artifacts
-#delete_old_artifacts()
+if __name__ == "__main__":
+    # Schedule the function to run every 12 hours
+    schedule.every(720).minutes.do(delete_old_runs)
 
-print("Old logs and artifacts cleanup completed.")
+    # Delete old runs
+    delete_old_runs()
+
+    # Delete old artifacts
+    #delete_old_artifacts()
+
+    # Run the scheduler in an infinite loop
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
