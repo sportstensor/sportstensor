@@ -101,6 +101,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                             closingEdge         FLOAT           NULL,
                             isArchived          INTEGER         DEFAULT 0
                             )"""
+    
+    HOTFIX_CE20241012a_MARKER_FILE = "HOTFIX_CE20241012a_MARKER_FILE.txt"
 
     def __init__(self):
         self._initialized = False
@@ -138,6 +140,9 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Create the MatchPredictions table (if it does not already exist).
                 cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
+                # Execute db hotfix
+                self.execute_db_hotfix()
+
                 # Commit the changes and close the connection
                 connection.commit()
 
@@ -165,6 +170,28 @@ class SqliteValidatorStorage(ValidatorStorage):
         if not self._initialized:
             raise RuntimeError("SqliteValidatorStorage has not been initialized")
         return self.continuous_connection_do_not_reuse
+    
+    def execute_db_hotfix(self):
+        if os.path.exists(self.HOTFIX_CE20241012a_MARKER_FILE):
+            print("Deletion has already been executed. Skipping.")
+            return
+
+        try:
+            with self.lock:
+                with contextlib.closing(self._create_connection()) as connection:
+                    cursor = connection.cursor()
+                    cursor.execute(
+                        """UPDATE MatchPredictions SET isScored=0, scoredDate=NULL, closingEdge=NULL WHERE matchId IN ('701567b38a322dfefa6911836488ea0a','32ba9116bafe06d271a25dacf91f1af4','fff1c288ec7e5e6ca7faaeecbea6d719')""",
+                    )
+                    connection.commit()
+            
+            # Create the marker file
+            with open(self.HOTFIX_CE20241012a_MARKER_FILE, "w") as f:
+                f.write("Deletion executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
+            
+            print("Marker file created. This script will not run the deletion again.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
     
     def cleanup(self):
         """Cleanup the database."""

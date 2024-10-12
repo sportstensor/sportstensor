@@ -18,22 +18,32 @@ from common.constants import (
     NO_LEAGUE_COMMITMENT_PENALTY
 )
 
-def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, consensus_closing_odds: float) -> Tuple[float, int]:
+def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, winning_closing_odds: float, losing_closing_odds: float) -> Tuple[float, int]:
     """
     Calculate the edge for a prediction on a two-sided market.
     
     :param prediction_team: str, either 'A' or 'B', representing the team chosen
     :param prediction_prob: float, weak learner's probability of winning for the chosen team at prediction time
     :param actual_team: str, either 'A' or 'B', representing the team that actually won
-    :param consensus_closing_odds: float, consensus probability of winning for the chosen team at match start time
+    :param winning_closing_odds: float, consensus probability of winning team at match start time
+    :param losing_closing_odds: float, consensus probability of losing team at match start time
     :return: float, the calculated edge
     """
     model_prediction_correct = (prediction_team == actual_team)
-    reward_punishment = 1 if model_prediction_correct else -1
+    # consensus_closing_odds: float, consensus probability of winning for the chosen team at match start time
+    if model_prediction_correct:
+        reward_punishment = 1
+        consensus_closing_odds = winning_closing_odds
+    else:
+        reward_punishment = -1
+        consensus_closing_odds = losing_closing_odds
+
+    # draws have no edge. temporary
+    if winning_closing_odds == losing_closing_odds:
+        reward_punishment = 0
     
     edge = consensus_closing_odds - (1 / prediction_prob)
     return reward_punishment * edge, 1 if reward_punishment == 1 else 0
-
 
 def compute_significance_score(num_miner_predictions: int, num_threshold_predictions: int, alpha: float) -> float:
     """

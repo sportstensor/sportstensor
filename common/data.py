@@ -274,3 +274,11 @@ class MatchPredictionWithMatchData(BaseModel):
         elif self.actualHomeTeamScore < self.actualAwayTeamScore:
             return self.awayTeamOdds
         return self.drawOdds
+    
+    def get_actual_loser_odds(self) -> float:
+        """Get the odds of the actual loser of the match."""
+        if self.actualHomeTeamScore > self.actualAwayTeamScore:
+            return self.awayTeamOdds
+        elif self.actualHomeTeamScore < self.actualAwayTeamScore:
+            return self.homeTeamOdds
+        return self.drawOdds
