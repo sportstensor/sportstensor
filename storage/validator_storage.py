@@ -65,6 +65,11 @@ class ValidatorStorage(ABC):
         raise NotImplemented
     
     @abstractmethod
+    def get_recently_completed_matches(self, matchDateSince: dt.datetime) -> List[Match]:
+        """Gets completed matches since the passed in date."""
+        raise NotImplemented
+    
+    @abstractmethod
     def update_match_prediction_request(self, matchId: str, request_time: str):
         """Updates a match prediction request with the status of the request_time."""
         raise NotImplemented
@@ -87,11 +92,6 @@ class ValidatorStorage(ABC):
     @abstractmethod
     def delete_unscored_deregistered_match_predictions(self, miner_hotkeys: List[str], miner_uids: List[int]):
         """Deletes unscored predictions returned from miners that are no longer registered."""
-        raise NotImplemented
-    
-    @abstractmethod
-    def get_eligible_match_predictions_since(self, hoursAgo: int) -> Optional[List[MatchPrediction]]:
-        """Gets all predictions that are eligible to be scored and have been made since hoursAgo hours ago."""
         raise NotImplemented
 
     @abstractmethod

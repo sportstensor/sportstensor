@@ -16,7 +16,8 @@ from storage.sqlite_validator_storage import SqliteValidatorStorage
 
 from common.constants import (
     IS_DEV,
-    VALIDATOR_TIMEOUT
+    VALIDATOR_TIMEOUT,
+    SCORING_CUTOFF_IN_DAYS
 )
 
 from neurons.validator import Validator
@@ -81,57 +82,67 @@ async def sync_match_data(match_data_endpoint) -> bool:
         bt.logging.error(f"Error getting match data: {e}")
         return False
     
-def sync_match_odds_data(match_odds_data_endpoint: str, matchId: str = None) -> Optional[List[Tuple[str, float, float, float, str]]]:
+def fetch_match_odds(match_odds_data_endpoint: str, match_id: str) -> Dict:
+    url = f"{match_odds_data_endpoint}?matchId={match_id}"
+    # TODO: add in authentication?
+    response = requests.get(url, timeout=5)
+    response.raise_for_status()
+    return response.json()
+
+def sync_match_odds_data(match_odds_data_endpoint: str) -> bool:
     try:
-        # Construct the URL
-        if matchId:
-            match_odds_data_endpoint = f"{match_odds_data_endpoint}?matchId={matchId}"
+        # Get matches from the last SCORING_CUTOFF_IN_DAYS days
+        x_days_ago = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=SCORING_CUTOFF_IN_DAYS)
+        recent_matches = storage.get_recently_completed_matches(x_days_ago)
 
-        # Make the GET request
-        response = requests.get(match_odds_data_endpoint)
-        response.raise_for_status()
-        odds_data = response.json()
-
-        if not odds_data or "match_odds" not in odds_data:
-            bt.logging.debug("No odds data returned from API")
-            return None
-        
-        odds_data = odds_data["match_odds"]
-        if len(odds_data) == 0:
-            bt.logging.debug("No odds data returned from API")
-            return None
+        if not recent_matches:
+            bt.logging.debug("No recent matches found in the database")
+            return False
 
         odds_to_insert = []
-        for item in odds_data:
-            if "matchId" not in item:
-                bt.logging.error(f"Skipping odds data missing matchId: {item}")
+
+        for match in recent_matches:
+            try:
+                odds_data = fetch_match_odds(match_odds_data_endpoint, match.matchId)
+            except Exception as e:
+                bt.logging.error(f"Error fetching odds for match {match.matchId}: {e}")
                 continue
-            if not storage.check_match_odds(item["matchId"]):
-                odds_to_insert.append((
-                    item["matchId"],
-                    float(item.get("homeTeamOdds", 0) or 0),
-                    float(item.get("awayTeamOdds", 0) or 0),
-                    float(item.get("drawOdds", 0) or 0),
-                    dt.datetime.strptime(item["lastUpdated"], "%Y-%m-%dT%H:%M:%S")
-                ))
+
+            if not odds_data or "match_odds" not in odds_data:
+                bt.logging.debug(f"No odds data returned from API for match {match.matchId}")
+                continue
+
+            match_odds = odds_data["match_odds"]
+            if not match_odds:
+                bt.logging.debug(f"Empty odds data returned from API for match {match.matchId}")
+                continue
+
+            for item in match_odds:
+                if "matchId" not in item:
+                    bt.logging.error(f"Skipping odds data missing matchId: {item}")
+                    continue
+
+                lastUpdated = dt.datetime.strptime(item["lastUpdated"], "%Y-%m-%dT%H:%M:%S")
+                if not storage.check_match_odds(item["matchId"], lastUpdated):
+                    odds_to_insert.append((
+                        item["matchId"],
+                        float(item.get("homeTeamOdds", 0) or 0),
+                        float(item.get("awayTeamOdds", 0) or 0),
+                        float(item.get("drawOdds", 0) or 0),
+                        lastUpdated
+                    ))
 
         if odds_to_insert:
             storage.insert_match_odds(odds_to_insert)
             bt.logging.info(f"Inserted {len(odds_to_insert)} odds for matches.")
-
-        return odds_to_insert
-
-    except ValueError as e:
-        bt.logging.error(f"Error processing odds data: {e}")
-        return None
-
-    except requests.RequestException as e:
-        bt.logging.error(f"Error getting odds data: {e}")
-        return None
+            return True
+        else:
+            bt.logging.info("No new odds data collected from API.")
+            return True
 
     except Exception as e:
-        bt.logging.error(f"Unexpected error getting odds data: {e}")
-        return None
+        bt.logging.error(f"Unexpected error in sync_match_odds_data: {e}")
+        return False
 
 async def process_app_prediction_requests(
     vali: Validator,

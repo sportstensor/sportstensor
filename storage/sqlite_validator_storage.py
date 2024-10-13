@@ -404,14 +404,14 @@ class SqliteValidatorStorage(ValidatorStorage):
                 )
                 connection.commit()
 
-    def check_match_odds(self, matchId: str) -> bool:
+    def check_match_odds(self, matchId: str, lastUpdated: str) -> bool:
         """Check if match odds with the given ID exists in the database."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.execute(
-                    """SELECT EXISTS(SELECT 1 FROM MatchOdds WHERE matchId = ?)""",
-                    (matchId,),
+                    """SELECT EXISTS(SELECT 1 FROM MatchOdds WHERE matchId = ? AND lastUpdated = ?)""",
+                    (matchId, lastUpdated),
                 )
                 return cursor.fetchone()[0]
 
@@ -481,6 +481,35 @@ class SqliteValidatorStorage(ValidatorStorage):
                     cursor.execute(query, (lower_bound_str, upper_bound_str, batchsize))
                 else:
                     cursor.execute(query, (lower_bound_str, upper_bound_str))
+                
+                results = cursor.fetchall()
+                if not results:
+                    return []
+
+                # Convert the raw database results into Pydantic models
+                matches = [
+                    Match(
+                        **dict(zip([column[0] for column in cursor.description], row))
+                    )
+                    for row in results
+                ]
+                return matches
+            
+    def get_recently_completed_matches(self, matchDateSince: dt.datetime) -> List[Match]:
+        """Gets completed matches since the passed in date."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                # Convert datetime to string in 'YYYY-MM-DD HH:MM:SS' format
+                dateSince = matchDateSince.strftime("%Y-%m-%d %H:%M:%S")
+
+                cursor = connection.cursor()
+                query = """
+                    SELECT * 
+                    FROM Matches
+                    WHERE isComplete = 1
+                    AND matchDate > ?
+                    """
+                cursor.execute(query, (dateSince,))
                 
                 results = cursor.fetchall()
                 if not results:
@@ -669,93 +698,6 @@ class SqliteValidatorStorage(ValidatorStorage):
                             values,
                         )
                         connection.commit()
-
-    def get_eligible_match_predictions_since(self, hoursAgo: int) -> Optional[List[MatchPredictionWithMatchData]]:
-        """Gets all predictions that are eligible to be scored and have been made since hoursAgo hours ago."""
-        with self.lock:
-            with contextlib.closing(self._create_connection()) as connection:
-                cursor = connection.cursor()
-
-                # Calculate the current timestamp
-                current_timestamp = int(time.time())
-                # Calculate cutoff date timestamp
-                prediction_cutoff_timestamp = current_timestamp - (
-                    hoursAgo * 24 * 3600
-                )
-                # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
-                prediction_cutoff_str = dt.datetime.utcfromtimestamp(
-                    prediction_cutoff_timestamp
-                ).strftime("%Y-%m-%d %H:%M:%S")
-
-                cursor.execute(
-                    """
-                    SELECT 
-                        mp.*,
-                        m.homeTeamScore as actualHomeTeamScore, m.awayTeamScore as actualAwayTeamScore, m.winOdds,
-                        CASE
-                            WHEN mp.homeTeamScore > mp.awayTeamScore THEN mp.homeTeamName
-                            WHEN mp.homeTeamScore < mp.awayTeamScore THEN mp.awayTeamName
-                            ELSE 'Draw'
-                        END AS predictedTeam,
-                        CASE
-                            WHEN m.homeTeamScore > m.awayTeamScore THEN m.homeTeamName
-                            WHEN m.homeTeamScore < m.awayTeamScore THEN m.awayTeamName
-                            ELSE 'Draw'
-                        END AS actualTeam
-                    FROM MatchPredictions mp
-                    JOIN Matches m ON (m.matchId = mp.matchId)
-                    WHERE mp.isScored = 0
-                    AND m.isComplete = 1
-                    AND mp.lastUpdated > ?
-                    AND mp.homeTeamScore IS NOT NULL
-                    AND mp.awayTeamScore IS NOT NULL
-                    AND mp.winProbability IS NOT NULL
-                    AND m.homeTeamScore IS NOT NULL
-                    AND m.awayTeamScore IS NOT NULL
-                    AND m.winOdds IS NOT NULL
-                    ORDER BY mp.lastUpdated ASC
-                    """,
-                    [prediction_cutoff_str],
-                )
-                results = cursor.fetchall()
-                if not results:
-                    return []
-
-                # Convert the raw database results into the new combined Pydantic model
-                combined_predictions = []
-                for row in results:
-                    prediction_data = {
-                        "predictionId": row[0],
-                        "minerId": row[1],
-                        "hotkey": row[2],
-                        "matchId": row[3],
-                        "matchDate": row[4],
-                        "sport": row[5],
-                        "league": row[6],
-                        "homeTeamName": row[7],
-                        "awayTeamName": row[8],
-                        "homeTeamScore": row[9],
-                        "awayTeamScore": row[10],
-                        "winProbability": row[11],
-                        "isScored": row[12],
-                        # row[13] is scoredDate
-                        "lastUpdated": row[14],
-                    }
-                    try:
-                        combined_predictions.append(
-                            MatchPredictionWithMatchData(
-                                prediction=MatchPrediction(**prediction_data),
-                                actualHomeTeamScore=row[15],
-                                actualAwayTeamScore=row[16],
-                                actualWinOdds=row[17],
-                                predictedTeam=row[18],
-                                actualTeam=row[19],
-                            )
-                        )
-                    except ValidationError as e:
-                        bt.logging.error(f"Validation error for row {row}: {e}")
-
-                return combined_predictions
     
     def get_match_predictions_to_score(
         self, batchsize: int = 10, matchDateCutoff: int = SCORING_CUTOFF_IN_DAYS
