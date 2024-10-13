@@ -103,6 +103,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             )"""
     
     HOTFIX_CE20241012a_MARKER_FILE = "HOTFIX_CE20241012a_MARKER_FILE.txt"
+    HOTFIX_CE20241013a_MARKER_FILE = "HOTFIX_CE20241013a_MARKER_FILE.txt"
 
     def __init__(self):
         self._initialized = False
@@ -140,8 +141,10 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Create the MatchPredictions table (if it does not already exist).
                 cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
-                # Execute db hotfix
-                self.execute_db_hotfix()
+                # Execute db hotfix ce20241012a
+                self.execute_db_hotfix_ce20241012a()
+                # Execute db hotfix ce20241013a
+                self.execute_db_hotfix_ce20241013a()
 
                 # Commit the changes and close the connection
                 connection.commit()
@@ -171,9 +174,9 @@ class SqliteValidatorStorage(ValidatorStorage):
             raise RuntimeError("SqliteValidatorStorage has not been initialized")
         return self.continuous_connection_do_not_reuse
     
-    def execute_db_hotfix(self):
+    def execute_db_hotfix_ce20241012a(self):
         if os.path.exists(self.HOTFIX_CE20241012a_MARKER_FILE):
-            print("Deletion has already been executed. Skipping.")
+            print(f"{self.HOTFIX_CE20241012a_MARKER_FILE} Update has already been executed. Skipping.")
             return
 
         try:
@@ -187,9 +190,31 @@ class SqliteValidatorStorage(ValidatorStorage):
             
             # Create the marker file
             with open(self.HOTFIX_CE20241012a_MARKER_FILE, "w") as f:
-                f.write("Deletion executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
+                f.write("Update executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
             
-            print("Marker file created. This script will not run the deletion again.")
+            print(f"Marker file created: {self.HOTFIX_CE20241012a_MARKER_FILE}. This script will not run the update again.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+    def execute_db_hotfix_ce20241013a(self):
+        if os.path.exists(self.HOTFIX_CE20241013a_MARKER_FILE):
+            print(f"{self.HOTFIX_CE20241013a_MARKER_FILE} Update has already been executed. Skipping.")
+            return
+
+        try:
+            with self.lock:
+                with contextlib.closing(self._create_connection()) as connection:
+                    cursor = connection.cursor()
+                    cursor.execute(
+                        """UPDATE MatchPredictions SET isScored=0, scoredDate=NULL, closingEdge=NULL WHERE probabilityChoice = 'Draw'""",
+                    )
+                    connection.commit()
+            
+            # Create the marker file
+            with open(self.HOTFIX_CE20241013a_MARKER_FILE, "w") as f:
+                f.write("Update executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
+            
+            print(f"Marker file created: {self.HOTFIX_CE20241013a_MARKER_FILE}. This script will not run the update again.")
         except Exception as e:
             print(f"An error occurred: {e}")
     
