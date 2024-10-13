@@ -107,17 +107,16 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
     bt.logging.debug(f"  • Closing Odds: {pwmd.get_actual_winner_odds()}")
     return prediction_odds - pwmd.get_actual_winner_odds()
 
-def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: ProbabilityChoice) -> Optional[float]:
+def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: str) -> Optional[float]:
     """
-    Find the closest odds to the prediction time, ensuring the odds are after the prediction.
+    Find the closest odds to the prediction time, ensuring the odds are before or at the prediction time.
 
     :param match_odds: List of tuples (matchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated)
     :param prediction_time: DateTime of the prediction
     :param probability_choice: ProbabilityChoice selection of the prediction
-    :return: The closest odds value after the prediction time, or None if no suitable odds are found
+    :return: The closest odds value before or at the prediction time, or None if no suitable odds are found
     """
     closest_odds = None
-    smallest_time_diff = float('inf')
     closest_odds_time = None
 
     # Ensure prediction_time is offset-aware
@@ -129,10 +128,10 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
         if odds_datetime.tzinfo is None:
             odds_datetime = odds_datetime.replace(tzinfo=pytz.UTC)
 
-        # Skip odds that are before or equal to the prediction time
-        if odds_datetime <= prediction_time:
+        # Skip odds that are after the prediction time
+        if odds_datetime > prediction_time:
             continue
-
+        
         if probability_choice in [ProbabilityChoice.HOMETEAM, ProbabilityChoice.HOMETEAM.value]:
             odds = homeTeamOdds
         elif probability_choice in [ProbabilityChoice.AWAYTEAM, ProbabilityChoice.AWAYTEAM.value]:
@@ -143,22 +142,21 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
         if odds is None:
             continue
 
-        time_diff = (odds_datetime - prediction_time).total_seconds()
-
-        if time_diff < smallest_time_diff:
-            smallest_time_diff = time_diff
+        # Update closest odds if this is the first valid odds or if it's closer to the prediction time
+        if closest_odds_time is None or odds_datetime > closest_odds_time:
             closest_odds = odds
             closest_odds_time = odds_datetime
 
     if closest_odds is not None:
-        time_diff_readable = str(timedelta(seconds=int(smallest_time_diff)))
+        time_diff = prediction_time - closest_odds_time
+        time_diff_readable = str(time_diff)
         bt.logging.debug(f"  • Prediction Time: {prediction_time}")
         bt.logging.debug(f"  • Closest Odds Time: {closest_odds_time}")
         bt.logging.debug(f"  • Time Difference: {time_diff_readable}")
         bt.logging.debug(f"  • Prediction Time Odds: {closest_odds}")
         bt.logging.debug(f"  • Probability Choice: {probability_choice}")
     else:
-        bt.logging.debug(f"No suitable odds found after the prediction time: {prediction_time}")
+        bt.logging.debug(f"No suitable odds found before or at the prediction time: {prediction_time}")
 
     return closest_odds
 
@@ -317,12 +315,8 @@ def calculate_incentives_and_update_scores(vali):
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
                 if match_odds is None or len(match_odds) == 0:
-                    bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId} in db. Attempting sync with API.")
-                    # Try and grab match odds from API
-                    match_odds = utils.sync_match_odds_data(vali.match_odds_endpoint, pwmd.prediction.matchId)
-                    if match_odds is None:
-                        bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
-                        continue
+                    bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
+                    continue
                 
                 # Calculate our time delta expressed in minutes
                 # Ensure prediction.matchDate is offset-aware

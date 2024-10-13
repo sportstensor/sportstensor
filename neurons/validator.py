@@ -149,18 +149,30 @@ class Validator(BaseValidatorNeuron):
 
     
     def incentive_scoring_and_set_weights(self, ttl: int):
-        # Continually loop and execute at the 20-minute mark
+        # Continually loop and execute at the 30-minute mark
         while not self.stop_event.is_set():
             current_time = dt.datetime.utcnow()
             minutes = current_time.minute
             
-            # Check if we're at a 20-minute mark
-            if minutes % 20 == 0 or self.config.immediate:
+            # Check if we're at a 30-minute mark
+            if minutes % 30 == 0 or self.config.immediate:
                 # Skip processing if we haven't loaded our league commitments yet
                 if len(self.uids_to_leagues) == 0:
                     bt.logging.info("Skipping calculating incentives, updating scores, and setting weights. League commitments not loaded yet.")
                     time.sleep(60)
                     continue
+
+                try:
+                    bt.logging.info(
+                        "*** Syncing the latest match odds data to local validator storage. ***"
+                    )
+                    sync_result = utils.sync_match_odds_data(self.match_odds_endpoint)
+                    if sync_result:
+                        bt.logging.info("Successfully synced match odds data.")
+                    else:
+                        bt.logging.warning("Issue syncing match odds data")
+                except Exception as e:
+                    bt.logging.error(f"Error syncing match odds: {str(e)}")
 
                 try:
                     bt.logging.debug("Calculating incentives.")
@@ -182,7 +194,7 @@ class Validator(BaseValidatorNeuron):
             else:
                 # only log every 5 minutes
                 if minutes % 5 == 0:
-                    bt.logging.debug(f"Skipping setting weights. Only set weights at 20-minute marks.")
+                    bt.logging.debug(f"Skipping setting weights. Only set weights at 30-minute marks.")
 
             # sleep for 1 minute before checking again
             time.sleep(60)
