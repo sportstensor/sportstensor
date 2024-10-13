@@ -39,7 +39,7 @@ def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: st
         consensus_closing_odds = losing_closing_odds
 
     # draws have no edge. temporary
-    if winning_closing_odds == losing_closing_odds:
+    if prediction_team == "Draw" or winning_closing_odds == losing_closing_odds:
         reward_punishment = 0
     
     edge = consensus_closing_odds - (1 / prediction_prob)
