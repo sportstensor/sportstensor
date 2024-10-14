@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 from typing import List, Dict, Tuple, Optional
 from tabulate import tabulate
+import random
 
 import bittensor as bt
 from storage.sqlite_validator_storage import get_storage
@@ -81,11 +82,18 @@ def calculate_sigma(pwmd: MatchPredictionWithMatchData) -> float:
     
     :return: float, the calculated incentive score (sigma)
     """
-    model_prediction_correct = 1 if (pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner()) else -1
-    closing_odds = pwmd.get_actual_winner_odds()
-    return model_prediction_correct * (closing_odds - (1 / pwmd.prediction.probability))
+    model_prediction_correct = (pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+    
+    if model_prediction_correct:
+        reward_punishment = 1
+        closing_odds = pwmd.get_actual_winner_odds()
+    else:
+        reward_punishment = -1
+        closing_odds = pwmd.get_actual_loser_odds()
+    
+    return reward_punishment * (closing_odds - (1 / pwmd.prediction.probability))
 
-def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData):
+def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
     """
     Calculate the closing line value for this prediction.
 
@@ -95,19 +103,27 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
     """
     
     # Find the odds for the match at the time of the prediction
-    prediction_odds = find_closest_odds(match_odds, pwmd.prediction.predictionDate, pwmd.prediction.probabilityChoice)
+    prediction_odds = find_closest_odds(match_odds, pwmd.prediction.predictionDate, pwmd.prediction.probabilityChoice, log_prediction)
     
     if prediction_odds is None:
         bt.logging.debug(f"Unable to find suitable odds for matchId {pwmd.prediction.matchId} at prediction time. Skipping calculation of this prediction.")
         return None
 
-    bt.logging.debug(f"  • Implied odds: {(1/pwmd.prediction.probability):.4f}")
+    if log_prediction:
+        bt.logging.debug(f"      • Implied odds: {(1/pwmd.prediction.probability):.4f}")
 
     # clv is the distance between the odds at the time of prediction to the closing odds. Anything above 0 is derived value based on temporal drift of information
-    bt.logging.debug(f"  • Closing Odds: {pwmd.get_actual_winner_odds()}")
-    return prediction_odds - pwmd.get_actual_winner_odds()
+    model_prediction_correct = (pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+    if model_prediction_correct:
+        closing_odds = pwmd.get_actual_winner_odds()
+    else:
+        closing_odds = pwmd.get_actual_loser_odds()
+    if log_prediction:
+        bt.logging.debug(f"      • Closing Odds: {closing_odds}")
 
-def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: str) -> Optional[float]:
+    return prediction_odds - closing_odds
+
+def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: str, log_prediction: bool) -> Optional[float]:
     """
     Find the closest odds to the prediction time, ensuring the odds are before or at the prediction time.
 
@@ -150,11 +166,13 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
     if closest_odds is not None:
         time_diff = prediction_time - closest_odds_time
         time_diff_readable = str(time_diff)
-        bt.logging.debug(f"  • Prediction Time: {prediction_time}")
-        bt.logging.debug(f"  • Closest Odds Time: {closest_odds_time}")
-        bt.logging.debug(f"  • Time Difference: {time_diff_readable}")
-        bt.logging.debug(f"  • Prediction Time Odds: {closest_odds}")
-        bt.logging.debug(f"  • Probability Choice: {probability_choice}")
+        if log_prediction:
+            bt.logging.debug(f"  ---- Randomly logged prediction ----")
+            bt.logging.debug(f"      • Prediction Time: {prediction_time}")
+            bt.logging.debug(f"      • Closest Odds Time: {closest_odds_time}")
+            bt.logging.debug(f"      • Time Difference: {time_diff_readable}")
+            bt.logging.debug(f"      • Prediction Time Odds: {closest_odds}")
+            bt.logging.debug(f"      • Probability Choice: {probability_choice}")
     else:
         bt.logging.debug(f"No suitable odds found before or at the prediction time: {prediction_time}")
 
@@ -312,6 +330,8 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.debug(f"  • Rho: {rho:.4f}")
             total_score = 0
             for pwmd in predictions_with_match_data:
+                log_prediction = random.random() < 0.01
+
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
                 if match_odds is None or len(match_odds) == 0:
@@ -332,32 +352,36 @@ def calculate_incentives_and_update_scores(vali):
 
                 # Calculate time delta in minutes    
                 delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
-                bt.logging.debug(f"  • Time delta: {delta_t:.4f}")
+                if log_prediction:
+                    bt.logging.debug(f"      • Time delta: {delta_t:.4f}")
                 
                 # Calculate closing line value
-                clv = calculate_clv(match_odds, pwmd)
+                clv = calculate_clv(match_odds, pwmd, log_prediction)
                 if clv is None:
                     continue
-                else:
-                    bt.logging.debug(f"  • Closing line value: {clv:.4f}")
+                elif log_prediction:
+                    bt.logging.debug(f"      • Closing line value: {clv:.4f}")
 
                 v = calculate_incentive_score(
                     delta_t=delta_t,
                     clv=clv,
                     gamma=vali.GAMMA,
                     kappa=vali.TRANSITION_KAPPA, 
-                    beta=vali.EXTREMIS_BETA,
+                    beta=vali.EXTREMIS_BETA
                 )
-                bt.logging.debug(f"  • Incentive score (v): {v:.4f}")
+                if log_prediction:
+                    bt.logging.debug(f"      • Incentive score (v): {v:.4f}")
 
                 # Calculate sigma
                 sigma = calculate_sigma(pwmd)
-                bt.logging.debug(f"  • Sigma: {sigma:.4f}")
+                if log_prediction:
+                    bt.logging.debug(f"      • Sigma: {sigma:.4f}")
 
                 # Apply sigma to v
                 total_score += v * sigma
-                bt.logging.debug(f"  • Total score: {total_score:.4f}")
-                bt.logging.debug("-" * 50)
+                if log_prediction:
+                    bt.logging.debug(f"      • Total score: {total_score:.4f}")
+                    bt.logging.debug("-" * 50)
 
             final_score = rho * total_score
             league_scores[league][index] = final_score

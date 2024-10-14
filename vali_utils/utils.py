@@ -17,7 +17,8 @@ from storage.sqlite_validator_storage import SqliteValidatorStorage
 from common.constants import (
     IS_DEV,
     VALIDATOR_TIMEOUT,
-    SCORING_CUTOFF_IN_DAYS
+    SCORING_CUTOFF_IN_DAYS,
+    LEAGUES_ALLOWING_DRAWS
 )
 
 from neurons.validator import Validator
@@ -640,6 +641,13 @@ def is_match_prediction_valid(
             False,
             f"Probability choice {prediction.probabilityChoice} is not of type ProbabilityChoice or str",
         )
+    # Check if probability choice is 'Draw' and if so, that the prediction league is eligible to have Draws
+    if (prediction.probabilityChoice == ProbabilityChoice.DRAW or prediction.probabilityChoice == ProbabilityChoice.DRAW.value):
+        if input_synapse.match_prediction.league not in LEAGUES_ALLOWING_DRAWS:
+            return (
+                False,
+                f"Probability choice {prediction.probabilityChoice} is not allowed for league: {prediction.league}",
+            )
     
     if not isinstance(prediction.probability, float):
         return (
@@ -651,30 +659,6 @@ def is_match_prediction_valid(
             False,
             f"Probability {prediction.probability} is not between 0 and 1",
         )
-    """ Turning off homeTeamScore and awayTeamScore validation as it will no longer be needed.
-    # Check the validity of the scores
-    if not isinstance(prediction.homeTeamScore, int):
-        return (
-            False,
-            f"Home team score {prediction.homeTeamScore} is not an integer",
-        )
-    if prediction.homeTeamScore < 0:
-        return (
-            False,
-            f"Home team score {prediction.homeTeamScore} is a negative integer",
-        )
-
-    if not isinstance(prediction.awayTeamScore, int):
-        return (
-            False,
-            f"Away team score {prediction.awayTeamScore} is not an integer",
-        )
-    if prediction.awayTeamScore < 0:
-        return (
-            False,
-            f"Away team score {prediction.awayTeamScore} is a negative integer",
-        )
-    """
 
     # Check that the current time is before the match date
     current_time = dt.datetime.now(dt.timezone.utc)

@@ -57,6 +57,11 @@ ACTIVE_LEAGUES = [
     League.NFL
 ]
 
+LEAGUES_ALLOWING_DRAWS = [
+    League.EPL,
+    League.MLS
+]
+
 ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
     League.MLB: 250,
     League.NBA: 250,
