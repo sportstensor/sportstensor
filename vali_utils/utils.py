@@ -18,7 +18,8 @@ from common.constants import (
     IS_DEV,
     VALIDATOR_TIMEOUT,
     SCORING_CUTOFF_IN_DAYS,
-    LEAGUES_ALLOWING_DRAWS
+    LEAGUES_ALLOWING_DRAWS,
+    MINIMUM_PREDICTION_PROBABILITY
 )
 
 from neurons.validator import Validator
@@ -654,10 +655,10 @@ def is_match_prediction_valid(
             False,
             f"Probability {prediction.probability} is not a float",
         )
-    if prediction.probability < 0 or prediction.probability > 1:
+    if prediction.probability < MINIMUM_PREDICTION_PROBABILITY or prediction.probability > 1:
         return (
             False,
-            f"Probability {prediction.probability} is not between 0 and 1",
+            f"Probability {prediction.probability} is not between {MINIMUM_PREDICTION_PROBABILITY} and 1",
         )
 
     # Check that the current time is before the match date
