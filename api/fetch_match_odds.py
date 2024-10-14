@@ -5,6 +5,7 @@ import time
 import logging
 from datetime import datetime, timezone
 from api.config import ODDS_API_KEY
+import pytz
 
 # Setup basic configuration for logging
 logging.basicConfig(
@@ -13,21 +14,22 @@ logging.basicConfig(
 
 def get_odds_apis_by_match(stored_odds, match):
     matchId = match.get("matchId")
+    if matchId is None:
+        return None
     homeTeamName = match.get("homeTeamName")
     awayTeamName = match.get("awayTeamName")
     matchDate = match.get("matchDate")
     matchLeague = match.get("matchLeague")
+    str_matchDate = pytz.utc.localize(matchDate).strftime("%Y-%m-%dT%HZ")
     # Extract just the date part from match_date
-    match_date_only = matchDate.date()
-
     odds_apis = []
-
     for odds in stored_odds:
         # Extract date from commence_time
-        commence_time_only = odds["commence_time"].date()
+        commence_time = odds["commence_time"]
+        str_commence_time = pytz.utc.localize(commence_time).strftime("%Y-%m-%dT%HZ")
         if (odds["homeTeamName"] == homeTeamName and
             odds["awayTeamName"] == awayTeamName and
-            commence_time_only == match_date_only and
+            str_matchDate == str_commence_time and
             odds["league"] == matchLeague):
             odds_apis.append(odds['oddsapiMatchId'])
     if odds_apis:
