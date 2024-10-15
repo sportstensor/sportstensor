@@ -222,6 +222,18 @@ async def main():
             logging.error(f"Error retrieving matches: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
         
+    @app.get("/scored-predictions")
+    def get_match_predictions():
+        try:
+            match_predictions = db.get_match_predictions_scored()
+            if match_predictions:
+                return {"match_predictions": match_predictions}
+            else:
+                return {"match_predictions": []}
+        except Exception as e:
+            logging.error(f"Error retrieving match predictions: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
+        
     @app.get("/matches/all")
     def get_all_matches():
         try:
