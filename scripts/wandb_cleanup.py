@@ -6,7 +6,7 @@ import time
 # Set your wandb project and entity
 PROJECT_NAME = 'sportstensor-vali-logs'
 ENTITY_NAME = 'sportstensor'
-DAYS_TO_KEEP = 5  # Number of days to keep logs and artifacts
+DAYS_TO_KEEP = 3  # Number of days to keep logs and artifacts
 
 # Authenticate with wandb
 wandb.login()
@@ -46,8 +46,8 @@ def delete_old_runs():
     print("\n--------------------------------------------------------------------")
 
 if __name__ == "__main__":
-    # Schedule the function to run every 12 hours
-    schedule.every(720).minutes.do(delete_old_runs)
+    # Schedule the function to run every 4 hours
+    schedule.every(240).minutes.do(delete_old_runs)
 
     # Delete old runs
     delete_old_runs()
