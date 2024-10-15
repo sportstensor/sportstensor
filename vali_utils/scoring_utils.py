@@ -15,6 +15,7 @@ from vali_utils import utils
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
+    MINIMUM_PREDICTION_PROBABILITY,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     NO_LEAGUE_COMMITMENT_PENALTY
 )
@@ -41,6 +42,10 @@ def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: st
 
     # draws have no edge. temporary
     if prediction_team == "Draw" or winning_closing_odds == losing_closing_odds:
+        reward_punishment = 0
+        
+    # Sanity check to ensure valid probabilities.
+    if prediction_prob < MINIMUM_PREDICTION_PROBABILITY or prediction_prob > 1:
         reward_punishment = 0
     
     edge = consensus_closing_odds - (1 / prediction_prob)
