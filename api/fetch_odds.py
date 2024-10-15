@@ -136,7 +136,6 @@ def check_if_odds_should_be_stored(stored_odds, odds, inserting):
         ) and matchComing
         # Check if commence_time has changed
         should_update_odds = matched_odds_commence != commence_time
-        logging.info(f"matched_odds===============>{(matched_odds, should_update_match_odds, should_update_odds)}")
         return should_update_match_odds, should_update_odds
     else:
         # If no match found, indicate that new odds should be stored

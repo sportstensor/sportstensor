@@ -23,11 +23,11 @@ GET_MATCH_QUERY = """
             m.homeTeamName,
             m.awayTeamName,
             m.sport,
-            CASE 
+            CASE
                 WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
                 ELSE m.homeTeamScore 
             END AS homeTeamScore,
-            CASE 
+            CASE
                 WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
                 ELSE m.awayTeamScore 
             END AS awayTeamScore,
@@ -147,7 +147,6 @@ def get_matches_with_no_odds():
             FROM matches_lookup ml
             LEFT JOIN matches m
             ON ml.matchId = m.matchId
-            WHERE ml.oddsapiMatchId IS NULL
         """
 
         cursor.execute(query)
