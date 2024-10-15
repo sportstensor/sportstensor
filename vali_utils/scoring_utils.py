@@ -380,7 +380,7 @@ def calculate_incentives_and_update_scores(vali):
                     bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = utils.apply_gaussian_filter(pwmd)
+                gfilter = apply_gaussian_filter(pwmd)
                 if log_prediction:
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
 
