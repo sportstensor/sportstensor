@@ -1,26 +1,33 @@
 import numpy as np
 
-PROB = 0.00001
-ODDS = 1.4
+ODDS = [1.04, 1.91, 2.5, 10]
+PROBABILITIES = [1.0, 0.999, 0.99, 0.9, 0.8, 0.5, 0.2857, 0.3333, 0.1, 0.05, 0.01, 0.001, 0.0001, .00001]
 
 def main():
-    gfilter = apply_gaussian_filter(ODDS,PROB)
-    impliededge = (ODDS - 1/PROB) 
-    w = (ODDS-1.0)*np.log(ODDS)/2
-    print("if implied edge > w then supression begins")
-    print({"odds": ODDS, "prob": PROB, "gfilter": gfilter, "implied edge": impliededge, "w": w})
+    results = []
+    for odds in ODDS:
+        for prob in PROBABILITIES:
+            gfilter = apply_gaussian_filter(odds, prob)
+            implied_edge = odds - 1/prob
+            w = (odds - 1.0) * np.log(odds) / 2
+            results.append({
+                "odds": odds,
+                "prob": prob,
+                "gfilter": gfilter,
+                "implied edge": implied_edge,
+                "w": w
+            })
+    
+    for result in results:
+        print(result)
 
 def apply_gaussian_filter(odds, prob):
-    ##sigma here is set in such a way that as we deviate from 2.0 odds the drop off of the gaussian increases with the square
-    sigma = np.log(1/(PROB*PROB))
-
-    w = (odds-1.0)*np.log(odds)/2
+    sigma = np.log(1/(prob*prob))
+    w = (odds - 1.0) * np.log(odds) / 2
     diff = abs(odds - 1/prob)
-
-    #plateaued curve.
-    exp_component = 1.0 if diff<=w else np.exp(-np.power(diff,2)/(2*np.power(sigma,2)))
-
-    ##return
+    
+    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (4 * np.power(sigma, 2)))
+    
     return exp_component
 
 if __name__ == "__main__":

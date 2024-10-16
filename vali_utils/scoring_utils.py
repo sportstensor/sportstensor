@@ -75,8 +75,8 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     w = (closing_odds - 1.0) * np.log(closing_odds)/2
     diff = abs(closing_odds - 1/pwmd.prediction.probability)
 
-    # plateaued curve.
-    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff,2)/(2*np.power(sigma,2)))
+    # plateaued curve. 
+    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff,2)/(4*np.power(sigma,2)))
     
     return exp_component
 
@@ -112,6 +112,7 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
         return None
 
     if log_prediction:
+        bt.logging.debug(f"      • Probability: {pwmd.prediction.probability}")
         bt.logging.debug(f"      • Implied odds: {(1/pwmd.prediction.probability):.4f}")
 
     # clv is the distance between the odds at the time of prediction to the closing odds. Anything above 0 is derived value based on temporal drift of information
@@ -386,8 +387,9 @@ def calculate_incentives_and_update_scores(vali):
 
                 # Apply sigma and G (gaussian filter) to v
                 total_score += v * sigma * gfilter
+                
                 if log_prediction:
-                    bt.logging.debug(f"      • Total score: {total_score:.4f}")
+                    bt.logging.debug(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                     bt.logging.debug("-" * 50)
 
             final_score = rho * total_score
