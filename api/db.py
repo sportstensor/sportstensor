@@ -1,7 +1,7 @@
 import mysql.connector
 import logging
 import datetime as dt
-from datetime import timezone, datetime
+from datetime import timezone
 from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
 
@@ -165,28 +165,45 @@ def get_matches_with_no_odds():
         if conn is not None:
             conn.close()
 
-def get_stored_odds():
+def get_stored_odds(lastUpdated = None):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
-
-        query = """
-            SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
-            FROM (
-                SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
-                FROM match_odds
-                WHERE (oddsapiMatchId, lastUpdated) IN (
-                    SELECT oddsapiMatchId, MAX(lastUpdated)
+        if lastUpdated:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
                     FROM match_odds
-                    GROUP BY oddsapiMatchId 
-                )
-            ) mo
-            INNER JOIN odds o
-            ON mo.oddsapiMatchId = o.oddsapiMatchId
-        """
-
-        cursor.execute(query)
-        stored_odds = cursor.fetchall()
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_odds
+                        WHERE lastUpdated < %s
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query, (lastUpdated,))
+            stored_odds = cursor.fetchall()
+        else:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+                    FROM match_odds
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_odds
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query)
+            stored_odds = cursor.fetchall()
 
         return stored_odds
 
@@ -217,35 +234,43 @@ def get_match_odds_by_id(match_id):
             match_odds = cursor.fetchall()
         else:
             query = """
-                SELECT 
-                    ordered.matchId,
-                    JSON_ARRAYAGG(
-                        JSON_OBJECT(
-                            "id", ordered.id,
-                            "matchId", ordered.matchId,
-                            "homeTeamOdds", ordered.homeTeamOdds,
-                            "awayTeamOdds", ordered.awayTeamOdds,
-                            "drawOdds", ordered.drawOdds,
-                            "lastUpdated", ordered.lastUpdated
-                        )
+                SELECT
+                    mlo.*,
+                    (
+                        SELECT
+                            JSON_ARRAYAGG(
+                                JSON_OBJECT(
+                                    "oddsapiMatchId", mo.oddsapiMatchId,
+                                    "homeTeamOdds", mo.homeTeamOdds,
+                                    "awayTeamOdds", mo.awayTeamOdds,
+                                    "drawOdds", mo.drawOdds,
+                                    "lastUpdated", mo.lastUpdated
+                                )
+                            )
+                        FROM match_odds mo
+                        WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId
                     ) AS oddsData
                 FROM (
                     SELECT
-                        mo.id,
-                        ml.matchId,
-                        mo.homeTeamOdds,
-                        mo.awayTeamOdds,
-                        mo.drawOdds,
-                        mo.lastUpdated
-                    FROM match_odds mo
-                    LEFT JOIN matches_lookup as ml ON ml.oddsapiMatchId = mo.oddsapiMatchId
-                    ORDER BY
-                        mo.lastUpdated ASC
-                ) AS ordered
-                GROUP BY
-                    ordered.matchId
-                ORDER BY
-                    MAX(ordered.lastUpdated) ASC
+                        m.matchId,
+                        m.matchDate,
+                        m.homeTeamName,
+                        m.awayTeamName,
+                        m.sport,
+                        CASE 
+                            WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                            ELSE m.homeTeamScore 
+                        END AS homeTeamScore,
+                        CASE 
+                            WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                            ELSE m.awayTeamScore 
+                        END AS awayTeamScore,
+                        m.matchLeague,
+                        m.isComplete,
+                        ml.oddsapiMatchId
+                    FROM matches m
+                    LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+                ) mlo
             """
             cursor.execute(query)
             match_odds = cursor.fetchall()
@@ -263,6 +288,70 @@ def get_match_odds_by_id(match_id):
         if conn is not None:
             conn.close()
 
+def get_matches_with_missing_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        # Set the current time in UTC
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
+
+        query = """
+            SELECT
+                mlo.*,
+                (
+                    SELECT
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                "oddsapiMatchId", mo.oddsapiMatchId,
+                                "homeTeamOdds", mo.homeTeamOdds,
+                                "awayTeamOdds", mo.awayTeamOdds,
+                                "drawOdds", mo.drawOdds,
+                                "lastUpdated", mo.lastUpdated
+                            )
+                        )
+                    FROM match_odds mo
+                    WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId
+                    ORDER BY mo.lastUpdated ASC
+                ) AS oddsData
+            FROM (
+                SELECT
+                    m.matchId,
+                    m.matchDate,
+                    m.homeTeamName,
+                    m.awayTeamName,
+                    m.sport,
+                    CASE 
+                        WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                        ELSE m.homeTeamScore 
+                    END AS homeTeamScore,
+                    CASE 
+                        WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                        ELSE m.awayTeamScore 
+                    END AS awayTeamScore,
+                    m.matchLeague,
+                    m.isComplete,
+                    ml.oddsapiMatchId
+                FROM matches m
+                LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+                WHERE m.matchDate BETWEEN @current_time_utc - INTERVAL 10 DAY AND @current_time_utc AND m.isComplete = 1 
+            ) mlo
+        """
+
+        cursor.execute(query)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 def get_match_by_id(match_id):
     try:

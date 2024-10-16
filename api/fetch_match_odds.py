@@ -1,10 +1,7 @@
-import requests
 import api.db as db
 import schedule
 import time
 import logging
-from datetime import datetime, timezone
-from api.config import ODDS_API_KEY
 import pytz
 
 # Setup basic configuration for logging
