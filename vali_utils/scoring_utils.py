@@ -59,6 +59,27 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
+def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
+    """
+    Apply a Gaussian filter to the closing odds and prediction probability. 
+    This filter is used to suppress the score when the prediction is far from the closing odds, simulating a more realistic prediction.
+
+    :param pwmd: MatchPredictionWithMatchData
+    :return: float, the calculated Gaussian filter
+    """
+    closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
+
+    # sigma here is set in such a way that as we deviate from closing_odds the drop off of the gaussian increases with the square
+    sigma = np.log(1/np.power(pwmd.prediction.probability, 2))
+
+    w = (closing_odds - 1.0) * np.log(closing_odds)/2
+    diff = abs(closing_odds - 1/pwmd.prediction.probability)
+
+    # plateaued curve. 
+    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff,2)/(4*np.power(sigma,2)))
+    
+    return exp_component
+
 def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
     """
     Calculate the incentive score considering time differential and closing line value.
@@ -73,25 +94,6 @@ def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: flo
     time_component = math.exp(-gamma * delta_t)
     clv_component = (1 - (2 * beta)) / (1 + math.exp(kappa * clv)) + beta
     return time_component + (1 - time_component) * clv_component
-
-def calculate_sigma(pwmd: MatchPredictionWithMatchData) -> float:
-    """
-    Calculate the incentive sigma as a function of skill.
-
-    np.sign(score of team chose - score of team not chosen) * (odds at close - 1 / probability of team chosen)
-    
-    :return: float, the calculated incentive score (sigma)
-    """
-    model_prediction_correct = (pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-    
-    if model_prediction_correct:
-        reward_punishment = 1
-        closing_odds = pwmd.get_actual_winner_odds()
-    else:
-        reward_punishment = -1
-        closing_odds = pwmd.get_actual_loser_odds()
-    
-    return reward_punishment * (closing_odds - (1 / pwmd.prediction.probability))
 
 def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
     """
@@ -110,6 +112,7 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
         return None
 
     if log_prediction:
+        bt.logging.debug(f"      • Probability: {pwmd.prediction.probability}")
         bt.logging.debug(f"      • Implied odds: {(1/pwmd.prediction.probability):.4f}")
 
     # clv is the distance between the odds at the time of prediction to the closing odds. Anything above 0 is derived value based on temporal drift of information
@@ -372,15 +375,21 @@ def calculate_incentives_and_update_scores(vali):
                 if log_prediction:
                     bt.logging.debug(f"      • Incentive score (v): {v:.4f}")
 
-                # Calculate sigma
-                sigma = calculate_sigma(pwmd)
+                # Get sigma, aka the closing edge
+                sigma = pwmd.prediction.closingEdge
                 if log_prediction:
-                    bt.logging.debug(f"      • Sigma: {sigma:.4f}")
+                    bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
-                # Apply sigma to v
-                total_score += v * sigma
+                # Calculate the Gaussian filter
+                gfilter = apply_gaussian_filter(pwmd)
                 if log_prediction:
-                    bt.logging.debug(f"      • Total score: {total_score:.4f}")
+                    bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
+
+                # Apply sigma and G (gaussian filter) to v
+                total_score += v * sigma * gfilter
+                
+                if log_prediction:
+                    bt.logging.debug(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                     bt.logging.debug("-" * 50)
 
             final_score = rho * total_score
