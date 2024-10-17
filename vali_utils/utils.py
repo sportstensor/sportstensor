@@ -655,6 +655,12 @@ def is_match_prediction_valid(
             f"Probability {prediction.probability} is not a float",
         )
     
+    if prediction.probability <= 0 or prediction.probability > 1:
+        return (
+            False,
+            f"Probability {prediction.probability} is not between 0 and 1",
+        )
+    
     # Check that the current time is before the match date
     current_time = dt.datetime.now(dt.timezone.utc)
     # Ensure prediction.matchDate is offset-aware
