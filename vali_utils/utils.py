@@ -587,8 +587,7 @@ def find_and_score_edge_match_predictions(batchsize: int) -> Tuple[List[float], 
             prediction_team=prediction.get_predicted_team(),
             prediction_prob=prediction.probability,
             actual_team=pwmd.get_actual_winner(),
-            winning_closing_odds=pwmd.get_actual_winner_odds(),
-            losing_closing_odds=pwmd.get_actual_loser_odds(),
+            closing_odds=pwmd.get_closing_odds_for_predicted_outcome(),
         )
         prediction.closingEdge = edge
         

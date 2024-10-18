@@ -19,21 +19,20 @@ from common.constants import (
     NO_LEAGUE_COMMITMENT_PENALTY
 )
 
-def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: Dict[str, float]) -> Tuple[float, int]:
+def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
     """
     Calculate the edge for a prediction on a three-sided market.
     
     :param prediction_team: str, either 'A' or 'B' or 'Draw' representing the team chosen
     :param prediction_prob: float, weak learner's probability of winning for the chosen team at prediction time
     :param actual_team: str, either 'A' or 'B', representing the team that actually won
-    :param closing_odds: Dict[str, float], consensus probability of outcome at match start time
+    :param closing_odds: float, consensus probability of outcome at match start time
     :return: Tuple[float, int], the calculated edge and a correctness indicator (1 if correct, 0 otherwise)
     """
     model_prediction_correct = (prediction_team == actual_team)
     reward_punishment = 1 if model_prediction_correct else -1
 
-    # retrieve the closing odds for the predicted outcome
-    closing_odds = closing_odds.get(prediction_team)
+    # check if closing_odd is available
     if closing_odds is None:
         return 0.0, 0
 
