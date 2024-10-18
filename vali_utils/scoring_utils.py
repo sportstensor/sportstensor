@@ -70,7 +70,7 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
 
     # sigma here is set in such a way that as we deviate from closing_odds the drop off of the gaussian increases with the square
-    sigma = np.log(1/np.power(pwmd.prediction.probability, 2))
+    sigma = np.log(1/np.power(closing_odds, 2))
 
     w = (closing_odds - 1.0) * np.log(closing_odds)/2
     diff = abs(closing_odds - 1/pwmd.prediction.probability)
