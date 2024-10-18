@@ -7,11 +7,13 @@ apps:
       - "--host"
       - "0.0.0.0"
       - "--port"
-      - "443"
-      - "--ssl-keyfile"
-      - "/root/origin-key.key"
-      - "--ssl-certfile"
-      - "/root/origin-cert.pem"
+      - "8000"
+    env:
+      DB_HOST: localhost
+      DB_NAME: sportstensor
+      DB_USER: root
+      DB_PASSWORD: Success2468$
+      ODDS_API_KEY: 9ee4220c4b65b37af8312a2925be8db9
     exec_mode: fork
     watch: true
     merge_logs: true
