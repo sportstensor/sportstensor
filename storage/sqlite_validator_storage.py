@@ -102,9 +102,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             isArchived          INTEGER         DEFAULT 0
                             )"""
     
-    HOTFIX_CE20241012a_MARKER_FILE = "HOTFIX_CE20241012a_MARKER_FILE.txt"
-    HOTFIX_CE20241013a_MARKER_FILE = "HOTFIX_CE20241013a_MARKER_FILE.txt"
-    HOTFIX_CE20241014a_MARKER_FILE = "HOTFIX_CE20241014a_MARKER_FILE.txt"
+    HOTFIX_CE20241017a_MARKER_FILE = "HOTFIX_CE20241017a_MARKER_FILE.txt"
 
     def __init__(self):
         self._initialized = False
@@ -142,12 +140,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Create the MatchPredictions table (if it does not already exist).
                 cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
-                # Execute db hotfix ce20241012a
-                self.execute_db_hotfix_ce20241012a()
-                # Execute db hotfix ce20241013a
-                self.execute_db_hotfix_ce20241013a()
-                # Execute db hotfix ce20241014a
-                self.execute_db_hotfix_ce20241014a()
+                # Execute db hotfix ce20241017a
+                self.execute_db_hotfix_ce20241017a()
 
                 # Commit the changes and close the connection
                 connection.commit()
@@ -177,9 +171,9 @@ class SqliteValidatorStorage(ValidatorStorage):
             raise RuntimeError("SqliteValidatorStorage has not been initialized")
         return self.continuous_connection_do_not_reuse
     
-    def execute_db_hotfix_ce20241012a(self):
-        if os.path.exists(self.HOTFIX_CE20241012a_MARKER_FILE):
-            print(f"{self.HOTFIX_CE20241012a_MARKER_FILE} Update has already been executed. Skipping.")
+    def execute_db_hotfix_ce20241017a(self):
+        if os.path.exists(self.HOTFIX_CE20241017a_MARKER_FILE):
+            print(f"{self.HOTFIX_CE20241017a_MARKER_FILE} Update has already been executed. Skipping.")
             return
 
         try:
@@ -187,59 +181,15 @@ class SqliteValidatorStorage(ValidatorStorage):
                 with contextlib.closing(self._create_connection()) as connection:
                     cursor = connection.cursor()
                     cursor.execute(
-                        """UPDATE MatchPredictions SET isScored=0, scoredDate=NULL, closingEdge=NULL WHERE matchId IN ('701567b38a322dfefa6911836488ea0a','32ba9116bafe06d271a25dacf91f1af4','fff1c288ec7e5e6ca7faaeecbea6d719')""",
+                        """UPDATE MatchPredictions SET isScored=0, scoredDate=NULL, closingEdge=NULL WHERE matchId IN ('1633294957b11691326d3f39d74f2570')""",
                     )
                     connection.commit()
             
             # Create the marker file
-            with open(self.HOTFIX_CE20241012a_MARKER_FILE, "w") as f:
+            with open(self.HOTFIX_CE20241017a_MARKER_FILE, "w") as f:
                 f.write("Update executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
             
-            print(f"Marker file created: {self.HOTFIX_CE20241012a_MARKER_FILE}. This script will not run the update again.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-
-    def execute_db_hotfix_ce20241013a(self):
-        if os.path.exists(self.HOTFIX_CE20241013a_MARKER_FILE):
-            print(f"{self.HOTFIX_CE20241013a_MARKER_FILE} Update has already been executed. Skipping.")
-            return
-
-        try:
-            with self.lock:
-                with contextlib.closing(self._create_connection()) as connection:
-                    cursor = connection.cursor()
-                    cursor.execute(
-                        """UPDATE MatchPredictions SET isScored=0, scoredDate=NULL, closingEdge=NULL WHERE probabilityChoice = 'Draw'""",
-                    )
-                    connection.commit()
-            
-            # Create the marker file
-            with open(self.HOTFIX_CE20241013a_MARKER_FILE, "w") as f:
-                f.write("Update executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
-            
-            print(f"Marker file created: {self.HOTFIX_CE20241013a_MARKER_FILE}. This script will not run the update again.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-
-    def execute_db_hotfix_ce20241014a(self):
-        if os.path.exists(self.HOTFIX_CE20241014a_MARKER_FILE):
-            print(f"{self.HOTFIX_CE20241014a_MARKER_FILE} Delete has already been executed. Skipping.")
-            return
-
-        try:
-            with self.lock:
-                with contextlib.closing(self._create_connection()) as connection:
-                    cursor = connection.cursor()
-                    cursor.execute(
-                        """DELETE FROM MatchPredictions WHERE probabilityChoice = 'Draw' AND league IN ('MLB','NFL')""",
-                    )
-                    connection.commit()
-            
-            # Create the marker file
-            with open(self.HOTFIX_CE20241014a_MARKER_FILE, "w") as f:
-                f.write("Delete executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
-            
-            print(f"Marker file created: {self.HOTFIX_CE20241014a_MARKER_FILE}. This script will not run the delete again.")
+            print(f"Marker file created: {self.HOTFIX_CE20241017a_MARKER_FILE}. This script will not run the update again.")
         except Exception as e:
             print(f"An error occurred: {e}")
     
