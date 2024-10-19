@@ -1,9 +1,10 @@
 import mysql.connector
 import logging
 import datetime as dt
-from datetime import timezone, datetime
+from datetime import timezone
 from api.config import IS_PROD, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 import os
+import time
 
 def generate_uuid():
     return os.urandom(16).hex()
@@ -165,28 +166,45 @@ def get_matches_with_no_odds():
         if conn is not None:
             conn.close()
 
-def get_stored_odds():
+def get_stored_odds(lastUpdated = None):
     try:
         conn = get_db_conn()
         cursor = conn.cursor(dictionary=True)
-
-        query = """
-            SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
-            FROM (
-                SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
-                FROM match_odds
-                WHERE (oddsapiMatchId, lastUpdated) IN (
-                    SELECT oddsapiMatchId, MAX(lastUpdated)
+        if lastUpdated:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
                     FROM match_odds
-                    GROUP BY oddsapiMatchId 
-                )
-            ) mo
-            INNER JOIN odds o
-            ON mo.oddsapiMatchId = o.oddsapiMatchId
-        """
-
-        cursor.execute(query)
-        stored_odds = cursor.fetchall()
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_odds
+                        WHERE lastUpdated < %s
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query, (lastUpdated,))
+            stored_odds = cursor.fetchall()
+        else:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+                    FROM match_odds
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_odds
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query)
+            stored_odds = cursor.fetchall()
 
         return stored_odds
 
@@ -217,35 +235,43 @@ def get_match_odds_by_id(match_id):
             match_odds = cursor.fetchall()
         else:
             query = """
-                SELECT 
-                    ordered.matchId,
-                    JSON_ARRAYAGG(
-                        JSON_OBJECT(
-                            "id", ordered.id,
-                            "matchId", ordered.matchId,
-                            "homeTeamOdds", ordered.homeTeamOdds,
-                            "awayTeamOdds", ordered.awayTeamOdds,
-                            "drawOdds", ordered.drawOdds,
-                            "lastUpdated", ordered.lastUpdated
-                        )
+                SELECT
+                    mlo.*,
+                    (
+                        SELECT
+                            JSON_ARRAYAGG(
+                                JSON_OBJECT(
+                                    "oddsapiMatchId", mo.oddsapiMatchId,
+                                    "homeTeamOdds", mo.homeTeamOdds,
+                                    "awayTeamOdds", mo.awayTeamOdds,
+                                    "drawOdds", mo.drawOdds,
+                                    "lastUpdated", mo.lastUpdated
+                                )
+                            )
+                        FROM match_odds mo
+                        WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId
                     ) AS oddsData
                 FROM (
                     SELECT
-                        mo.id,
-                        ml.matchId,
-                        mo.homeTeamOdds,
-                        mo.awayTeamOdds,
-                        mo.drawOdds,
-                        mo.lastUpdated
-                    FROM match_odds mo
-                    LEFT JOIN matches_lookup as ml ON ml.oddsapiMatchId = mo.oddsapiMatchId
-                    ORDER BY
-                        mo.lastUpdated ASC
-                ) AS ordered
-                GROUP BY
-                    ordered.matchId
-                ORDER BY
-                    MAX(ordered.lastUpdated) ASC
+                        m.matchId,
+                        m.matchDate,
+                        m.homeTeamName,
+                        m.awayTeamName,
+                        m.sport,
+                        CASE 
+                            WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                            ELSE m.homeTeamScore 
+                        END AS homeTeamScore,
+                        CASE 
+                            WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                            ELSE m.awayTeamScore 
+                        END AS awayTeamScore,
+                        m.matchLeague,
+                        m.isComplete,
+                        ml.oddsapiMatchId
+                    FROM matches m
+                    LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+                ) mlo
             """
             cursor.execute(query)
             match_odds = cursor.fetchall()
@@ -263,6 +289,70 @@ def get_match_odds_by_id(match_id):
         if conn is not None:
             conn.close()
 
+def get_matches_with_missing_odds():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        # Set the current time in UTC
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
+
+        query = """
+            SELECT
+                mlo.*,
+                (
+                    SELECT
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                "oddsapiMatchId", mo.oddsapiMatchId,
+                                "homeTeamOdds", mo.homeTeamOdds,
+                                "awayTeamOdds", mo.awayTeamOdds,
+                                "drawOdds", mo.drawOdds,
+                                "lastUpdated", mo.lastUpdated
+                            )
+                        )
+                    FROM match_odds mo
+                    WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId
+                    ORDER BY mo.lastUpdated ASC
+                ) AS oddsData
+            FROM (
+                SELECT
+                    m.matchId,
+                    m.matchDate,
+                    m.homeTeamName,
+                    m.awayTeamName,
+                    m.sport,
+                    CASE 
+                        WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                        ELSE m.homeTeamScore 
+                    END AS homeTeamScore,
+                    CASE 
+                        WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                        ELSE m.awayTeamScore 
+                    END AS awayTeamScore,
+                    m.matchLeague,
+                    m.isComplete,
+                    ml.oddsapiMatchId
+                FROM matches m
+                LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+                WHERE m.matchDate BETWEEN @current_time_utc - INTERVAL 10 DAY AND @current_time_utc AND m.isComplete = 1 
+            ) mlo
+        """
+
+        cursor.execute(query)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
 
 def get_match_by_id(match_id):
     try:
@@ -608,14 +698,14 @@ def update_miner_reg_statuses(active_uids, active_hotkeys):
         conn = get_db_conn()
         c = conn.cursor()
 
-        prediction_scores_table_name = "MatchPredictionResults"
+        miners_table_name = "Miners"
         if not IS_PROD:
-            prediction_scores_table_name += "_test"
+            miners_table_name += "_test"
 
         # mark all as unregistered first as we'll update only the active ones next
         c.execute(
             f"""
-            UPDATE {prediction_scores_table_name}
+            UPDATE {miners_table_name}
             SET miner_is_registered = 0
             """,
         )
@@ -625,7 +715,7 @@ def update_miner_reg_statuses(active_uids, active_hotkeys):
         for uid, hotkey in zip(active_uids, active_hotkeys):
             c.execute(
                 f"""
-                UPDATE {prediction_scores_table_name}
+                UPDATE {miners_table_name}
                 SET miner_is_registered = 1, miner_uid = %s
                 WHERE miner_hotkey = %s
                 """,
@@ -644,72 +734,175 @@ def update_miner_reg_statuses(active_uids, active_hotkeys):
         conn.close()
 
 
-def update_miner_coldkeys_and_ages(data_to_update):
+def insert_or_update_miner_coldkeys_and_ages(data_to_update):
     try:
         conn = get_db_conn()
-        c = conn.cursor()
+        cursor = conn.cursor()
 
-        prediction_scores_table_name = "MatchPredictionResults"
+        miners_table_name = "Miners"
         if not IS_PROD:
-            prediction_scores_table_name += "_test"
+            miners_table_name += "_test"
 
-        c.executemany(
+        # mark all as unregistered first as we'll update only the active ones next
+        cursor.execute(
             f"""
-            UPDATE {prediction_scores_table_name}
-            SET miner_coldkey = %s, miner_age = %s
-            WHERE miner_hotkey = %s
+            UPDATE {miners_table_name}
+            SET miner_is_registered = 0
             """,
-            [(coldkey, age, hotkey) for coldkey, age, hotkey in data_to_update],
         )
         conn.commit()
-        logging.info("Miner coldkeys and ages updated in database")
+
+        cursor.executemany(f"""
+            INSERT INTO {miners_table_name} (miner_hotkey, miner_coldkey, miner_uid, miner_age, miner_is_registered, last_updated) 
+            VALUES (%s, %s, %s, %s, 1, NOW())
+            ON DUPLICATE KEY UPDATE
+                miner_coldkey=VALUES(miner_coldkey), 
+                miner_age=VALUES(miner_age), 
+                miner_is_registered=VALUES(miner_is_registered)
+        """, data_to_update)
+
+        # Commit the changes
+        conn.commit()
 
     except Exception as e:
         logging.error("Failed to update miner coldkeys and ages in MySQL database", exc_info=True)
     finally:
-        c.close()
+        cursor.close()
         conn.close()
 
 
-def get_prediction_stats_by_league(league, miner_hotkey=None, group_by_miner=False):
+def get_prediction_stats_by_league(league=None, miner_hotkey=None, cutoff = None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
 
-        prediction_scores_table_name = "MatchPredictionResults"
+        prediction_scores_table_name = "MatchPredictionsScored"
+        params = []
+        miners_table_name = "Miners"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
+            miners_table_name += "_test"
 
         query = f"""
             SELECT
-                league,
-                AVG(avg_score) AS avg_score,
-                SUM(total_predictions) AS total_predictions,
-                SUM(winner_predictions) AS winner_predictions
+                mps.miner_id,
+                mps.miner_hotkey,
+                JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'vali_hotkey', mps.vali_hotkey,
+                        'matchId', mps.matchId,
+                        'matchDate', mps.matchDate,
+                        'sport', mps.sport,
+                        'league', mps.league,
+                        'homeTeamName', mps.homeTeamName,
+                        'awayTeamName', mps.awayTeamName,
+                        'probabilityChoice', mps.probabilityChoice,
+                        'probability', mps.probability,
+                        'predictionDate', mps.predictionDate,
+                        'closingEdge', mps.closingEdge,
+                        'isScored', mps.isScored,
+                        'scoredDate', mps.scoredDate,
+                        'lastUpdated', mps.lastUpdated,
+                        'homeTeamScore', matches.homeTeamScore,
+                        'awayTeamScore', matches.awayTeamScore,
+                        'closing_homeTeamOdds', closing_odds.homeTeamOdds,
+                        'closing_awayTeamOdds', closing_odds.awayTeamOdds,
+                        'closing_drawOdds', closing_odds.drawOdds
+                    )
+                ) AS data
+            FROM {prediction_scores_table_name} mps
+            LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey
+            LEFT JOIN matches ON matches.matchId = mps.matchId
+            LEFT JOIN matches_lookup ml ON (ml.matchId = mps.matchId)
+            LEFT JOIN (
+                SELECT 
+                    mo.oddsapiMatchId,
+                    mo.homeTeamOdds,
+                    mo.awayTeamOdds,
+                    mo.drawOdds,
+                    ROW_NUMBER() OVER (PARTITION BY mo.oddsapiMatchId ORDER BY mo.lastUpdated DESC) as rn
+                FROM 
+                    match_odds mo
+            ) closing_odds ON closing_odds.oddsapiMatchId = ml.oddsapiMatchId AND closing_odds.rn = 1
+            WHERE m.miner_is_registered = 1
         """
 
-        if group_by_miner:
-            query += ", miner_hotkey, miner_coldkey, miner_uid, miner_age"
+        if cutoff:
+            # Calculate the current timestamp
+            current_timestamp = int(time.time())
+            # Calculate cutoff date timestamp
+            match_cutoff_timestamp = current_timestamp - (
+                cutoff * 24 * 3600
+            )
+            # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
+            match_cutoff_str = dt.datetime.utcfromtimestamp(
+                match_cutoff_timestamp
+            ).strftime("%Y-%m-%d %H:%M:%S")
+            query += " AND mps.scoredDate > %s"
+            params = [match_cutoff_str]
 
-        query += f"""
-            FROM {prediction_scores_table_name}
-            WHERE league = %s
-        """
-
-        params = [league]
+        if league:
+            query += " AND league = %s"
+            params.append(league)
 
         if miner_hotkey:
-            query += " AND miner_hotkey = %s"
+            query += " AND mps.miner_hotkey = %s"
             params.append(miner_hotkey)
-        else:
-            query += " AND miner_is_registered = 1"
+        
+        query += """ GROUP BY 
+        mps.miner_id, 
+        mps.miner_hotkey;"""
 
-        if group_by_miner:
-            query += " GROUP BY league, miner_hotkey, miner_coldkey, miner_uid, miner_age"
+        if params:
+            c.execute(query, params)
         else:
-            query += " GROUP BY league"
+            c.execute(query)
+        return c.fetchall()
 
-        c.execute(query, params)
+    except Exception as e:
+        logging.error(
+            "Failed to query league prediction stats from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def get_prediction_results_by_league(league=None, miner_hotkey=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+
+        prediction_scores_table_name = "MatchPredictionsScored"
+        params = []
+        miners_table_name = "Miners"
+        if not IS_PROD:
+            prediction_scores_table_name += "_test"
+            miners_table_name += "_test"
+
+        query = f"""
+            SELECT
+                DATE(mps.scoredDate) AS scoreDate,
+                COUNT(*) AS total_predictions
+            FROM {prediction_scores_table_name} mps
+            LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey
+            WHERE m.miner_is_registered = 1
+        """
+        if league:
+            query += " AND league = %s"
+            params = [league]
+
+        if miner_hotkey:
+            query += " AND mps.miner_hotkey = %s"
+            params.append(miner_hotkey)
+        query += """
+            GROUP BY DATE(mps.scoredDate)
+            ORDER BY scoreDate ASC;
+        """
+        if params:
+            c.execute(query, params)
+        else:
+            c.execute(query)
         return c.fetchall()
 
     except Exception as e:
@@ -1296,6 +1489,32 @@ def create_tables():
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL,
             UNIQUE (miner_hotkey, miner_uid, league)
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS Miners (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            miner_coldkey VARCHAR(64) NOT NULL,
+            miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
+            miner_age INTEGER NOT NULL DEFAULT 0,
+            last_updated TIMESTAMP NOT NULL,
+            UNIQUE (miner_hotkey, miner_uid)
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS Miners_test (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            miner_coldkey VARCHAR(64) NOT NULL,
+            miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
+            miner_age INTEGER NOT NULL DEFAULT 0,
+            last_updated TIMESTAMP NOT NULL,
+            UNIQUE (miner_hotkey, miner_uid)
         )"""
         )
         c.execute(
