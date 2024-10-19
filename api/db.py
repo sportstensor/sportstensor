@@ -780,7 +780,7 @@ def get_prediction_stats_by_league(league=None, miner_hotkey=None, cutoff = None
         params = []
         miners_table_name = "Miners"
         if not IS_PROD:
-            # prediction_scores_table_name += "_test"
+            prediction_scores_table_name += "_test"
             miners_table_name += "_test"
 
         query = f"""
@@ -877,7 +877,7 @@ def get_prediction_results_by_league(league=None, miner_hotkey=None):
         params = []
         miners_table_name = "Miners"
         if not IS_PROD:
-            # prediction_scores_table_name += "_test"
+            prediction_scores_table_name += "_test"
             miners_table_name += "_test"
 
         query = f"""
