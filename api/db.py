@@ -868,7 +868,7 @@ def get_prediction_stats_by_league(league=None, miner_hotkey=None, cutoff = None
         c.close()
         conn.close()
 
-def get_total_bets_by_league(league=None, miner_hotkey=None):
+def get_prediction_results_by_league(league=None, miner_hotkey=None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -883,7 +883,7 @@ def get_total_bets_by_league(league=None, miner_hotkey=None):
         query = f"""
             SELECT
                 DATE(mps.scoredDate) AS scoreDate,
-                COUNT(*) AS total_bets
+                COUNT(*) AS total_predictions
             FROM {prediction_scores_table_name} mps
             LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey
             WHERE m.miner_is_registered = 1

@@ -468,7 +468,7 @@ async def main():
         league: Optional[str] = None,
     ):
         try:
-            results = db.get_total_bets_by_league(league, miner_hotkey)
+            results = db.get_prediction_results_by_league(league, miner_hotkey)
 
             if results:
                 return {"results": results}
