@@ -92,7 +92,7 @@ def calculate_sigma(pwmd: MatchPredictionWithMatchData) -> float:
     sigma = reward_punishment * (closing_odds - (1 / pwmd.prediction.probability))
     return sigma
 
-def calculate_clv(match_odds: List[Tuple[str, float, float, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
+def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
     """
     Calculate the closing line value for this prediction.
 
