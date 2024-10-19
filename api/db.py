@@ -110,30 +110,6 @@ def get_matches(all=False):
         if conn is not None:
             conn.close()
 
-def get_match_predictions_scored():
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor(dictionary=True)
-
-        query = """
-            SELECT *
-            FROM MatchPredictionsScored
-        """
-        
-        cursor.execute(query)
-        match_predictions = cursor.fetchall()
-
-        return match_predictions
-
-    except Exception as e:
-        logging.error("Failed to retrieve match predictions from MySQL database", exc_info=True)
-        return []
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
-
 def get_upcoming_matches():
     try:
         conn = get_db_conn()
