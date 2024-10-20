@@ -3,7 +3,7 @@ import bittensor as bt
 from st.sport_prediction_model import SportPredictionModel
 from common.data import ProbabilityChoice
 
-from st.models.baseball import BasketballPredictionModel
+from st.models.basketball import BasketballPredictionModel
 
 
 class NBABasketballPredictionModel(BasketballPredictionModel):
