@@ -88,7 +88,7 @@ def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: flo
     clv_component = (1 - (2 * beta)) / (1 + math.exp(kappa * clv)) + beta
     return time_component + (1 - time_component) * clv_component
 
-def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
+def calculate_clv(match_odds: List[Tuple[str, float, float, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
     """
     Calculate the closing line value for this prediction.
 
@@ -111,6 +111,7 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
     # Get the closing odds for the predicted outcome
     closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
     if closing_odds is None:
+        bt.logging.debug(f"Closing odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
         return None
 
     if log_prediction:

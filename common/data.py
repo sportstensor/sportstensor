@@ -218,7 +218,7 @@ class MatchPrediction(Prediction):
             return self.homeTeamName
         elif self.probabilityChoice == ProbabilityChoice.AWAYTEAM or self.probabilityChoice == ProbabilityChoice.AWAYTEAM.value:
             return self.awayTeamName
-        elif self.probabilityChoice == ProbabilityChoice.DRAW:
+        elif self.probabilityChoice == ProbabilityChoice.DRAW or self.probabilityChoice == ProbabilityChoice.DRAW.value:
             return "Draw"
         else:
             return "Unknown"
