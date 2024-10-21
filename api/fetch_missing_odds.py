@@ -11,7 +11,8 @@ league_sports_types_mapping = {
     'English Premier League': 'soccer_epl',
     'American Major League Soccer': 'soccer_usa_mls',
     'NFL': 'americanfootball_nfl',
-    'MLB': 'baseball_mlb'
+    'MLB': 'baseball_mlb',
+    'NBA': 'basketball_nba',
 }
 
 # Setup basic configuration for logging
