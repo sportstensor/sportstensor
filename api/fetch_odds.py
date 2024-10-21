@@ -12,13 +12,14 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-SPORTS_TYPES = ['baseball_mlb', 'americanfootball_nfl', 'soccer_usa_mls', 'soccer_epl']
+SPORTS_TYPES = ['baseball_mlb', 'americanfootball_nfl', 'soccer_usa_mls', 'soccer_epl', 'basketball_nba']
 
 league_mapping = {
     'EPL': 'English Premier League',
     'MLS': 'American Major League Soccer',
     'MLB': 'MLB',
-    'NFL': 'NFL'
+    'NFL': 'NFL',
+    'NBA': 'NBA',
 }
 
 mismatch_teams_mapping = {
