@@ -771,13 +771,13 @@ def insert_or_update_miner_coldkeys_and_ages(data_to_update):
         conn.close()
 
 
-def get_prediction_stats_by_league(league=None, miner_hotkey=None, cutoff = None):
+def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, cutoff = None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
 
         prediction_scores_table_name = "MatchPredictionsScored"
-        params = []
+        params = [vali_hotkey]
         miners_table_name = "Miners"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
@@ -824,7 +824,7 @@ def get_prediction_stats_by_league(league=None, miner_hotkey=None, cutoff = None
                 FROM 
                     match_odds mo
             ) closing_odds ON closing_odds.oddsapiMatchId = ml.oddsapiMatchId AND closing_odds.rn = 1
-            WHERE m.miner_is_registered = 1
+            WHERE m.miner_is_registered = 1 AND mps.vali_hotkey = %s
         """
 
         if cutoff:
@@ -839,7 +839,7 @@ def get_prediction_stats_by_league(league=None, miner_hotkey=None, cutoff = None
                 match_cutoff_timestamp
             ).strftime("%Y-%m-%d %H:%M:%S")
             query += " AND mps.scoredDate > %s"
-            params = [match_cutoff_str]
+            params.append(match_cutoff_str)
 
         if league:
             query += " AND league = %s"
@@ -868,13 +868,13 @@ def get_prediction_stats_by_league(league=None, miner_hotkey=None, cutoff = None
         c.close()
         conn.close()
 
-def get_prediction_results_by_league(league=None, miner_hotkey=None):
+def get_prediction_results_by_league(vali_hotkey, league=None, miner_hotkey=None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
 
         prediction_scores_table_name = "MatchPredictionsScored"
-        params = []
+        params = [vali_hotkey]
         miners_table_name = "Miners"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
@@ -886,11 +886,11 @@ def get_prediction_results_by_league(league=None, miner_hotkey=None):
                 COUNT(*) AS total_predictions
             FROM {prediction_scores_table_name} mps
             LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey
-            WHERE m.miner_is_registered = 1
+            WHERE m.miner_is_registered = 1 AND mps.vali_hotkey = %s
         """
         if league:
             query += " AND league = %s"
-            params = [league]
+            params.append(league)
 
         if miner_hotkey:
             query += " AND mps.miner_hotkey = %s"
