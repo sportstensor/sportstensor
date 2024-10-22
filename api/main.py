@@ -464,11 +464,12 @@ async def main():
 
     @app.get("/predictionResults")
     async def get_prediction_results(
+        vali_hotkey: str,
         miner_hotkey: Optional[str] = None,
         league: Optional[str] = None,
     ):
         try:
-            results = db.get_prediction_results_by_league(league, miner_hotkey)
+            results = db.get_prediction_results_by_league(vali_hotkey, league, miner_hotkey)
 
             if results:
                 return {"results": results}
@@ -480,12 +481,13 @@ async def main():
 
     @app.get("/predictionResultsPerMiner")
     async def get_prediction_results_per_miner(
+        vali_hotkey: str,
         miner_hotkey: Optional[str] = None,
         league: Optional[str] = None,
         cutoff: Optional[int] = None
     ):
         try:
-            results = db.get_prediction_stats_by_league(league, miner_hotkey, cutoff)
+            results = db.get_prediction_stats_by_league(vali_hotkey, league, miner_hotkey, cutoff)
 
             if results:
                 return {"results": results}
