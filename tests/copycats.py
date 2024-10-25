@@ -166,16 +166,15 @@ def main_api():
     subtensor = bittensor.subtensor(network=NETWORK)
     metagraph: bittensor.metagraph = subtensor.metagraph(NETUID)
     all_uids = metagraph.uids.tolist()
+    #all_uids = metagraph.uids.tolist()[:10]
 
     # Initialize controller
     controller = CopycatDetectionController()
     
-    # Optional: Limit analysis to specific leagues or miners for testing
-    # test_leagues = [League.NFL]
-    # test_miners = controller.metagraph.uids.tolist()[:10]
-    
     # Run analysis
     leagues = ACTIVE_LEAGUES
+    leagues = [League.NFL]
+
     final_duplicates = set()
     final_penalties = set()
 
