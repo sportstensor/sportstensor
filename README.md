@@ -149,6 +149,13 @@ Failure to respond or incorrectly formatted responses will result in penalties a
 - CPU
 - If running on runpod, `runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04` is a good base template.
 
+#### Importance of the Database
+The subnet creates a sqlite database in the root directory titled `SportsTensorEdge.db`. This database is extremely important to the functionality of the subnet as it holds historical prediction data for all miners which are used in the scoring mechanism.
+
+**If you need to reinstall or migrate the subnet code, please be very careful and bring along the database with you!!!**
+
+Please reach out to the subnet team for any questions or assistance.
+
 #### Recommended
 - Utilizing wandb. Set environment variable with `export WANDB_API_KEY=<your API key>`. Alternatively, you can disable wandb with --wandb.off
 
