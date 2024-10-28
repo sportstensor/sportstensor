@@ -38,7 +38,7 @@ MAX_PREDICTION_DAYS_THRESHOLD = 1
 MAX_BATCHSIZE_FOR_SCORING = 500
 
 # Cut off days to attempt to score predictions. i.e. Any predictions not scored with X days will be left behind
-SCORING_CUTOFF_IN_DAYS = 10
+SCORING_CUTOFF_IN_DAYS = 30
 
 # Interval in minutes that we attempt to score predictions
 SCORING_INTERVAL_IN_MINUTES = 1
