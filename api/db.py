@@ -572,6 +572,28 @@ def upload_prediction_edge_results(prediction_results):
         }
         """
 
+        # Convert the miner_scores dictionary into a list of tuples
+        values_list = []
+        for uid, score_data in prediction_results["miner_scores"].items():
+            values_tuple = (
+                score_data["uid"],
+                score_data["hotkey"],
+                score_data["vali_hotkey"],
+                score_data["total_score"],
+                score_data["total_pred_count"],
+                score_data["mlb_score"],
+                score_data["mlb_pred_count"],
+                score_data["nfl_score"],
+                score_data["nfl_pred_count"],
+                score_data["nba_score"],
+                score_data["nba_pred_count"],
+                score_data["mls_score"],
+                score_data["mls_pred_count"],
+                score_data["epl_score"],
+                score_data["epl_pred_count"]
+            )
+            values_list.append(values_tuple)
+
         prediction_edge_scores_table_name = "MatchPredictionEdgeResults"
         if not IS_PROD:
             prediction_edge_scores_table_name += "_test"
@@ -595,10 +617,10 @@ def upload_prediction_edge_results(prediction_results):
                 epl_pred_count,
                 lastUpdated
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
             )
             """,
-            prediction_results["miner_scores"],
+            values_list,
         )
 
         conn.commit()
@@ -607,6 +629,44 @@ def upload_prediction_edge_results(prediction_results):
 
     except Exception as e:
         logging.error("Failed to insert prediction edge results data in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, cutoff=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+
+        prediction_edge_results_table_name = "MatchPredictionEdgeResults"
+        params = [vali_hotkey]
+        if not IS_PROD:
+            prediction_edge_results_table_name += "_test"
+
+        query = f"""
+            SELECT *
+            FROM {prediction_edge_results_table_name}
+            WHERE vali_hotkey = %s
+        """
+
+        if miner_hotkey:
+            query += " AND miner_hotkey = %s"
+            params.append(miner_hotkey)
+        query += """
+            ORDER BY lastUpdated DESC;
+        """
+        if params:
+            c.execute(query, params)
+        else:
+            c.execute(query)
+        return c.fetchall()
+
+    except Exception as e:
+        logging.error(
+            "Failed to query league prediction stats from MySQL database", exc_info=True
+        )
         return False
     finally:
         c.close()
