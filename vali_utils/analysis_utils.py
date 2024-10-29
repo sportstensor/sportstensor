@@ -2,6 +2,7 @@ import json
 import hashlib
 from collections import defaultdict
 from typing import List, Tuple
+import datetime as dt
 
 from common.data import MatchPrediction, MatchPredictionWithMatchData
 
@@ -52,7 +53,7 @@ class PredictionPatternAnalyzer:
         Build a pattern fingerprint from recent predictions.
         Returns list of (matchId, choice, probability) tuples with match details.
         """
-        recent_preds = sorted(predictions, key=lambda x: x.prediction.predictionDate)[-window_size:]
+        recent_preds = sorted(predictions, key=lambda x: x.prediction.predictionDate.replace(tzinfo=dt.timezone.utc))[-window_size:]
         return [(
             p.prediction.matchId,
             p.prediction.probabilityChoice,

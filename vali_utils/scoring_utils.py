@@ -11,12 +11,15 @@ import random
 
 import bittensor as bt
 from storage.sqlite_validator_storage import get_storage
+from vali_utils.copycat_controller import CopycatDetectionController
 from vali_utils import utils
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
-    NO_LEAGUE_COMMITMENT_PENALTY
+    NO_LEAGUE_COMMITMENT_PENALTY,
+    EXACT_MATCH_PENALTY_SCORE,
+    COPYCAT_PUNISHMENT_START_DATE
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, winning_closing_odds: float, losing_closing_odds: float) -> Tuple[float, int]:
@@ -298,6 +301,11 @@ def calculate_incentives_and_update_scores(vali):
     """
     storage = get_storage()
     all_uids = vali.metagraph.uids.tolist()
+
+    # Initialize Copycat Detection Controller
+    copycat_controller = CopycatDetectionController()
+    final_copycat_duplicates = set()
+    final_copycat_penalties = set()
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -305,6 +313,7 @@ def calculate_incentives_and_update_scores(vali):
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name}")
         league_table_data = []
+        predictions_for_copycat_analysis = []
 
         for index, uid in enumerate(all_uids):
             hotkey = vali.metagraph.hotkeys[uid]
@@ -352,6 +361,9 @@ def calculate_incentives_and_update_scores(vali):
                     prediction_date = pwmd.prediction.predictionDate.replace(tzinfo=dt.timezone.utc)
                 else:
                     prediction_date = pwmd.prediction.predictionDate
+
+                # Filter predictions by our start date for copycat analysis
+                predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data if prediction_date >= COPYCAT_PUNISHMENT_START_DATE])
 
                 # Calculate time delta in minutes    
                 delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
@@ -406,6 +418,11 @@ def calculate_incentives_and_update_scores(vali):
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
+        # Analyze league for copycat patterns
+        duplicates, penalties = copycat_controller.analyze_league(league, predictions_for_copycat_analysis)
+        final_copycat_duplicates.update(duplicates)
+        final_copycat_penalties.update(penalties)
+
     # Update all_scores with weighted sum of league scores for each miner
     bt.logging.info("************ Applying leagues scoring percentages to scores ************")
     for league, percentage in vali.LEAGUE_SCORING_PERCENTAGES.items():
@@ -419,6 +436,21 @@ def calculate_incentives_and_update_scores(vali):
     all_scores = check_and_apply_league_commitment_penalties(vali, all_scores, all_uids)
     # Apply penalties for miners that have not responded to prediction requests
     all_scores = apply_no_prediction_response_penalties(vali, all_scores, all_uids)
+
+    # Log final copycat results
+    bt.logging.info(f"********************* Copycat Controller Findings  *********************")
+    bt.logging.info(f"Total miners with duplicates across all leagues: {len(final_copycat_duplicates)}")
+    if len(final_copycat_duplicates) > 0:
+        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_duplicates))}")
+
+    bt.logging.info(f"Total miners to penalize across all leagues: {len(final_copycat_penalties)}")
+    if len(final_copycat_penalties) > 0:
+        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_penalties))}")
+    bt.logging.info(f"*************************************************************")
+
+    for uid in final_copycat_penalties:
+        # Apply the penalty to the score
+        all_scores[uid] = EXACT_MATCH_PENALTY_SCORE
     
     # Apply Pareto to all scores
     bt.logging.info(f"Applying Pareto distribution (mu: {vali.PARETO_MU}, alpha: {vali.PARETO_ALPHA}) to scores...")

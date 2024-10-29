@@ -1,3 +1,4 @@
+import datetime
 from common.data import League
 
 IS_DEV = False
@@ -49,6 +50,13 @@ MAX_TEAM_NAME_LENGTH = 32
 ########## SCORING CONSTANTS ##############
 NO_LEAGUE_COMMITMENT_PENALTY = -0.25
 NO_PREDICTION_RESPONSE_PENALTY = -0.1
+
+# Copycat punishment constants
+COPYCAT_PUNISHMENT_START_DATE = datetime.datetime(2024, 10, 20, 0, 0, 0, tzinfo=datetime.timezone.utc)
+EXACT_MATCH_PENALTY_SCORE = 0
+EXACT_MATCH_PREDICTIONS_THRESHOLD = 10
+EXACT_MATCH_CONFIDENCE_THRESHOLD = 60
+STATISTICAL_CONFIDENCE_THRESHOLD = 75
 
 ACTIVE_LEAGUES = [
     League.MLB,

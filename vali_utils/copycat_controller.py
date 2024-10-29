@@ -1,10 +1,15 @@
 import logging
 from pathlib import Path
-from typing import List, Set
+from typing import List, Set, Dict, Union
 
 import bittensor as bt
 
 from common.data import League, MatchPredictionWithMatchData
+from common.constants import (
+    EXACT_MATCH_CONFIDENCE_THRESHOLD,
+    EXACT_MATCH_PREDICTIONS_THRESHOLD,
+    STATISTICAL_CONFIDENCE_THRESHOLD,
+)
 from vali_utils.analysis_utils import PredictionPatternAnalyzer, StatisticalAnalyzer
 from vali_utils.suspicious_utils import (
     ExactMatchSummary,
@@ -12,6 +17,7 @@ from vali_utils.suspicious_utils import (
     print_exact_match_report,
     print_statistical_report
 )
+
 
 class CopycatDetectionController:
     def __init__(
@@ -24,7 +30,7 @@ class CopycatDetectionController:
     def analyze_league(
         self,
         league: League,
-        league_predictions: List[MatchPredictionWithMatchData] = None
+        league_predictions: List[MatchPredictionWithMatchData] = None,
     ) -> tuple[Set[int], Set[int]]:
         """
         Analyze a specific league for duplicates.
@@ -36,10 +42,10 @@ class CopycatDetectionController:
         Returns:
             Tuple of (all duplicate miners, miners to penalize)
         """
-        logging.info(f"Processing league: {league.name}")
+        bt.logging.info(f"Analyzing league predictions for copycat patterns: {league.name}")
 
         if not league_predictions:
-            logging.warning(f"No predictions found for {league.name}")
+            bt.logging.warning(f"No predictions found for {league.name}")
             return set(), set()
 
         # Analyze exact matches
@@ -52,19 +58,21 @@ class CopycatDetectionController:
 
         # Get all miners with duplicates
         miner_ids_with_duplicates = set(m for miners in duplicate_groups.values() for m in miners)
-        print(f"\nTotal miners with duplicates in {league.name}: {len(miner_ids_with_duplicates)}")
-        print(f"Miners: {', '.join(str(m) for m in miner_ids_with_duplicates)}")
+        bt.logging.info(f"Total miners with duplicates in {league.name}: {len(miner_ids_with_duplicates)}")
+        bt.logging.info(f"Miners: {', '.join(str(m) for m in miner_ids_with_duplicates)}")
 
         # Get miners to penalize based on exact matches
         miners_to_penalize = self._get_miners_to_penalize(exact_match_summary)
         
         # Analyze statistical patterns for remaining miners
+        """
         cleared_miners = miner_ids_with_duplicates - miners_to_penalize
         suspicious_patterns = self.statistical_analyzer.analyze_prediction_clusters(league_predictions)
         
         statistical_summary = StatisticalPatternSummary(min_confidence_threshold=30.0)
         statistical_summary.analyze_patterns(suspicious_patterns, excluded_miners=cleared_miners)
         print_statistical_report(statistical_summary, league.name)
+        """
 
         return miner_ids_with_duplicates, miners_to_penalize
 
@@ -74,10 +82,10 @@ class CopycatDetectionController:
             return set()
 
         miners_to_penalize = set()
-        for group in summary.groups:
+        for i, group in enumerate(summary.groups):
             stats = group.stats
             confidence = group.calculate_confidence()
-            if confidence >= 60 and stats['unique_matches'] >= 10:
+            if confidence >= EXACT_MATCH_CONFIDENCE_THRESHOLD and stats['unique_matches'] >= EXACT_MATCH_PREDICTIONS_THRESHOLD:
                 miners_to_penalize.update(group.miners)
 
         return miners_to_penalize
