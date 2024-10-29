@@ -547,32 +547,52 @@ def upload_prediction_edge_results(prediction_results):
         conn = get_db_conn()
         c = conn.cursor()
 
-        current_utc_time = dt.datetime.now(timezone.utc)
-        current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
-
         """
         {
-            'edge_scores': edge_scores,
-            'correct_winner_results': correct_winner_results,
-            'uids': prediction_rewards_uids,
-            'hotkeys': prediction_results_hotkeys,
-            'sports': prediction_sports,
-            'leagues': prediction_leagues
+            'miner_scores': [
+                {
+                    "uid": 123,
+                    "hotkey": 'abcdefg',
+                    "vali_hotkey": 'hijklmnop',
+                    "total_score": 5.5,
+                    "total_pred_count": 100,
+                    "mlb_score": 1.1,
+                    "mlb_pred_count": 35,
+                    "nfl_score": 3.12,
+                    "nfl_pred_count": 20,
+                    "nba_score": 0.5,
+                    "nba_pred_count": 45,
+                    "mls_score": 0,
+                    "mls_pred_count": 0,
+                    "epl_score": 0,
+                    "epl_pred_count": 0,
+                    "lastUpdated": '2024-10-28 00:00:00'
+                }
+            ],
         }
         """
 
-        # Prepare the data for executemany
-        data_to_insert = list(
-            zip(
-                prediction_results["hotkeys"],
-                prediction_results["uids"],
-                prediction_results["leagues"],
-                prediction_results["sports"],
-                [1] * len(prediction_results["uids"]),
-                prediction_results["correct_winner_results"],
-                prediction_results["edge_scores"],
+        # Convert the miner_scores dictionary into a list of tuples
+        values_list = []
+        for uid, score_data in prediction_results["miner_scores"].items():
+            values_tuple = (
+                score_data["uid"],
+                score_data["hotkey"],
+                score_data["vali_hotkey"],
+                score_data["total_score"],
+                score_data["total_pred_count"],
+                score_data["mlb_score"],
+                score_data["mlb_pred_count"],
+                score_data["nfl_score"],
+                score_data["nfl_pred_count"],
+                score_data["nba_score"],
+                score_data["nba_pred_count"],
+                score_data["mls_score"],
+                score_data["mls_pred_count"],
+                score_data["epl_score"],
+                score_data["epl_pred_count"]
             )
-        )
+            values_list.append(values_tuple)
 
         prediction_edge_scores_table_name = "MatchPredictionEdgeResults"
         if not IS_PROD:
@@ -580,23 +600,27 @@ def upload_prediction_edge_results(prediction_results):
         c.executemany(
             f"""
             INSERT INTO {prediction_edge_scores_table_name} (
-                miner_hotkey,
                 miner_uid,
-                league,
-                sport,
-                total_predictions,
-                winner_predictions,
-                avg_edge,
-                last_updated
+                miner_hotkey,
+                vali_hotkey,
+                total_score,
+                total_pred_count,
+                mlb_score,
+                mlb_pred_count,
+                nfl_score,
+                nfl_pred_count,
+                nba_score,
+                nba_pred_count,
+                mls_score,
+                mls_pred_count,
+                epl_score,
+                epl_pred_count,
+                lastUpdated
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, NOW()
-            ) ON DUPLICATE KEY UPDATE
-                total_predictions = total_predictions + VALUES(total_predictions),
-                winner_predictions = winner_predictions + VALUES(winner_predictions),
-                avg_edge = ((avg_edge * (total_predictions - VALUES(total_predictions))) + (VALUES(avg_edge) * VALUES(total_predictions))) / total_predictions,
-                last_updated = NOW();
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+            )
             """,
-            data_to_insert,
+            values_list,
         )
 
         conn.commit()
@@ -605,6 +629,44 @@ def upload_prediction_edge_results(prediction_results):
 
     except Exception as e:
         logging.error("Failed to insert prediction edge results data in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, cutoff=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+
+        prediction_edge_results_table_name = "MatchPredictionEdgeResults"
+        params = [vali_hotkey]
+        if not IS_PROD:
+            prediction_edge_results_table_name += "_test"
+
+        query = f"""
+            SELECT *
+            FROM {prediction_edge_results_table_name}
+            WHERE vali_hotkey = %s
+        """
+
+        if miner_hotkey:
+            query += " AND miner_hotkey = %s"
+            params.append(miner_hotkey)
+        query += """
+            ORDER BY lastUpdated DESC;
+        """
+        if params:
+            c.execute(query, params)
+        else:
+            c.execute(query)
+        return c.fetchall()
+
+    except Exception as e:
+        logging.error(
+            "Failed to query league prediction stats from MySQL database", exc_info=True
+        )
         return False
     finally:
         c.close()
@@ -1457,6 +1519,78 @@ def create_tables():
 
         c.execute(
             """
+        CREATE TABLE IF NOT EXISTS MatchPredictionEdgeResults (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_uid INTEGER NOT NULL,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            vali_hotkey VARCHAR(64) NOT NULL,
+            total_score FLOAT NOT NULL,
+            total_pred_count INTEGER NOT NULL,
+            mlb_score FLOAT NOT NULL,
+            mlb_pred_count INTEGER NOT NULL,
+            nfl_score FLOAT NOT NULL,
+            nfl_pred_count INTEGER NOT NULL,
+            nba_score FLOAT NOT NULL,
+            nba_pred_count INTEGER NOT NULL,
+            mls_score FLOAT NOT NULL,
+            mls_pred_count INTEGER NOT NULL,
+            epl_score FLOAT NOT NULL,
+            epl_pred_count INTEGER NOT NULL,
+            lastUpdated TIMESTAMP NOT NULL
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS MatchPredictionEdgeResults_test (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_uid INTEGER NOT NULL,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            vali_hotkey VARCHAR(64) NOT NULL,
+            total_score FLOAT NOT NULL,
+            total_pred_count INTEGER NOT NULL,
+            mlb_score FLOAT NOT NULL,
+            mlb_pred_count INTEGER NOT NULL,
+            nfl_score FLOAT NOT NULL,
+            nfl_pred_count INTEGER NOT NULL,
+            nba_score FLOAT NOT NULL,
+            nba_pred_count INTEGER NOT NULL,
+            mls_score FLOAT NOT NULL,
+            mls_pred_count INTEGER NOT NULL,
+            epl_score FLOAT NOT NULL,
+            epl_pred_count INTEGER NOT NULL,
+            lastUpdated TIMESTAMP NOT NULL
+        )"""
+        )
+        
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS Miners (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            miner_coldkey VARCHAR(64) NOT NULL,
+            miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
+            miner_age INTEGER NOT NULL DEFAULT 0,
+            last_updated TIMESTAMP NOT NULL,
+            UNIQUE (miner_hotkey, miner_uid)
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS Miners_test (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_hotkey VARCHAR(64) NOT NULL,
+            miner_coldkey VARCHAR(64) NOT NULL,
+            miner_uid INTEGER NOT NULL,
+            miner_is_registered TINYINT(1) DEFAULT 1,
+            miner_age INTEGER NOT NULL DEFAULT 0,
+            last_updated TIMESTAMP NOT NULL,
+            UNIQUE (miner_hotkey, miner_uid)
+        )"""
+        )
+
+        c.execute(
+            """
         CREATE TABLE IF NOT EXISTS MatchPredictionResults (
             id INT AUTO_INCREMENT PRIMARY KEY,
             miner_hotkey VARCHAR(64) NOT NULL,
@@ -1489,32 +1623,6 @@ def create_tables():
             avg_score FLOAT NOT NULL,
             last_updated TIMESTAMP NOT NULL,
             UNIQUE (miner_hotkey, miner_uid, league)
-        )"""
-        )
-        c.execute(
-            """
-        CREATE TABLE IF NOT EXISTS Miners (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            miner_hotkey VARCHAR(64) NOT NULL,
-            miner_coldkey VARCHAR(64) NOT NULL,
-            miner_uid INTEGER NOT NULL,
-            miner_is_registered TINYINT(1) DEFAULT 1,
-            miner_age INTEGER NOT NULL DEFAULT 0,
-            last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, miner_uid)
-        )"""
-        )
-        c.execute(
-            """
-        CREATE TABLE IF NOT EXISTS Miners_test (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            miner_hotkey VARCHAR(64) NOT NULL,
-            miner_coldkey VARCHAR(64) NOT NULL,
-            miner_uid INTEGER NOT NULL,
-            miner_is_registered TINYINT(1) DEFAULT 1,
-            miner_age INTEGER NOT NULL DEFAULT 0,
-            last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, miner_uid)
         )"""
         )
         c.execute(

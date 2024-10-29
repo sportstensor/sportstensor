@@ -297,6 +297,7 @@ def calculate_incentives_and_update_scores(vali):
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name}")
@@ -391,6 +392,7 @@ def calculate_incentives_and_update_scores(vali):
 
             final_score = rho * total_score
             league_scores[league][index] = final_score
+            league_pred_counts[league][index] = len(predictions_with_match_data)
             bt.logging.debug(f"  • Final score: {final_score:.4f}")
             bt.logging.debug("-" * 50)
 
@@ -447,6 +449,8 @@ def calculate_incentives_and_update_scores(vali):
         bt.logging.info(f"Lowest non-zero score: {min(non_zero_scores):.6f}")
     else:
         bt.logging.info("\nNo non-zero scores recorded.")
+
+    return league_scores, league_pred_counts, all_scores
 
 def update_miner_scores(vali, rewards: torch.FloatTensor, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""
