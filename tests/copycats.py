@@ -2,6 +2,7 @@ import logging
 import time
 import json
 from typing import List, Set
+import datetime
 from pathlib import Path
 import requests
 
@@ -12,6 +13,7 @@ from common.data import League, MatchPrediction, MatchPredictionWithMatchData
 from common.constants import (
     ACTIVE_LEAGUES,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
+    COPYCAT_PUNISHMENT_START_DATE,
 )
 
 from vali_utils.copycat_controller import CopycatDetectionController
@@ -146,6 +148,9 @@ def get_predictions_from_api(miner_uid, miner_hotkey, league):
         # Fetch all predictions
         predictions = fetch_prediction_results(BASE_URL, miner_uid, miner_hotkey, VALI_HOTKEY)
         #print(f"Successfully fetched {len(predictions)} predictions for miner {miner_uid}")
+
+        # Filter predictions by our start date
+        predictions = [p for p in predictions if p.prediction.predictionDate.replace(tzinfo=datetime.timezone.utc) >= COPYCAT_PUNISHMENT_START_DATE]
         
         # Filter predictions by league
         league_predictions = [p for p in predictions if p.prediction.league == league]
@@ -167,13 +172,25 @@ def main_api():
     metagraph: bittensor.metagraph = subtensor.metagraph(NETUID)
     all_uids = metagraph.uids.tolist()
     #all_uids = metagraph.uids.tolist()[:10]
+    
+    """ Turning off registration block info. Not in use.
+    uids_to_registration_info = {}
+    for uid in all_uids:
+        # query the subtensor for the block at registration
+        registration_block = subtensor.query_module('SubtensorModule','BlockAtRegistration',None,[NETUID,uid]).value
+        if registration_block:
+            uids_to_registration_info[uid] = {
+                "hotkey": metagraph.axons[uid].hotkey,
+                "registration_block": registration_block
+            }
+    """
 
     # Initialize controller
     controller = CopycatDetectionController()
     
     # Run analysis
     leagues = ACTIVE_LEAGUES
-    leagues = [League.NFL]
+    #leagues = [League.NFL]
 
     final_duplicates = set()
     final_penalties = set()
@@ -210,6 +227,7 @@ def main():
     subtensor = bittensor.subtensor(network=NETWORK)
     metagraph: bittensor.metagraph = subtensor.metagraph(NETUID)
     all_uids = metagraph.uids.tolist()
+    #all_uids = metagraph.uids.tolist()[:10]
 
     # Initialize database to get data
     storage = get_storage()
@@ -217,12 +235,10 @@ def main():
     # Initialize controller
     controller = CopycatDetectionController()
     
-    # Optional: Limit analysis to specific leagues or miners for testing
-    # test_leagues = [League.NFL]
-    # test_miners = controller.metagraph.uids.tolist()[:10]
-    
     # Run analysis
     leagues = ACTIVE_LEAGUES
+    #leagues = [League.NFL]
+
     final_duplicates = set()
     final_penalties = set()
 
@@ -242,6 +258,9 @@ def main():
             if not predictions_with_match_data:
                 continue  # No predictions for this league, keep score as 0
 
+            # Filter predictions by our start date
+            predictions_with_match_data = [p for p in predictions_with_match_data if p.prediction.predictionDate.replace(tzinfo=datetime.timezone.utc) >= COPYCAT_PUNISHMENT_START_DATE]
+
             league_predictions.extend(predictions_with_match_data)
 
         
@@ -259,5 +278,5 @@ def main():
     print(f"==============================================================================")
 
 if __name__ == "__main__":
-    #main()
-    main_api()
+    main()
+    #main_api()
