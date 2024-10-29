@@ -4,7 +4,8 @@ import schedule
 import time
 import logging
 from datetime import datetime, timedelta, timezone
-
+from api.config import ODDS_API_KEY
+from fetch_odds import league_mapping
 # Setup basic configuration for logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -13,8 +14,15 @@ logging.basicConfig(
 from api.config import NETWORK
 
 # Define sport mapping
-sport_mapping = {"SOCCER": 1, "AMERICAN FOOTBALL": 2, "BASEBALL": 3, "BASKETBALL": 4}
+sport_mapping = {"soccer_epl": 1, "soccer_usa_mls": 1, "americanfootball_nfl": 2, "baseball_mlb": 3, "basketball_nba": 4}
 
+league_odds_type_mapping = {
+    'English Premier League': 'soccer_epl',
+    'NBA': 'basketball_nba',
+    'MLB': 'baseball_mlb',
+    'American Major League Soccer': 'soccer_usa_mls',
+    'NFL': 'americanfootball_nfl'
+}
 
 def parse_datetime_with_optional_timezone(timestamp):
     if isinstance(timestamp, (int, float)) or timestamp.isdigit():
@@ -70,12 +78,12 @@ def fetch_and_store_events():
         # split the response text into lines
         lines = response.text.split("\n")
         # filter the lines to include only those where column C is "Active"
-        urls = [
-            line.split(",")[4].strip()
+        activeLeagues = [
+            line.split(",")[0].strip()
             for line in lines[1:]
             if line.split(",")[5].strip() == "Active"
         ]
-        logging.info(f"Loaded {len(urls)} API endpoints from {api_endpoints_url}")
+        logging.info(f"Loaded {len(activeLeagues)} API endpoints from {api_endpoints_url}")
 
     except Exception as e:
         logging.error(f"Error loading API endpoints from URL {api_endpoints_url}: {e}")
@@ -88,70 +96,68 @@ def fetch_and_store_events():
         ]
 
     logging.info("Fetching data from APIs")
-    all_events = []
+    all_matches = []
 
     current_utc_time = datetime.now(timezone.utc)
-    start_period = current_utc_time - timedelta(days=10)
-    end_period = current_utc_time + timedelta(hours=48)
 
-    for url in urls:
+    for league in activeLeagues:
         try:
-            response = requests.get(url)
-            data = response.json()
-            if "events" in data:
-                filtered_events = [
-                    event
-                    for event in data["events"]
-                    if start_period
-                    <= parse_datetime_with_optional_timezone(event["strTimestamp"])
-                    <= end_period
-                ]
-                all_events.extend(filtered_events)
+            url = f"https://api.the-odds-api.com/v4/sports/{league_odds_type_mapping.get(league)}/scores/"
+            params = {
+                "apiKey": ODDS_API_KEY,
+                "daysFrom": 3,
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                all_matches.extend(data)
+            else:
+                logging.error("Failed to fetch matches:", response.status_code)
         except Exception as e:
             logging.error(
                 f"Failed to fetch or parse API data from {url}", exc_info=True
             )
 
-    if not all_events:
-        logging.info("No events data found in the API responses")
+    if not all_matches:
+        logging.info("No matches data found in the API responses")
         return
 
     current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        for event in all_events:
-            event_id = event.get("idEvent")
+        for match in all_matches:
+            oddspaiMatchId = match.get("id")
 
             # Query the lookup table
-            match_id = db.query_sportsdb_match_lookup(event_id)
+            match_id = db.query_sportsdb_match_lookup(oddspaiMatchId)
             new_match = False
             if match_id is None:
                 match_id = create_match_id()
                 new_match = True
 
-            status = event.get("strStatus")
-            is_complete = (
-                0
-                if status in ("Not Started", "NS")
-                else 1 if status in ("Match Finished", "FT") else 0
-            )
+            is_complete = match.get("completed")
             sport_type = sport_mapping.get(
-                event.get("strSport").upper(), 0
+                match.get("sport_key"), 0
             )  # Default to 0 if sport is unknown
-            
-            if isinstance(event.get("strTimestamp"), (int, float)) or event.get("strTimestamp").isdigit():
+            match.update({"sport_title": league_mapping.get(match.get("sport_title"), match.get("sport_title"))})
+            commence_time_str = match.get("commence_time")
+            if isinstance(commence_time_str, (int, float)) or commence_time_str.isdigit():
                 # Handle Unix timestamp (seconds since epoch)
-                matchTimestamp = datetime.fromtimestamp(float(event.get("strTimestamp")), tz=timezone.utc)
+                matchTimestamp = datetime.fromtimestamp(commence_time_str, tz=timezone.utc)
                 matchTimestampStr = matchTimestamp.strftime("%Y-%m-%d %H:%M:%S")
-                event.update({"strTimestamp": matchTimestampStr})
+                match.update({"commence_time": matchTimestampStr})
+            elif commence_time_str:
+                # Parse the ISO 8601 format and convert to the desired format
+                commence_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00")).strftime('%Y-%m-%d %H:%M:%S')
+                match.update({"commence_time": commence_time})
 
             dbresult = db.insert_match(
-                match_id, event, sport_type, is_complete, current_utc_time
+                match_id, match, sport_type, is_complete, current_utc_time
             )
             if dbresult and new_match:
-                dbresult2 = db.insert_sportsdb_match_lookup(match_id, event_id)
+                dbresult2 = db.insert_sportsdb_match_lookup(match_id, oddspaiMatchId)
                 if dbresult2:
-                    logging.info(f"Inserted matchId {match_id} and sportsdbMatchId {event_id} lookup into the database")
+                    logging.info(f"Inserted matchId {match_id} and oddsapiMatchId {oddspaiMatchId} lookup into the database")
 
     except Exception as e:
         logging.error("Failed inserting events into the MySQL database", exc_info=True)
