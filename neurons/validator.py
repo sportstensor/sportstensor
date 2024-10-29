@@ -198,8 +198,8 @@ class Validator(BaseValidatorNeuron):
                     if hour % 12 == 0 and minutes == 0:
                         if (
                             league_scores and len(league_scores) > 0 and
-                            (self.config.subtensor.network == "test" and league_scores and len(league_scores) > 0) or 
-                            (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 500_000)
+                            ((self.config.subtensor.network == "test") or 
+                            (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 500_000))
                         ):
                             bt.logging.info("Posting league scores to API.")
                             post_result = utils.post_prediction_edge_results(self, self.prediction_edge_results_endpoint, league_scores, league_pred_counts, all_scores)
