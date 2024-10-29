@@ -1,12 +1,15 @@
+import os
 from aiohttp import ClientSession, BasicAuth
 import asyncio
 import requests
+from requests.auth import HTTPBasicAuth
 import bittensor as bt
 import random
 import traceback
 from typing import List, Optional, Tuple, Dict
 import datetime as dt
 from datetime import timedelta, timezone
+import time
 import copy
 
 from common.data import League, Match, MatchPrediction, ProbabilityChoice, get_probablity_choice_from_string
@@ -692,41 +695,70 @@ def is_match_prediction_valid(
     return (True, "")
 
 
-async def post_prediction_edge_results(
+def post_prediction_edge_results(
     vali,
-    prediction_edge_results_endpoint,
-    edge_scores,
-    correct_winner_results,
-    prediction_uids,
-    prediction_hotkeys,
-    prediction_sports,
-    prediction_leagues,
+    prediction_edge_results_endpoint: str,
+    league_scores: Dict[League, List[float]],
+    league_pred_counts: Dict[League, List[int]],
+    all_scores: Dict[str, List[float]],
 ):
     keypair = vali.dendrite.keypair
     hotkey = keypair.ss58_address
     signature = f"0x{keypair.sign(hotkey).hex()}"
     max_retries = 3
+    
+    # Get current timestamp for lastUpdated field
+    current_time = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Initialize the miner scores dictionary
+    miner_scores = {}
+    
+    all_uids = vali.metagraph.uids.tolist()
+    
+    # Build complete score data for each UID
+    for uid in all_uids:
+        total_pred_count = (
+            league_pred_counts[League.MLB][uid] +
+            league_pred_counts[League.NFL][uid] +
+            league_pred_counts[League.NBA][uid] +
+            league_pred_counts[League.MLS][uid] +
+            league_pred_counts[League.EPL][uid]
+        )
+
+        miner_scores[uid] = {
+            "uid": uid,
+            "hotkey": vali.metagraph.axons[uid].hotkey,
+            "vali_hotkey": vali.wallet.hotkey.ss58_address,
+            "total_score": all_scores[uid],
+            "total_pred_count": total_pred_count,
+            "mlb_score": league_scores[League.MLB][uid],
+            "mlb_pred_count": league_pred_counts[League.MLB][uid],
+            "nfl_score": league_scores[League.NFL][uid],
+            "nfl_pred_count": league_pred_counts[League.NFL][uid],
+            "nba_score": league_scores[League.NBA][uid],
+            "nba_pred_count": league_pred_counts[League.NBA][uid],
+            "mls_score": league_scores[League.MLS][uid],
+            "mls_pred_count": league_pred_counts[League.MLS][uid],
+            "epl_score": league_scores[League.EPL][uid],
+            "epl_pred_count": league_pred_counts[League.EPL][uid],
+            "lastUpdated": current_time
+        }
 
     for attempt in range(max_retries):
         try:
             # Post the scoring results back to the api
             scoring_results = {
-                "scores": edge_scores,
-                "correct_winner_results": correct_winner_results,
-                "uids": prediction_uids,
-                "hotkeys": prediction_hotkeys,
-                "sports": prediction_sports,
-                "leagues": prediction_leagues,
+                "miner_scores": miner_scores,
             }
-            async with ClientSession() as session:
-                async with session.post(
-                    prediction_edge_results_endpoint,
-                    auth=BasicAuth(hotkey, signature),
-                    json=scoring_results,
-                ) as response:
-                    response.raise_for_status()
-                    bt.logging.info("Successfully posted prediction edge results to API.")
-                    return response
+            
+            response = requests.post(
+                prediction_edge_results_endpoint,
+                auth=HTTPBasicAuth(hotkey, signature),
+                json=scoring_results,
+            )
+            response.raise_for_status()
+            bt.logging.info("Successfully posted prediction edge results to API.")
+            return response
 
         except Exception as e:
             bt.logging.error(
@@ -734,11 +766,12 @@ async def post_prediction_edge_results(
             )
             if attempt < max_retries - 1:
                 # Wait before retrying
-                await asyncio.sleep(2)
+                time.sleep(2)
             else:
                 bt.logging.error(
                     f"Max retries attempted posting prediction edge results to API. Contact a Sportstensor admin."
                 )
+                raise  # Re-raise the last exception after all retries are exhausted
 
 
 async def post_scored_predictions(
