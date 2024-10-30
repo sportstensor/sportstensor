@@ -6,7 +6,7 @@ MAX_PREDICTION_DAYS_THRESHOLD = 1
 gamma = 0.00125
 
 def calc_time_component(match_date, prediction_date, label):
-    delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
+    delta_t = min(MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60, (match_date - prediction_date).total_seconds() / 60)
     time_component = math.exp(-gamma * delta_t)
     print(f"{label}: delta_t: {delta_t}, time_component: {time_component}")
     return time_component
