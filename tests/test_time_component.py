@@ -5,14 +5,14 @@ import datetime as dt
 MAX_PREDICTION_DAYS_THRESHOLD = 1
 gamma = 0.00125
 
-def calc_time_component(match_date, prediction_date):
+def calc_time_component(match_date, prediction_date, label):
     delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
     time_component = math.exp(-gamma * delta_t)
-    print(f"delta_t: {delta_t}, time_component: {time_component}")
+    print(f"{label}: delta_t: {delta_t}, time_component: {time_component}")
     return time_component
 
-def pretty_print(timestamp, score, score_sum):
-    print(f"{timestamp}: {round(score / score_sum * 100, 2)}%")
+def pretty_print(label, score, score_sum):
+    print(f"{label}: {round(score / score_sum * 100, 2)}%")
 
 def test_time_component():
 
@@ -22,15 +22,15 @@ def test_time_component():
     # T-24h == 3%
 
     match_date = dt.datetime(2024, 10, 30, 12, 0, 0)
-    pred_date_24h = dt.datetime(2024, 10, 29, 12, 1, 0)
-    pred_date_12h = dt.datetime(2024, 10, 30, 0, 1, 0)
-    pred_date_4h = dt.datetime(2024, 10, 30, 8, 1, 0)
-    pred_date_10m = dt.datetime(2024, 10, 30, 11, 51, 0)
+    pred_date_10m = dt.datetime(2024, 10, 30, 11, 59, 0)
+    pred_date_4h = dt.datetime(2024, 10, 30, 8, 10, 0)
+    pred_date_12h = dt.datetime(2024, 10, 30, 0, 10, 0)
+    pred_date_24h = dt.datetime(2024, 10, 29, 12, 10, 0)
 
-    t_10m = calc_time_component(match_date, pred_date_10m)
-    t_4h = calc_time_component(match_date, pred_date_4h)
-    t_12h = calc_time_component(match_date, pred_date_12h)
-    t_24h = calc_time_component(match_date, pred_date_24h)
+    t_10m = calc_time_component(match_date, pred_date_10m, "T-10m")
+    t_4h = calc_time_component(match_date, pred_date_4h, "T-4h")
+    t_12h = calc_time_component(match_date, pred_date_12h, "T-12h")
+    t_24h = calc_time_component(match_date, pred_date_24h, "T-24h")
     score_sum = t_24h + t_12h + t_4h + t_10m
     print()
 
