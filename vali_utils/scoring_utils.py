@@ -352,7 +352,7 @@ def calculate_incentives_and_update_scores(vali):
                     prediction_date = pwmd.prediction.predictionDate
 
                 # Calculate time delta in minutes    
-                delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
+                delta_t = min(MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60, (match_date - prediction_date).total_seconds() / 60)
                 if log_prediction:
                     bt.logging.debug(f"      • Time delta: {delta_t:.4f}")
                 
