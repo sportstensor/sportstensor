@@ -841,14 +841,22 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
         prediction_scores_table_name = "MatchPredictionsScored"
         params = [vali_hotkey]
         miners_table_name = "Miners"
+        prediction_edges_table_name = "MatchPredictionEdgeResults"
         if not IS_PROD:
             prediction_scores_table_name += "_test"
             miners_table_name += "_test"
+            prediction_edges_table_name += "_test"
 
         query = f"""
             SELECT
                 mps.miner_id,
                 mps.miner_hotkey,
+                sorted_mpe.total_score,
+                sorted_mpe.mlb_score,
+                sorted_mpe.nba_score,
+                sorted_mpe.mls_score,
+                sorted_mpe.epl_score,
+                sorted_mpe.nfl_score,
                 JSON_ARRAYAGG(
                     JSON_OBJECT(
                         'vali_hotkey', mps.vali_hotkey,
@@ -874,6 +882,15 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
                 ) AS data
             FROM {prediction_scores_table_name} mps
             LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey
+            LEFT JOIN (
+                SELECT mpe.*
+                FROM {prediction_edges_table_name} mpe
+                WHERE (miner_hotkey, vali_hotkey, lastUpdated) IN (
+                    SELECT miner_hotkey, vali_hotkey, MAX(lastUpdated)
+                    FROM {prediction_edges_table_name}
+                    GROUP BY miner_hotkey, vali_hotkey
+                )
+            ) sorted_mpe ON mps.miner_hotkey = sorted_mpe.miner_hotkey AND mps.vali_hotkey = sorted_mpe.vali_hotkey
             LEFT JOIN matches ON matches.matchId = mps.matchId
             LEFT JOIN matches_lookup ml ON (ml.matchId = mps.matchId)
             LEFT JOIN (
@@ -913,7 +930,13 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
         
         query += """ GROUP BY 
         mps.miner_id, 
-        mps.miner_hotkey;"""
+        mps.miner_hotkey,
+        sorted_mpe.total_score,
+        sorted_mpe.nfl_score,
+        sorted_mpe.nba_score,
+        sorted_mpe.mls_score,
+        sorted_mpe.epl_score,
+        sorted_mpe.mlb_score;"""
 
         if params:
             c.execute(query, params)
