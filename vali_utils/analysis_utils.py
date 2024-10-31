@@ -5,10 +5,11 @@ from typing import List, Tuple
 import datetime as dt
 
 from common.data import MatchPredictionWithMatchData
+from common.constants import COPYCAT_VARIANCE_THRESHOLD, EXACT_MATCH_PREDICTIONS_THRESHOLD
   
 
 class StatisticalAnalyzer:
-    def __init__(self, variance_threshold: float = 0.01, min_suspicious_matches: int = 10):
+    def __init__(self, variance_threshold: float = COPYCAT_VARIANCE_THRESHOLD, min_suspicious_matches: int = EXACT_MATCH_PREDICTIONS_THRESHOLD):
         self.variance_threshold = variance_threshold
         self.min_suspicious_matches = min_suspicious_matches
 
