@@ -16,7 +16,46 @@ GET_MATCH_QUERY = """
         mo.awayTeamOdds,
         mo.drawOdds,
         mo.lastUpdated,
-        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count
+        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 24 HOUR)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_24h,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated >= DATE_SUB(mlo.matchDate, INTERVAL 24 HOUR)
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 12 HOUR)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_12h,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated >= DATE_SUB(mlo.matchDate, INTERVAL 12 HOUR)
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 4 HOUR)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_4h,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated >= DATE_SUB(mlo.matchDate, INTERVAL 4 HOUR)
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 10 MINUTE)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_10m
     FROM (
         SELECT
             m.matchId,
