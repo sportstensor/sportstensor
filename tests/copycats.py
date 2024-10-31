@@ -5,6 +5,7 @@ from typing import List, Set
 import datetime
 from pathlib import Path
 import requests
+import random
 
 from storage.sqlite_validator_storage import get_storage
 import bittensor
@@ -192,7 +193,7 @@ def main_api():
     leagues = ACTIVE_LEAGUES
     #leagues = [League.NFL]
 
-    final_duplicates = set()
+    final_suspicious = set()
     final_penalties = set()
 
     for league in leagues:
@@ -204,14 +205,23 @@ def main_api():
                 continue
             league_predictions.extend(predictions)
         
-        duplicates, penalties = controller.analyze_league(league, league_predictions)
-        final_duplicates.update(duplicates)
+        suspicious_miners, penalties = controller.analyze_league(league, league_predictions)
+        
+        # Print league results
+        print(f"\n==============================================================================")
+        print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
+        
+        print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
+        print(f"==============================================================================")
+        final_suspicious.update(suspicious_miners)
         final_penalties.update(penalties)
 
     # Print final results
     print(f"\n==============================================================================")
-    print(f"Total miners with duplicates across all leagues: {len(final_duplicates)}")
-    print(f"Miners: {', '.join(str(m) for m in sorted(final_duplicates))}")
+    print(f"Total suspicious miners across all leagues: {len(final_suspicious)}")
+    print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious))}")
 
     print(f"\nTotal miners to penalize across all leagues: {len(final_penalties)}")
     print(f"Miners: {', '.join(str(m) for m in sorted(final_penalties))}")
@@ -239,7 +249,7 @@ def main():
     leagues = ACTIVE_LEAGUES
     #leagues = [League.NFL]
 
-    final_duplicates = set()
+    final_suspicious = set()
     final_penalties = set()
 
     for league in leagues:
@@ -264,19 +274,28 @@ def main():
             league_predictions.extend(predictions_with_match_data)
 
         
-        duplicates, penalties = controller.analyze_league(league, league_predictions)
-        final_duplicates.update(duplicates)
+        suspicious_miners, penalties = controller.analyze_league(league, league_predictions)
+
+        # Print league results
+        print(f"\n==============================================================================")
+        print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
+        
+        print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
+        print(f"==============================================================================")
+        final_suspicious.update(suspicious_miners)
         final_penalties.update(penalties)
 
     # Print final results
     print(f"\n==============================================================================")
-    print(f"Total miners with duplicates across all leagues: {len(final_duplicates)}")
-    print(f"Miners: {', '.join(str(m) for m in sorted(final_duplicates))}")
+    print(f"Total suspicious miners across all leagues: {len(final_suspicious)}")
+    print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious))}")
 
     print(f"\nTotal miners to penalize across all leagues: {len(final_penalties)}")
     print(f"Miners: {', '.join(str(m) for m in sorted(final_penalties))}")
     print(f"==============================================================================")
 
 if __name__ == "__main__":
-    main()
-    #main_api()
+    #main()
+    main_api()
