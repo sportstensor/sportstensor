@@ -22,32 +22,25 @@ from common.constants import (
     COPYCAT_PUNISHMENT_START_DATE
 )
 
-def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, winning_closing_odds: float, losing_closing_odds: float) -> Tuple[float, int]:
+def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
     """
-    Calculate the edge for a prediction on a two-sided market.
+    Calculate the edge for a prediction on a three-sided market.
     
-    :param prediction_team: str, either 'A' or 'B', representing the team chosen
+    :param prediction_team: str, either 'A' or 'B' or 'Draw' representing the team chosen
     :param prediction_prob: float, weak learner's probability of winning for the chosen team at prediction time
     :param actual_team: str, either 'A' or 'B', representing the team that actually won
-    :param winning_closing_odds: float, consensus probability of winning team at match start time
-    :param losing_closing_odds: float, consensus probability of losing team at match start time
-    :return: float, the calculated edge
+    :param closing_odds: float, consensus probability of outcome at match start time
+    :return: Tuple[float, int], the calculated edge and a correctness indicator (1 if correct, 0 otherwise)
     """
     model_prediction_correct = (prediction_team == actual_team)
-    # consensus_closing_odds: float, consensus probability of winning for the chosen team at match start time
-    if model_prediction_correct:
-        reward_punishment = 1
-        consensus_closing_odds = winning_closing_odds
-    else:
-        reward_punishment = -1
-        consensus_closing_odds = losing_closing_odds
+    reward_punishment = 1 if model_prediction_correct else -1
 
-    # draws have no edge. temporary
-    if prediction_team == "Draw" or winning_closing_odds == losing_closing_odds:
-        reward_punishment = 0
-    
-    edge = consensus_closing_odds - (1 / prediction_prob)
-    return reward_punishment * edge, 1 if reward_punishment == 1 else 0
+    # check if closing_odd is available
+    if closing_odds is None:
+        return 0.0, 0
+
+    edge = closing_odds - (1 / prediction_prob)
+    return reward_punishment * edge, 1 if model_prediction_correct else 0
 
 def compute_significance_score(num_miner_predictions: int, num_threshold_predictions: int, alpha: float) -> float:
     """
@@ -98,7 +91,7 @@ def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: flo
     clv_component = (1 - (2 * beta)) / (1 + math.exp(kappa * clv)) + beta
     return time_component + (1 - time_component) * clv_component
 
-def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
+def calculate_clv(match_odds: List[Tuple[str, float, float, float, datetime]], pwmd: MatchPredictionWithMatchData, log_prediction: bool = False) -> Optional[float]:
     """
     Calculate the closing line value for this prediction.
 
@@ -118,15 +111,16 @@ def calculate_clv(match_odds: List[Tuple[str, float, datetime]], pwmd: MatchPred
         bt.logging.debug(f"      • Probability: {pwmd.prediction.probability}")
         bt.logging.debug(f"      • Implied odds: {(1/pwmd.prediction.probability):.4f}")
 
-    # clv is the distance between the odds at the time of prediction to the closing odds. Anything above 0 is derived value based on temporal drift of information
-    model_prediction_correct = (pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-    if model_prediction_correct:
-        closing_odds = pwmd.get_actual_winner_odds()
-    else:
-        closing_odds = pwmd.get_actual_loser_odds()
+    # Get the closing odds for the predicted outcome
+    closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
+    if closing_odds is None:
+        bt.logging.debug(f"Closing odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
+        return None
+
     if log_prediction:
         bt.logging.debug(f"      • Closing Odds: {closing_odds}")
 
+     # clv is the distance between the odds at the time of prediction to the closing odds. Anything above 0 is derived value based on temporal drift of information
     return prediction_odds - closing_odds
 
 def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]], prediction_time: datetime, probability_choice: str, log_prediction: bool) -> Optional[float]:
@@ -158,8 +152,10 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
             odds = homeTeamOdds
         elif probability_choice in [ProbabilityChoice.AWAYTEAM, ProbabilityChoice.AWAYTEAM.value]:
             odds = awayTeamOdds
-        else:
+        elif probability_choice in [ProbabilityChoice.DRAW, ProbabilityChoice.DRAW.value]:
             odds = drawOdds
+        else:
+            continue  # invalid probability choice
 
         if odds is None:
             continue
@@ -309,6 +305,7 @@ def calculate_incentives_and_update_scores(vali):
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name}")
@@ -351,6 +348,7 @@ def calculate_incentives_and_update_scores(vali):
                     continue
                 
                 # Calculate our time delta expressed in minutes
+
                 # Ensure prediction.matchDate is offset-aware
                 if pwmd.prediction.matchDate.tzinfo is None:
                     match_date = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
@@ -366,7 +364,7 @@ def calculate_incentives_and_update_scores(vali):
                 predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data if prediction_date >= COPYCAT_PUNISHMENT_START_DATE])
 
                 # Calculate time delta in minutes    
-                delta_t = (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60) - ((match_date - prediction_date).total_seconds() / 60)
+                delta_t = min(MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60, (match_date - prediction_date).total_seconds() / 60)
                 if log_prediction:
                     bt.logging.debug(f"      • Time delta: {delta_t:.4f}")
                 
@@ -406,6 +404,7 @@ def calculate_incentives_and_update_scores(vali):
 
             final_score = rho * total_score
             league_scores[league][index] = final_score
+            league_pred_counts[league][index] = len(predictions_with_match_data)
             bt.logging.debug(f"  • Final score: {final_score:.4f}")
             bt.logging.debug("-" * 50)
 
@@ -482,6 +481,8 @@ def calculate_incentives_and_update_scores(vali):
         bt.logging.info(f"Lowest non-zero score: {min(non_zero_scores):.6f}")
     else:
         bt.logging.info("\nNo non-zero scores recorded.")
+
+    return league_scores, league_pred_counts, all_scores
 
 def update_miner_scores(vali, rewards: torch.FloatTensor, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""

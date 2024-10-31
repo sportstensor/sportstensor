@@ -153,6 +153,7 @@ class Validator(BaseValidatorNeuron):
         while not self.stop_event.is_set():
             current_time = dt.datetime.utcnow()
             minutes = current_time.minute
+            hour = current_time.hour
             
             # Check if we're at a 30-minute mark
             if minutes % 30 == 0 or self.config.immediate:
@@ -176,7 +177,7 @@ class Validator(BaseValidatorNeuron):
 
                 try:
                     bt.logging.debug("Calculating incentives.")
-                    scoring_utils.calculate_incentives_and_update_scores(self)
+                    league_scores, league_pred_counts, all_scores = scoring_utils.calculate_incentives_and_update_scores(self)
                     bt.logging.debug("Finished calculating incentives.")
                 except Exception as e:
                     bt.logging.error(f"Error calculating incentives: {str(e)}")
@@ -191,6 +192,21 @@ class Validator(BaseValidatorNeuron):
                             time.sleep(3600)
                 except asyncio.TimeoutError:
                     bt.logging.error(f"Failed to set weights after {ttl} seconds")
+
+                try:
+                    # Check if we're at a 12-hour 0-minute mark. Only run this at midnight and noon UTC.
+                    if hour % 12 == 0 and minutes == 0:
+                        if (
+                            league_scores and len(league_scores) > 0 and
+                            ((self.config.subtensor.network == "test") or 
+                            (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 500_000))
+                        ):
+                            bt.logging.info("Posting league scores to API.")
+                            post_result = utils.post_prediction_edge_results(self, self.prediction_edge_results_endpoint, league_scores, league_pred_counts, all_scores)
+                        
+                except Exception as e:
+                    bt.logging.error(f"Error posting league scores to API: {str(e)}")
+
             else:
                 # only log every 5 minutes
                 if minutes % 5 == 0:
@@ -501,25 +517,6 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.info(
                     f"Closing Edge scores: {edge_scores}"
                 )
-
-                # Get hotkeys associated with returned prediction reward uids
-                prediction_hotkeys = [
-                    self.metagraph.axons[uid].hotkey for uid in prediction_miner_uids
-                ]
-
-                # Post prediction scoring results to API for storage/analysis
-                """
-                post_result = await utils.post_prediction_edge_results(
-                    self,
-                    self.prediction_edge_results_endpoint,
-                    edge_scores,
-                    correct_winner_results,
-                    prediction_miner_uids,
-                    prediction_hotkeys,
-                    prediction_sports,
-                    prediction_leagues,
-                )
-                """
 
                 # Post scored predictions to API for storage/analysis
                 post_result = await utils.post_scored_predictions(

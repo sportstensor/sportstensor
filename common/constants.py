@@ -39,7 +39,7 @@ MAX_PREDICTION_DAYS_THRESHOLD = 1
 MAX_BATCHSIZE_FOR_SCORING = 500
 
 # Cut off days to attempt to score predictions. i.e. Any predictions not scored with X days will be left behind
-SCORING_CUTOFF_IN_DAYS = 10
+SCORING_CUTOFF_IN_DAYS = 30
 
 # Interval in minutes that we attempt to score predictions
 SCORING_INTERVAL_IN_MINUTES = 1
@@ -62,7 +62,8 @@ ACTIVE_LEAGUES = [
     League.MLB,
     League.EPL,
     League.MLS,
-    League.NFL
+    League.NFL,
+    League.NBA
 ]
 
 LEAGUES_ALLOWING_DRAWS = [
@@ -80,11 +81,11 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
-    League.MLB: 0.30,
-    League.NBA: 0.0,
-    League.EPL: 0.25,
+    League.MLB: 0.10,
+    League.NBA: 0.30,
+    League.EPL: 0.20,
     League.MLS: 0.10,
-    League.NFL: 0.35
+    League.NFL: 0.30
 }
 
 # ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the more predictions needed.

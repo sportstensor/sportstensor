@@ -431,6 +431,22 @@ async def main():
         except Exception as e:
             logging.error(f"Error posting predictionEdgeResults: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
+        
+    @app.get("/predictionEdgeResults")
+    async def get_prediction_edge_results(
+        vali_hotkey: str,
+        miner_hotkey: Optional[str] = None,
+    ):
+        try:
+            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey)
+
+            if results:
+                return {"results": results}
+            else:
+                return {"results": []}
+        except Exception as e:
+            logging.error(f"Error retrieving predictionEdgeResults: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
     
     @app.post("/scoredPredictions")
     async def upload_scored_predictions(

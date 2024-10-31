@@ -213,12 +213,15 @@ class MatchPrediction(Prediction):
     closingEdge: Optional[float]
 
     def get_predicted_team(self) -> str:
-        """Get the predicted team based on the probability choice."""
+        """Get the predicted team or Draw based on the probability choice."""
         if self.probabilityChoice == ProbabilityChoice.HOMETEAM or self.probabilityChoice == ProbabilityChoice.HOMETEAM.value:
             return self.homeTeamName
         elif self.probabilityChoice == ProbabilityChoice.AWAYTEAM or self.probabilityChoice == ProbabilityChoice.AWAYTEAM.value:
             return self.awayTeamName
-        return "Draw"
+        elif self.probabilityChoice == ProbabilityChoice.DRAW or self.probabilityChoice == ProbabilityChoice.DRAW.value:
+            return "Draw"
+        else:
+            return "Unknown"
 
     # Validators to ensure immutability
     @validator(
@@ -258,6 +261,22 @@ class MatchPredictionWithMatchData(BaseModel):
     homeTeamOdds: float
     awayTeamOdds: float
     drawOdds: float
+
+    def get_closing_odds_for_predicted_outcome(self) -> Optional[float]:
+        """
+        Get the closing odds for the predicted outcome.
+
+        :return: float, the closing odds for the predicted outcome, or None if unavailable
+        """
+        predicted_team = self.prediction.get_predicted_team()
+        if predicted_team == self.prediction.homeTeamName:
+            return self.homeTeamOdds
+        elif predicted_team == self.prediction.awayTeamName:
+            return self.awayTeamOdds
+        elif predicted_team == "Draw":
+            return self.drawOdds
+        else:
+            return None
 
     def get_actual_winner(self) -> str:
         """Get the actual winner of the match."""
