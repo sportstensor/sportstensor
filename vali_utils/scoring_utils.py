@@ -296,8 +296,10 @@ def calculate_incentives_and_update_scores(vali):
     all_uids = vali.metagraph.uids.tolist()
     
     # Initialize league_scores dictionary
-    league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_scores_without_rho: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    final_league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    rho_values: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name}")
@@ -324,11 +326,13 @@ def calculate_incentives_and_update_scores(vali):
                 alpha=vali.SENSITIVITY_ALPHA
             )
 
+            rho_values[league][index] = rho
+
             bt.logging.debug(f"Scoring predictions for miner {uid} in league {league.name}:")
             bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
             bt.logging.debug(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
             bt.logging.debug(f"  • Rho: {rho:.4f}")
-            total_score = 0
+            league_score_without_rho = 0
             for pwmd in predictions_with_match_data:
                 log_prediction = random.random() < 0.01
 
@@ -384,19 +388,18 @@ def calculate_incentives_and_update_scores(vali):
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
 
                 # Apply sigma and G (gaussian filter) to v
-                total_score += v * sigma * gfilter
+                league_score_without_rho += v * sigma * gfilter
                 
                 if log_prediction:
                     bt.logging.debug(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                     bt.logging.debug("-" * 50)
 
-            final_score = rho * total_score
-            league_scores[league][index] = final_score
+            league_scores_without_rho[league][index] = league_score_without_rho
             league_pred_counts[league][index] = len(predictions_with_match_data)
-            bt.logging.debug(f"  • Final score: {final_score:.4f}")
+            bt.logging.debug(f"  • Final score: {league_score_without_rho:.4f}")
             bt.logging.debug("-" * 50)
 
-            league_table_data.append([uid, final_score, len(predictions_with_match_data)])
+            league_table_data.append([uid, league_score_without_rho, len(predictions_with_match_data)])
 
         # Log league scores
         if league_table_data:
@@ -412,7 +415,7 @@ def calculate_incentives_and_update_scores(vali):
     bt.logging.info("*************************************************************")
     all_scores = [0.0] * len(all_uids)
     for i in range(len(all_uids)):
-        all_scores[i] = sum(league_scores[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
+        all_scores[i] = sum(league_scores_without_rho[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
 
     # Check and penalize miners that are not committed to any active leagues
     all_scores = check_and_apply_league_commitment_penalties(vali, all_scores, all_uids)
@@ -421,8 +424,23 @@ def calculate_incentives_and_update_scores(vali):
     
     # Apply Pareto to all scores
     bt.logging.info(f"Applying Pareto distribution (mu: {vali.PARETO_MU}, alpha: {vali.PARETO_ALPHA}) to scores...")
-    final_scores = apply_pareto(all_scores, all_uids, vali.PARETO_MU, vali.PARETO_ALPHA)
+    pareto_scores = apply_pareto(all_scores, all_uids, vali.PARETO_MU, vali.PARETO_ALPHA)
     
+    # Redistribute Pareto-adjusted scores back to leagues and apply rho
+    final_scores = [0.0] * len(all_uids)
+    for i in range(len(all_uids)):
+        raw_total = sum(league_scores_without_rho[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
+        
+        if raw_total > 0:
+            # For each league, calculate its adjusted score with rho and save to league_scores_with_rho
+            for league in vali.ACTIVE_LEAGUES:
+                # Calculate the proportion of the pareto score for this league with rho applied
+                adjusted_score_with_rho = pareto_scores[i] * (league_scores_without_rho[league][i] / raw_total) * rho_values[league][i]
+                final_league_scores[league][i] = adjusted_score_with_rho
+                
+            # Sum all adjusted scores to get the final score for this UID
+            final_scores[i] = sum(final_league_scores[league][i] for league in vali.ACTIVE_LEAGUES)
+
     # Update our main self.scores, which scatters the scores
     update_miner_scores(
         vali, 
@@ -450,7 +468,7 @@ def calculate_incentives_and_update_scores(vali):
     else:
         bt.logging.info("\nNo non-zero scores recorded.")
 
-    return league_scores, league_pred_counts, all_scores
+    return final_league_scores, league_pred_counts, all_scores
 
 def update_miner_scores(vali, rewards: torch.FloatTensor, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""
