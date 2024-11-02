@@ -50,37 +50,39 @@ class CopycatDetectionController:
         for key, relationship in suspicious_relationships.items():
             suspicious_miner_ids.update(relationship['miners'])
 
-        miners_to_penalize = self.get_miners_to_penalize(suspicious_relationships)
+        miners_to_penalize, miners_with_exact_matches = self.get_miners_to_penalize(suspicious_relationships)
 
         # Print random sample history
-        if random.random() < 0.5:
-            self.print_sample_history(suspicious_relationships, miners_to_penalize)
+        self.print_sample_history(suspicious_relationships, miners_to_penalize)
 
-        return suspicious_miner_ids, miners_to_penalize
+        return suspicious_miner_ids, miners_to_penalize, miners_with_exact_matches
     
-    def get_miners_to_penalize(self, suspicious_relationships: dict[str, list[tuple]]) -> Set[int]:
+    def get_miners_to_penalize(self, suspicious_relationships: dict[str, list[tuple]]) -> tuple[Set[int], Set[int]]:
         """Get set of miners that should be penalized based on summary results."""
         if len(suspicious_relationships) == 0:
-            return set()
+            return set(), set()
 
         # Create a dict of miners to penalize
         miners_to_penalize = set()
+        miners_with_exact_matches = set()
         for key, relationship in suspicious_relationships.items():
             if relationship['num_matches_with_exact'] >= EXACT_MATCH_PREDICTIONS_THRESHOLD:
                 for miner in relationship['miners']:
                     miners_to_penalize.add(miner)
+                    miners_with_exact_matches.add(miner)
             elif relationship['num_matches'] >= SUSPICIOUS_MATCH_PREDICTIONS_THRESHOLD:
                 for miner in relationship['miners']:
                     miners_to_penalize.add(miner)
         
-        return miners_to_penalize
+        return miners_to_penalize, miners_with_exact_matches
     
     def print_sample_history(self, suspicious_relationships: dict[str, list[tuple]], miners_to_penalize: Set[int]) -> None:
         """Print a sample of the history for suspicious relationships."""
         for key, value in suspicious_relationships.items():
             if value['miners'][0] in miners_to_penalize or value['miners'][1] in miners_to_penalize:
-                print(f"Miners: {value['miners']}, Matches: {value['num_matches']}, Predictions: {value['num_predictions']}, Predictions per match: {value['predictions_per_match']}, Exact predictions: {value['num_exact_predictions']}")
-                # Get random sample of history
-                for history in value['history'][:3]:
-                    print(f"Match: {history['match_id']}, Difference: {history['difference']}, Choice: {history['choice']}, Prob1: {history['prob1']}, Prob2: {history['prob2']}")
+                if random.random() < 0.01:
+                    print(f"Miners: {value['miners']}, Matches: {value['num_matches']}, Predictions: {value['num_predictions']}, Predictions per match: {value['predictions_per_match']}, Exact predictions: {value['num_exact_predictions']}")
+                    # Get random sample of history
+                    for history in value['history'][:3]:
+                        print(f"Match: {history['match_id']}, Difference: {history['difference']}, Choice: {history['choice']}, Prob1: {history['prob1']}, Prob2: {history['prob2']}")
                 

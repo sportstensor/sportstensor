@@ -914,7 +914,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                         "lastUpdated": row[13],
                         "predictionDate": row[14],
                         "probabilityChoice": row[15],
-                        "probability": row[16],
+                        "probability": round(row[16], 4),
                         "closingEdge": row[17],
                         "isArchived": row[18]
                     }

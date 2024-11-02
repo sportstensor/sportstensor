@@ -119,6 +119,7 @@ def _parse_prediction_data(response_data: dict, miner_id: int) -> List[MatchPred
                 try:
                     prediction = MatchPrediction(**pred_dict)
                     prediction.minerId = miner_id
+                    prediction.probability = round(prediction.probability, 4)
                     pwmd = MatchPredictionWithMatchData(
                         prediction=prediction,
                         actualHomeTeamScore=0,
@@ -195,6 +196,7 @@ def main_api():
 
     final_suspicious = set()
     final_penalties = set()
+    final_exact_matches = set()
 
     for league in leagues:
         league_predictions = []
@@ -205,23 +207,30 @@ def main_api():
                 continue
             league_predictions.extend(predictions)
         
-        suspicious_miners, penalties = controller.analyze_league(league, league_predictions)
+        suspicious_miners, penalties, miners_with_exact_matches = controller.analyze_league(league, league_predictions)
         
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
+
+        print(f"\nTotal miners with exact matches in {league.name}: {len(miners_with_exact_matches)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(miners_with_exact_matches))}")
         
         print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
         print(f"==============================================================================")
         final_suspicious.update(suspicious_miners)
         final_penalties.update(penalties)
+        final_exact_matches.update(miners_with_exact_matches)
 
     # Print final results
     print(f"\n==============================================================================")
     print(f"Total suspicious miners across all leagues: {len(final_suspicious)}")
     print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious))}")
+
+    print(f"\nTotal miners with exact matches across all leagues: {len(final_exact_matches)}")
+    print(f"Miners: {', '.join(str(m) for m in sorted(final_exact_matches))}")
 
     print(f"\nTotal miners to penalize across all leagues: {len(final_penalties)}")
     print(f"Miners: {', '.join(str(m) for m in sorted(final_penalties))}")

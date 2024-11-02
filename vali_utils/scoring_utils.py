@@ -301,6 +301,7 @@ def calculate_incentives_and_update_scores(vali):
     copycat_controller = CopycatDetectionController()
     final_suspicious_miners = set()
     final_copycat_penalties = set()
+    final_exact_matches = set()
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -417,9 +418,10 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.info(f"No non-zero scores for {league.name}")
 
         # Analyze league for copycat patterns
-        suspicious_miners, penalties = copycat_controller.analyze_league(league, predictions_for_copycat_analysis)
+        suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis)
         final_suspicious_miners.update(suspicious_miners)
         final_copycat_penalties.update(penalties)
+        final_exact_matches.update(exact_matches)
 
     # Update all_scores with weighted sum of league scores for each miner
     bt.logging.info("************ Applying leagues scoring percentages to scores ************")
@@ -441,10 +443,14 @@ def calculate_incentives_and_update_scores(vali):
     if len(final_suspicious_miners) > 0:
         bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")
 
+    bt.logging.info(f"Total miners with exact matches across all leagues: {len(final_exact_matches)}")
+    if len(final_exact_matches) > 0:
+        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_exact_matches))}")
+
     bt.logging.info(f"Total miners to penalize across all leagues: {len(final_copycat_penalties)}")
     if len(final_copycat_penalties) > 0:
         bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_penalties))}")
-    bt.logging.info(f"*************************************************************")
+    bt.logging.info(f"************************************************************************")
 
     for uid in final_copycat_penalties:
         # Apply the penalty to the score

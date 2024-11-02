@@ -52,7 +52,7 @@ class StatisticalAnalyzer:
                     if pred1.probabilityChoice != pred2.probabilityChoice:
                         continue
                     
-                    difference = abs(pred1.probability - pred2.probability)
+                    difference = round(abs(pred1.probability - pred2.probability), 4)
                     if difference > self.variance_threshold:
                         continue
                     
