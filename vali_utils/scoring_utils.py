@@ -429,13 +429,13 @@ def calculate_incentives_and_update_scores(vali):
     # Redistribute Pareto-adjusted scores back to leagues and apply rho
     final_scores = [0.0] * len(all_uids)
     for i in range(len(all_uids)):
-        raw_total = sum(league_scores_without_rho[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
+        raw_total = sum(league_scores_without_rho[league][i] for league in vali.ACTIVE_LEAGUES)
         
         if raw_total > 0:
             # For each league, calculate its adjusted score with rho and save to league_scores_with_rho
             for league in vali.ACTIVE_LEAGUES:
                 # Calculate the proportion of the pareto score for this league with rho applied
-                adjusted_score_with_rho = pareto_scores[i] * (league_scores_without_rho[league][i] / raw_total) * rho_values[league][i]
+                adjusted_score_with_rho = pareto_scores[i] * league_scores_without_rho[league][i] * rho_values[league][i]
                 final_league_scores[league][i] = adjusted_score_with_rho
                 
             # Sum all adjusted scores to get the final score for this UID
