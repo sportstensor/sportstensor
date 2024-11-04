@@ -966,7 +966,7 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
         if miner_hotkey:
             query += " AND mps.miner_hotkey = %s"
             params.append(miner_hotkey)
-        if include_deregged is None:
+        if include_deregged is None or include_deregged == 0:
             query += " AND m.miner_is_registered = 1"
         
         query += """ GROUP BY 
