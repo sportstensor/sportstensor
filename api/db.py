@@ -872,7 +872,7 @@ def insert_or_update_miner_coldkeys_and_ages(data_to_update):
         conn.close()
 
 
-def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, cutoff = None):
+def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, cutoff = None, include_deregged = None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -942,7 +942,7 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
                 FROM 
                     match_odds mo
             ) closing_odds ON closing_odds.oddsapiMatchId = ml.oddsapiMatchId AND closing_odds.rn = 1
-            WHERE m.miner_is_registered = 1 AND mps.vali_hotkey = %s
+            WHERE mps.vali_hotkey = %s
         """
 
         if cutoff:
@@ -966,6 +966,8 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
         if miner_hotkey:
             query += " AND mps.miner_hotkey = %s"
             params.append(miner_hotkey)
+        if include_deregged is None:
+            query += " AND m.miner_is_registered = 1"
         
         query += """ GROUP BY 
         mps.miner_id, 

@@ -1,4 +1,5 @@
 from typing import Annotated, List, Optional
+from pydantic import conint
 from traceback import print_exception
 
 import bittensor
@@ -500,10 +501,11 @@ async def main():
         vali_hotkey: str,
         miner_hotkey: Optional[str] = None,
         league: Optional[str] = None,
-        cutoff: Optional[int] = None
+        cutoff: Optional[int] = None,
+        include_deregged: Optional[conint(ge=0, le=1)] = None
     ):
         try:
-            results = db.get_prediction_stats_by_league(vali_hotkey, league, miner_hotkey, cutoff)
+            results = db.get_prediction_stats_by_league(vali_hotkey, league, miner_hotkey, cutoff, include_deregged)
 
             if results:
                 return {"results": results}
@@ -542,17 +544,15 @@ async def main():
             uvicorn.run,
             app,
             host="0.0.0.0",
-            port=443,
-            ssl_certfile="/root/origin-cert.pem",
-            ssl_keyfile="/root/origin-key.key",
+            port=8800,
         ),
         resync_miner_statuses(),
         check_vali_app_match_prediction_requests(),
     )
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# if __name__ == "__main__":
+asyncio.run(main())
 
 
 @app.get("/sentry-debug")
