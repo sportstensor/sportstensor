@@ -10,7 +10,7 @@ import random
 from storage.sqlite_validator_storage import get_storage
 import bittensor
 
-from common.data import League, MatchPrediction, MatchPredictionWithMatchData
+from common.data import Match, League, MatchPrediction, MatchPredictionWithMatchData
 from common.constants import (
     ACTIVE_LEAGUES,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
@@ -163,6 +163,33 @@ def get_predictions_from_api(miner_uid, miner_hotkey, league):
     except Exception as e:
         print(f"Error fetching predictions: {e}")
 
+def get_matches_from_json():
+    matches = []
+    # Load matches from JSON file
+    with open(".api-json/matches.json", "r") as f:
+        matches_json_data = json.load(f)
+        matches_data = matches_json_data.get("matches", [])
+        # Convert each match dict to Match object
+        for match_data in matches_data:
+            match = Match(
+                matchId=match_data["matchId"],
+                matchDate=match_data["matchDate"],
+                sport=match_data["sport"],
+                league=match_data["matchLeague"],
+                homeTeamName=match_data["homeTeamName"],
+                awayTeamName=match_data["awayTeamName"],
+                homeTeamScore=match_data["homeTeamScore"],
+                awayTeamScore=match_data["awayTeamScore"],
+                homeTeamOdds=match_data["homeTeamOdds"],
+                awayTeamOdds=match_data["awayTeamOdds"],
+                drawOdds=match_data["drawOdds"],
+                isComplete=match_data["isComplete"],
+                lastUpdated=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            )
+            matches.append(match)
+        
+    return matches
+
 def main_api():
     # Initialize our subtensor and metagraph
     NETWORK = None # "test" or None
@@ -186,28 +213,40 @@ def main_api():
                 "registration_block": registration_block
             }
     """
+    # Initialize database to get data
+    storage = get_storage()
 
     # Initialize controller
     controller = CopycatDetectionController()
     
     # Run analysis
-    leagues = ACTIVE_LEAGUES
-    #leagues = [League.NFL]
+    #leagues = ACTIVE_LEAGUES
+    leagues = [League.NFL]
 
     final_suspicious = set()
     final_penalties = set()
     final_exact_matches = set()
 
+    # get all matches from json to filter out
+    matches = get_matches_from_json()
+
     for league in leagues:
         league_predictions = []
+        earliest_match_date = None
         for index, uid in enumerate(all_uids):
             miner_hotkey = metagraph.hotkeys[uid]
             predictions = get_predictions_from_api(uid, miner_hotkey, league)
             if not predictions:
                 continue
             league_predictions.extend(predictions)
+
+        earliest_match_date = min([p.prediction.matchDate for p in league_predictions], default=None)
+
+        # filter only matches for this league
+        ordered_matches = [(match.matchId, match.matchDate) for match in matches if match.league == league and match.matchDate >= earliest_match_date and match.isComplete]
+        ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
         
-        suspicious_miners, penalties, miners_with_exact_matches = controller.analyze_league(league, league_predictions)
+        suspicious_miners, penalties, miners_with_exact_matches = controller.analyze_league(league, league_predictions, ordered_matches)
         
         # Print league results
         print(f"\n==============================================================================")
@@ -282,8 +321,14 @@ def main():
 
             league_predictions.extend(predictions_with_match_data)
 
+        earliest_match_date = min([p.prediction.matchDate for p in league_predictions], default=None)
+
+        matches = storage.get_recently_completed_matches(earliest_match_date, league)
+        ordered_matches = [(match.matchId, match.matchDate) for match in matches]
+        ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
         
-        suspicious_miners, penalties = controller.analyze_league(league, league_predictions)
+        suspicious_miners, penalties, miners_with_exact_matches = controller.analyze_league(league, league_predictions, ordered_matches)
+        #suspicious_miners, penalties = controller.analyze_league(league, league_predictions)
 
         # Print league results
         print(f"\n==============================================================================")

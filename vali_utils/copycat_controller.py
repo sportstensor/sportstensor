@@ -2,13 +2,15 @@ import logging
 from pathlib import Path
 from typing import List, Set, Dict, Union
 import random
+from datetime import datetime
 
 import bittensor as bt
 
 from common.data import League, MatchPredictionWithMatchData
 from common.constants import (
     EXACT_MATCH_PREDICTIONS_THRESHOLD,
-    SUSPICIOUS_MATCH_PREDICTIONS_THRESHOLD
+    SUSPICIOUS_MATCH_PREDICTIONS_THRESHOLD,
+    SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD
 )
 from vali_utils.analysis_utils import StatisticalAnalyzer
 
@@ -24,6 +26,7 @@ class CopycatDetectionController:
         self,
         league: League,
         league_predictions: List[MatchPredictionWithMatchData] = None,
+        ordered_matches: List[tuple[str, datetime]] = None
     ) -> tuple[Set[int], Set[int]]:
         """
         Analyze a specific league for duplicate predictions and copycat patterns.
@@ -43,7 +46,7 @@ class CopycatDetectionController:
         
         # Analyze statistical patterns for miner predictions
         cleared_miners = set()
-        suspicious_relationships = self.statistical_analyzer.analyze_prediction_clusters(league_predictions, excluded_miners=cleared_miners)
+        suspicious_relationships = self.statistical_analyzer.analyze_prediction_clusters(league_predictions, ordered_matches, excluded_miners=cleared_miners)
 
         suspicious_miner_ids = set()
         miners_to_penalize = set()
@@ -70,7 +73,10 @@ class CopycatDetectionController:
                 for miner in relationship['miners']:
                     miners_to_penalize.add(miner)
                     miners_with_exact_matches.add(miner)
-            elif relationship['num_matches'] >= SUSPICIOUS_MATCH_PREDICTIONS_THRESHOLD:
+            #elif relationship['num_matches'] >= SUSPICIOUS_MATCH_PREDICTIONS_THRESHOLD:
+                #for miner in relationship['miners']:
+                    #miners_to_penalize.add(miner)
+            elif 'consecutive_patterns' in relationship and relationship['consecutive_patterns']['max_consecutive'] >= SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD:
                 for miner in relationship['miners']:
                     miners_to_penalize.add(miner)
         
@@ -80,9 +86,18 @@ class CopycatDetectionController:
         """Print a sample of the history for suspicious relationships."""
         for key, value in suspicious_relationships.items():
             if value['miners'][0] in miners_to_penalize or value['miners'][1] in miners_to_penalize:
-                if random.random() < 0.01:
+                if random.random() < 0.01 and (value['num_exact_predictions'] >= EXACT_MATCH_PREDICTIONS_THRESHOLD or ('consecutive_patterns' in value and len(value['consecutive_patterns']['streak_details']) > 0)):
                     print(f"Miners: {value['miners']}, Matches: {value['num_matches']}, Predictions: {value['num_predictions']}, Predictions per match: {value['predictions_per_match']}, Exact predictions: {value['num_exact_predictions']}")
-                    # Get random sample of history
-                    for history in value['history'][:3]:
-                        print(f"Match: {history['match_id']}, Difference: {history['difference']}, Choice: {history['choice']}, Prob1: {history['prob1']}, Prob2: {history['prob2']}")
+                    # print consecutive patterns
+                    if 'consecutive_patterns' in value and len(value['consecutive_patterns']['streak_details']) > 0:
+                        print(f"Consecutive pattern streaks of {SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD} matches or more: {value['consecutive_patterns']['num_streaks']}, Max streak: {value['consecutive_patterns']['max_consecutive']}")
+                        for i, streaks in enumerate(value['consecutive_patterns']['streak_details']):
+                            # Streak: [{'match_id': '059e075310b172d74bf65aaaf5ef2951', 'match_date': datetime.datetime(2024, 10, 27, 17, 0), 'difference': 0.0046, 'choice': 'AwayTeam', 'prob1': 0.7637, 'prob2': 0.7591}, {'match_id': '2318d3f1037efd157e548084cfb33e94', 'match_date': datetime.datetime(2024, 10, 27, 17, 0), 'difference': 0.0008, 'choice': 'HomeTeam', 'prob1': 0.8837, 'prob2': 0.8845}, {'match_id': '3da3c1f83c87aa70f58bf811a7b2d56c', 'match_date': datetime.datetime(2024, 10, 27, 17, 0), 'difference': 0.0041, 'choice': 'AwayTeam', 'prob1': 0.6391, 'prob2': 0.635}]
+                            print(f"Streak {i+1}:")
+                            for streak in streaks:
+                                print(f"-- Match: {streak['match_id']}, Match Date: {streak['match_date']}, Difference: {streak['difference']}, Choice: {streak['choice']}, Prob1: {streak['prob1']}, Prob2: {streak['prob2']}")
+                    else:
+                        # Get random sample of history
+                        for history in value['history'][:3]:
+                            print(f"Match: {history['match_id']}, Difference: {history['difference']}, Choice: {history['choice']}, Prob1: {history['prob1']}, Prob2: {history['prob2']}")
                 

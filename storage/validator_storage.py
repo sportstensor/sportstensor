@@ -65,7 +65,7 @@ class ValidatorStorage(ABC):
         raise NotImplemented
     
     @abstractmethod
-    def get_recently_completed_matches(self, matchDateSince: dt.datetime) -> List[Match]:
+    def get_recently_completed_matches(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> List[Match]:
         """Gets completed matches since the passed in date."""
         raise NotImplemented
     
