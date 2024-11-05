@@ -95,9 +95,9 @@ class CopycatDetectionController:
                             # Streak: [{'match_id': '059e075310b172d74bf65aaaf5ef2951', 'match_date': datetime.datetime(2024, 10, 27, 17, 0), 'difference': 0.0046, 'choice': 'AwayTeam', 'prob1': 0.7637, 'prob2': 0.7591}, {'match_id': '2318d3f1037efd157e548084cfb33e94', 'match_date': datetime.datetime(2024, 10, 27, 17, 0), 'difference': 0.0008, 'choice': 'HomeTeam', 'prob1': 0.8837, 'prob2': 0.8845}, {'match_id': '3da3c1f83c87aa70f58bf811a7b2d56c', 'match_date': datetime.datetime(2024, 10, 27, 17, 0), 'difference': 0.0041, 'choice': 'AwayTeam', 'prob1': 0.6391, 'prob2': 0.635}]
                             print(f"Streak {i+1}:")
                             for streak in streaks:
-                                print(f"-- Match: {streak['match_id']}, Match Date: {streak['match_date']}, Difference: {streak['difference']}, Choice: {streak['choice']}, Prob1: {streak['prob1']}, Prob2: {streak['prob2']}")
+                                print(f"-- Match: {streak['match_id']}, Match Date: {streak['match_date']}, Difference: {streak['difference']}, 'Pronounced Difference: {streak['pronounced_difference']}, Choice: {streak['choice']}, Prob1: {streak['prob1']}, Prob2: {streak['prob2']}")
                     else:
                         # Get random sample of history
                         for history in value['history'][:3]:
-                            print(f"Match: {history['match_id']}, Difference: {history['difference']}, Choice: {history['choice']}, Prob1: {history['prob1']}, Prob2: {history['prob2']}")
+                            print(f"Match: {history['match_id']}, Difference: {history['difference']}, 'Pronounced Difference: {history['pronounced_difference']}, Choice: {history['choice']}, Prob1: {history['prob1']}, Prob2: {history['prob2']}")
                 

@@ -1,8 +1,6 @@
-import json
-import hashlib
+import math
 from collections import defaultdict
-from typing import List, Tuple
-import datetime as dt
+from typing import List
 from datetime import datetime
 
 from common.data import MatchPredictionWithMatchData
@@ -55,7 +53,11 @@ class StatisticalAnalyzer:
                         continue
                     
                     difference = round(abs(pred1.probability - pred2.probability), 4)
-                    if difference > self.variance_threshold:
+                    pronounced_difference = round(math.exp(-(pred1.probability*100 - pred2.probability*100) ** 2), 2)
+                    
+                    #if difference > self.variance_threshold:
+                        #continue
+                    if pronounced_difference < 0.80:
                         continue
                     
                     # Track the difference between these miners
@@ -63,6 +65,7 @@ class StatisticalAnalyzer:
                         'match_id': match_id,
                         'match_date': pred1.matchDate,
                         'difference': difference,
+                        'pronounced_difference': pronounced_difference,
                         'choice': pred1.probabilityChoice,
                         'prob1': pred1.probability,
                         'prob2': pred2.probability
@@ -70,10 +73,6 @@ class StatisticalAnalyzer:
 
         # Analyze the relationships
         suspicious_relationships = self.analyze_miner_relationships(miner_relationships)
-        
-        # print suspicious relationships, skipping history
-        #for key, value in suspicious_relationships.items():
-            #print(f"Miners: {value['miners']}, Matches: {value['num_matches']}, Predictions: {value['num_predictions']}, Predictions per match: {value['predictions_per_match']}, Exact predictions: {value['num_exact_predictions']}")
 
         # Add consecutive match analysis
         consecutive_patterns = self.analyze_consecutive_matches(suspicious_relationships, ordered_matches)
