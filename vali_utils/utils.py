@@ -713,6 +713,16 @@ def post_prediction_edge_results(
     miner_scores = {}
     
     all_uids = vali.metagraph.uids.tolist()
+
+    # if league doesn't exist in league_pred_counts or league_scores, add it with empty list
+    for league in League:
+        # only include the leagues we are using in our subnet
+        if league.name not in (League.MLB.name, League.NFL.name, League.NBA.name, League.MLS.name, League.EPL.name):
+            continue
+        if league not in league_pred_counts:
+            league_pred_counts[league] = [0] * len(all_uids)
+        if league not in league_scores:
+            league_scores[league] = [0] * len(all_uids)
     
     # Build complete score data for each UID
     for uid in all_uids:
