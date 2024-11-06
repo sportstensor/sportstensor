@@ -129,7 +129,7 @@ def fetch_and_store_events():
             oddspaiMatchId = match.get("id")
 
             # Query the lookup table
-            match_id = db.query_sportsdb_match_lookup(oddspaiMatchId)
+            match_id = db.query_oddsdb_match_lookup(oddspaiMatchId)
             new_match = False
             if match_id is None:
                 match_id = create_match_id()
@@ -151,11 +151,11 @@ def fetch_and_store_events():
                 commence_time = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00")).strftime('%Y-%m-%d %H:%M:%S')
                 match.update({"commence_time": commence_time})
 
-            dbresult = db.insert_match(
+            dbresult = db.insert_match_from_oddsdb(
                 match_id, match, sport_type, is_complete, current_utc_time
             )
             if dbresult and new_match:
-                dbresult2 = db.insert_sportsdb_match_lookup(match_id, oddspaiMatchId)
+                dbresult2 = db.insert_oddsdb_match_lookup(match_id, oddspaiMatchId)
                 if dbresult2:
                     logging.info(f"Inserted matchId {match_id} and oddsapiMatchId {oddspaiMatchId} lookup into the database")
 

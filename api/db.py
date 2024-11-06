@@ -375,7 +375,7 @@ def get_match_by_id(match_id):
         conn.close()
 
 
-def insert_match(match_id, match, sport_type, is_complete, current_utc_time):
+def insert_match_from_oddsdb(match_id, match, sport_type, is_complete, current_utc_time):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -436,7 +436,7 @@ def insert_match(match_id, match, sport_type, is_complete, current_utc_time):
         c.close()
         conn.close()
 
-def insert_sportsdb_match_lookup(match_id, oddsapiMatchId):
+def insert_oddsdb_match_lookup(match_id, oddsapiMatchId):
     try:
         conn = get_db_conn()
         c = conn.cursor()
@@ -462,7 +462,7 @@ def insert_sportsdb_match_lookup(match_id, oddsapiMatchId):
         c.close()
         conn.close()
 
-def query_sportsdb_match_lookup(oddspaiMatchId):
+def query_oddsdb_match_lookup(oddspaiMatchId):
     try:
         conn = get_db_conn()
         cursor = conn.cursor()
@@ -470,6 +470,102 @@ def query_sportsdb_match_lookup(oddspaiMatchId):
         cursor.execute(
             "SELECT matchId FROM matches_lookup WHERE oddsapiMatchId = %s",
             (oddspaiMatchId,),
+        )
+        match_id = cursor.fetchone()
+
+        return match_id[0] if match_id else None
+
+    except Exception as e:
+        logging.error("Failed to query sportsdb match lookup in MySQL database", exc_info=True)
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, matchLeague, isComplete, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                matchDate=VALUES(matchDate),
+                sport=VALUES(sport),
+                homeTeamName=VALUES(homeTeamName),
+                awayTeamName=VALUES(awayTeamName),
+                homeTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(homeTeamScore), 0)
+                    ELSE VALUES(homeTeamScore)
+                END,
+                awayTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(awayTeamScore), 0)
+                    ELSE VALUES(awayTeamScore)
+                END,
+                matchLeague=VALUES(matchLeague),
+                isComplete=VALUES(isComplete),
+                lastUpdated=VALUES(lastUpdated)
+            """,
+            (
+                match_id,
+                event.get("strTimestamp"),
+                sport_type,
+                event.get("strHomeTeam"),
+                event.get("strAwayTeam"),
+                event.get("intHomeScore"),
+                event.get("intAwayScore"),
+                event.get("strLeague"),
+                is_complete,
+                current_utc_time,
+            ),
+        )
+
+        conn.commit()
+        logging.info("Data inserted or updated in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT IGNORE INTO matches_lookup (matchId, sportsdbMatchId) 
+            VALUES (%s, %s)
+            """,
+            (
+                match_id,
+                sportsdb_match_id
+            ),
+        )
+
+        conn.commit()
+        logging.info("Match lookup inserted in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def query_sportsdb_match_lookup(sportsdb_match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT matchId FROM matches_lookup WHERE sportsdbMatchId = %s",
+            (sportsdb_match_id,),
         )
         match_id = cursor.fetchone()
 
