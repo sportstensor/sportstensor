@@ -81,7 +81,7 @@ def get_reduced_odds(all_odds):
 
             if odds["bookmakers"]:
                 # Check for Pinnacle bookmaker first
-                for bookmaker in odds.get("bookmakers", []):
+                for bookmaker in odds["bookmakers"]:
                     if bookmaker["key"] == "pinnacle":
                         cnt += 1
                         lastUpdated = bookmaker['last_update']
@@ -131,16 +131,16 @@ def get_reduced_odds(all_odds):
 
                 # Append the odds directly since they will not be None
                 reduced_odds.append({
-                        "api_id": api_id,
-                        "sport_title": sport_title,
-                        "home_team": home_team,
-                        "away_team": away_team,
-                        "home_team_odds": home_team_odds,
-                        "away_team_odds": away_team_odds,
-                        "draw_odds": draw_odds,
-                        "commence_time": commence_time,
-                        'last_updated': lastUpdated
-                    })
+                    "api_id": api_id,
+                    "sport_title": sport_title,
+                    "home_team": home_team,
+                    "away_team": away_team,
+                    "home_team_odds": home_team_odds,
+                    "away_team_odds": away_team_odds,
+                    "draw_odds": draw_odds,
+                    "commence_time": commence_time,
+                    'last_updated': lastUpdated
+                })
         return reduced_odds
 
     except Exception as e:
