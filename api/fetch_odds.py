@@ -124,10 +124,10 @@ def get_reduced_odds(all_odds):
                     vig = (1 / found_away_team_odds + 1 / found_home_team_odds + (1 / found_draw_odds if found_draw_odds is not None else 0)) - 1
 
                     # Extract the vig and add the avg vig of the pinnacle to the found bookmaker
-                    home_team_odds = (found_home_team_odds / (1 + vig)) * (1 + avg_pinnacle_vig)
-                    away_team_odds = (found_away_team_odds / (1 + vig)) * (1 + avg_pinnacle_vig)
+                    home_team_odds = (found_home_team_odds / (1 + avg_pinnacle_vig)) * (1 + vig)
+                    away_team_odds = (found_away_team_odds / (1 + avg_pinnacle_vig)) * (1 + vig)
                     if found_draw_odds is not None:
-                        draw_odds = (found_draw_odds / (1 + vig)) * (1 + avg_pinnacle_vig)
+                        draw_odds = (found_draw_odds / (1 + avg_pinnacle_vig)) * (1 + vig)
 
                 # Append the odds directly since they will not be None
                 reduced_odds.append({
