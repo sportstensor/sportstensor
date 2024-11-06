@@ -12,7 +12,28 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-SPORTS_TYPES = ['baseball_mlb', 'americanfootball_nfl', 'soccer_usa_mls', 'soccer_epl', 'basketball_nba']
+SPORTS_TYPES = [
+    {
+        'sport_key': 'baseball_mlb',
+        'region': 'us,eu',
+    },
+    {
+        'sport_key': 'americanfootball_nfl',
+        'region': 'us,eu'
+    },
+    {
+        'sport_key': 'soccer_usa_mls',
+        'region': 'us,eu'
+    },
+    {
+        'sport_key': 'soccer_epl',
+        'region': 'uk,eu'
+    },
+    {
+        'sport_key': 'basketball_nba',
+        'region': 'us,eu'
+    },
+]
 
 league_mapping = {
     'EPL': 'English Premier League',
@@ -44,6 +65,8 @@ mismatch_teams_mapping = {
 
 def get_reduced_odds(all_odds):
     reduced_odds = []
+    avg_pinnacle_vig = 0
+    cnt = 0
     try:
         for odds in all_odds:
             api_id = odds["id"]  # Get the odds ID
@@ -55,9 +78,12 @@ def get_reduced_odds(all_odds):
             away_team_odds = None
             draw_odds = None
             lastUpdated = None
+
             if odds["bookmakers"]:
-                for bookmaker in odds["bookmakers"]:
+                # Check for Pinnacle bookmaker first
+                for bookmaker in odds.get("bookmakers", []):
                     if bookmaker["key"] == "pinnacle":
+                        cnt += 1
                         lastUpdated = bookmaker['last_update']
                         for market in bookmaker["markets"]:
                             if market["key"] == "h2h":
@@ -72,18 +98,49 @@ def get_reduced_odds(all_odds):
                                     elif outcome["name"] == "Draw":
                                         draw_odds = outcome["price"]
 
+                        if home_team_odds is not None and away_team_odds is not None:
+                            vig = (1 / home_team_odds + 1 / away_team_odds + (1 / draw_odds if draw_odds is not None else 0)) - 1
+                            avg_pinnacle_vig = (avg_pinnacle_vig * (cnt - 1) + vig) / cnt
+
+                # If Pinnacle odds are not available, use the first available bookmaker
+                if home_team_odds is None or away_team_odds is None:
+                    found_bookmaker = odds['bookmakers'][0]
+                    found_home_team_odds = None
+                    found_away_team_odds = None
+                    found_draw_odds = None
+                    lastUpdated = found_bookmaker['last_update']
+                    for market in found_bookmaker["markets"]:
+                        if market["key"] == "h2h":
+                            outcomes = market["outcomes"]
+                            for outcome in outcomes:
+                                if outcome["name"] == odds["home_team"]:
+                                    found_home_team_odds = outcome["price"]
+                                elif outcome["name"] == odds["away_team"]:
+                                    found_away_team_odds = outcome["price"]
+                                elif outcome["name"] == "Draw":
+                                    found_draw_odds = outcome["price"]
+
+                    # Calculate vig for the found bookmaker
+                    vig = (1 / found_away_team_odds + 1 / found_home_team_odds + (1 / found_draw_odds if found_draw_odds is not None else 0)) - 1
+
+                    # Extract the vig and add the avg vig of the pinnacle to the found bookmaker
+                    home_team_odds = (found_home_team_odds / (1 + vig)) * (1 + avg_pinnacle_vig)
+                    away_team_odds = (found_away_team_odds / (1 + vig)) * (1 + avg_pinnacle_vig)
+                    if found_draw_odds is not None:
+                        draw_odds = (found_draw_odds / (1 + vig)) * (1 + avg_pinnacle_vig)
+
                 # Append the odds directly since they will not be None
                 reduced_odds.append({
-                    "api_id": api_id,
-                    "sport_title": sport_title,
-                    "home_team": home_team,
-                    "away_team": away_team,
-                    "home_team_odds": home_team_odds,
-                    "away_team_odds": away_team_odds,
-                    "draw_odds": draw_odds,
-                    "commence_time": commence_time,
-                    'last_updated': lastUpdated
-                })
+                        "api_id": api_id,
+                        "sport_title": sport_title,
+                        "home_team": home_team,
+                        "away_team": away_team,
+                        "home_team_odds": home_team_odds,
+                        "away_team_odds": away_team_odds,
+                        "draw_odds": draw_odds,
+                        "commence_time": commence_time,
+                        'last_updated': lastUpdated
+                    })
         return reduced_odds
 
     except Exception as e:
@@ -95,11 +152,10 @@ def get_reduced_odds(all_odds):
 def fetch_odds():
     all_odds = []
     for type in SPORTS_TYPES:
-        api_url = f"https://api.the-odds-api.com/v4/sports/{type}/odds/"
+        api_url = f"https://api.the-odds-api.com/v4/sports/{type['sport_key']}/odds/"
         params = {
             "apiKey": ODDS_API_KEY,
-            "regions": "eu",
-            "bookmakers": "pinnacle"
+            "regions": type['region'],
         }
         response = requests.get(api_url, params=params)
         if response.status_code == 200:
