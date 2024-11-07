@@ -64,11 +64,11 @@ LEAGUES_ALLOWING_DRAWS = [
 ]
 
 ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
-    League.MLB: 250,
-    League.NBA: 250,
-    League.EPL: 40,
-    League.MLS: 48,
-    League.NFL: 64
+    League.MLB: 72,
+    League.NBA: 72,
+    League.EPL: 12,
+    League.MLS: 24,
+    League.NFL: 36
 }
 
 # MUST ADD UP to 1.0 (100%)
