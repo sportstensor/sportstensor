@@ -14,10 +14,10 @@ These scores are the assumed products of v * sigma * gfilter because that produc
 LEAGUE_WEIGHTS = {'League1': 0.4, 'League2': 0.6}  # Arbitrary weights
 PARETO_ALPHA = 1.0
 PARETO_MU = 1.0
-M1_L1_RHO = 0.8
-M1_L2_RHO = 0.9
-M2_L1_RHO = 0.08
-M2_L2_RHO = 0.14
+M1_L1_RHO = 0.73
+M1_L2_RHO = 0.84
+M2_L1_RHO = 0.25
+M2_L2_RHO = 0.41
 L1_SCORE = 100 # This will be shared by both 'miners' so we can see how rho + old vs new method impacts
 L2_SCORE = 150 # This will be shared by both 'miners' so we can see how rho + old vs new method impacts
 ALL_UIDS = [0, 1]
@@ -94,6 +94,12 @@ def simulate_new_mechanism():
     m2_with_pareto_and_rho_applied = (pareto_scores[1] * L1_SCORE * M2_L1_RHO) + (pareto_scores[0] * L2_SCORE * M2_L2_RHO)
 
     return m1_with_pareto_and_rho_applied, m2_with_pareto_and_rho_applied
+
+print(f"""
+Miner 1 League 1 rho = {M1_L1_RHO}, Miner 1 League 2 rho = {M1_L2_RHO}
+Miner 2 League 1 rho = {M2_L1_RHO}, Miner 2 League 2 rho = {M2_L2_RHO}
+Both Miners using same league performance scores. 
+""")
 
 # Run simulations
 old_m1, old_m2 = simulate_old_mechanism()
