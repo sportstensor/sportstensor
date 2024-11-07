@@ -510,14 +510,51 @@ def query_sportsdb_match_lookup(sportsdb_match_id):
         cursor.close()
         conn.close()
 
+def setup_match_odds_table():
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        
+        # Check if the pinnacle_bookmaker column exists
+        c.execute("SHOW COLUMNS FROM match_odds LIKE 'pinnacle_bookmaker';")
+        result = c.fetchone()
+
+        # If the column does not exist, add it
+        if not result:
+            c.execute(
+                """
+                ALTER TABLE match_odds
+                ADD COLUMN pinnacle_bookmaker TINYINT(1) DEFAULT 1;
+                """
+            )
+            conn.commit()
+            logging.info("Added pinnacle_bookmaker column to match_odds table.")
+
+        # Update existing records to set a default value for pinnacle_bookmaker
+        c.execute(
+            """
+            UPDATE match_odds
+            SET pinnacle_bookmaker = 1
+            WHERE pinnacle_bookmaker IS NULL;
+            """
+        )
+        conn.commit()
+        logging.info("Updated existing records in match_odds table.")
+
+    except Exception as e:
+        logging.error("Failed to setup match_odds table", exc_info=True)
+    finally:
+        c.close()
+        conn.close()
+
 def insert_match_odds_bulk(match_data):
     try:
         conn = get_db_conn()
         c = conn.cursor()
         c.executemany(
             """
-            INSERT IGNORE INTO match_odds (id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated) 
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT IGNORE INTO match_odds (id, oddsapiMatchId, homeTeamOdds, awayTeamOdds, drawOdds, pinnacle_bookmaker, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             match_data,
         )
@@ -526,7 +563,35 @@ def insert_match_odds_bulk(match_data):
         return True
 
     except Exception as e:
-        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        logging.error("Failed to insert match odds in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def get_average_pinnacle():
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+                SELECT AVG(vig) AS average_vig
+                FROM (
+                    SELECT 
+                        (1 / homeTeamOdds + 1 / awayTeamOdds + 
+                        (CASE WHEN drawOdds IS NOT NULL THEN 1 / drawOdds ELSE 0 END) - 1) AS vig
+                    FROM match_odds
+                    WHERE pinnacle_bookmaker = 1
+                ) AS vig_table
+            """
+        )
+
+        average_vig = c.fetchone()[0]  # Fetch the result
+        conn.commit()
+        return average_vig  # Return the average vig
+
+    except Exception as e:
+        logging.error("Failed to get average pinnacle vig in match odds table", exc_info=True)
         return False
     finally:
         c.close()
@@ -1515,6 +1580,7 @@ def create_tables():
             homeTeamOdds FLOAT,
             awayTeamOdds FLOAT,
             drawOdds FLOAT,
+            pinnacle_bookmaker TINYINT(1) DEFAULT 1,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )
