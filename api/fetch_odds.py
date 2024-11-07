@@ -218,7 +218,6 @@ def store_match_odds(all_odds, stored_odds, inserting = True):
                 odds_to_store.append((odds['api_id'], odds['sport_title'], odds['home_team'], odds['away_team'], odds['commence_time'], odds['last_updated']))
 
         if match_odds_data:
-            logging.info(f"match_odds_data========>{match_odds_data}")
             result = db.insert_match_odds_bulk(match_odds_data)
             if result:
                 logging.info(f"Inserted odds data for {len(match_odds_data)} matches into the match odds database")
