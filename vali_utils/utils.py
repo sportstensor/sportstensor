@@ -514,6 +514,8 @@ async def send_predictions_to_miners(
                     response.match_prediction.minerId = uid
                     response.match_prediction.hotkey = response.axon.hotkey
                     response.match_prediction.predictionDate = dt.datetime.now(dt.timezone.utc)
+                    # round the probability to 4 decimal places
+                    response.match_prediction.probability = round(response.match_prediction.probability, 4)
                     finished_responses.append(response)
 
             return finished_responses, working_miner_uids

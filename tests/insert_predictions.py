@@ -16,6 +16,15 @@ MINERS = [
     (13, "5H1GFPwHKdBeE9GacGuxUcJt8vT8Qri4LU5MGQj98AmjRqR3")
 ]
 
+# Define groups of miners that might submit duplicate predictions
+DUPLICATE_GROUPS = [
+    [(1, "5EqZoEKc6c8TaG4xRRHTT1uZiQF5jkjQCeUV5t77L6YbeaJ8"), 
+     (54, "5EkPSGp7Yt63j1WdFvKduvv2fuXaJKhPyN8cm7jQ5cp1hvBC")],
+    [(57, "5HDkQ6hUR31yXBvuwXXQzrB14xseuUmgPBbm1ApR1tN3uw7q"),
+     (65, "5DPdXPrYCTnsUDh2nYZMCAUb3d6h8eouDCF3zhdw8ru3czSm"),
+     (69, "5HNAS5jXy3xX4kUKH4qSoncTTGpwJKNCNNE3CxK8GRtCU5XU")]
+]
+
 def connect_to_db(db_name='SportsTensorEdge.db'):
     conn = sqlite3.connect(db_name)
     return conn, conn.cursor()
@@ -42,7 +51,7 @@ def get_recently_completed_matches(cursor, days_ago=5, limit=30):
 def odds_to_probability(odds):
     return 1 / odds if odds else 0
 
-def generate_prediction(match, time_to_match):
+def generate_prediction(match, time_to_match, miner_info=None):
     match_id, match_date, sport, league, home_team, away_team, home_score, away_score, home_odds, away_odds, draw_odds = match
     
     # Determine the actual outcome
@@ -65,8 +74,7 @@ def generate_prediction(match, time_to_match):
             prediction = actual_outcome
         probability = random.uniform(0.8, 0.95)
     else:
-        # Earlier predictions have a chance to be wrong, but still favor the correct outcome
-        if random.random() < 0.3:  # 80% chance of being correct
+        if random.random() < 0.3:
             prediction = actual_outcome
             probability = random.uniform(0.6, 0.85)
         else:
@@ -74,13 +82,14 @@ def generate_prediction(match, time_to_match):
             prediction = random.choice(wrong_choices)
             probability = random.uniform(0.5, 0.7)
     
-    
     projected_edge = (actual_odds - (1 / probability)) * (1 if (actual_outcome == prediction) else -1)
-    print(f"Projected edge: {projected_edge:.2f}")
     prediction_date = datetime.strptime(match_date, '%Y-%m-%d %H:%M:%S') - time_to_match
     
-    # Randomly select a miner from the MINERS list
-    miner_id, hotkey = random.choice(MINERS)
+    # Use provided miner info or randomly select a miner
+    if miner_info is None:
+        miner_id, hotkey = random.choice(MINERS)
+    else:
+        miner_id, hotkey = miner_info
     
     return {
         'minerId': miner_id,
@@ -98,6 +107,29 @@ def generate_prediction(match, time_to_match):
         'predictionDate': prediction_date.strftime('%Y-%m-%d %H:%M:%S'),
         'lastUpdated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
+
+def generate_duplicate_predictions(match, time_to_match, duplicate_group):
+    """Generate identical predictions for a group of miners with small timing variations."""
+    base_prediction = generate_prediction(match, time_to_match, duplicate_group[0])
+    predictions = []
+    
+    for miner_info in duplicate_group:
+        dup_prediction = base_prediction.copy()
+        dup_prediction['minerId'] = miner_info[0]
+        dup_prediction['hotkey'] = miner_info[1]
+        
+        # Add small random variations to timestamps (within 2 seconds)
+        pred_date = datetime.strptime(dup_prediction['predictionDate'], '%Y-%m-%d %H:%M:%S')
+        pred_date += timedelta(seconds=random.uniform(0, 2))
+        dup_prediction['predictionDate'] = pred_date.strftime('%Y-%m-%d %H:%M:%S')
+        
+        last_updated = datetime.strptime(dup_prediction['lastUpdated'], '%Y-%m-%d %H:%M:%S')
+        last_updated += timedelta(seconds=random.uniform(0, 2))
+        dup_prediction['lastUpdated'] = last_updated.strftime('%Y-%m-%d %H:%M:%S')
+        
+        predictions.append(dup_prediction)
+    
+    return predictions
 
 def insert_predictions(cursor, predictions):
     insert_query = """
@@ -120,10 +152,18 @@ def main():
     ]
     
     for match in matches:
-        for i in range(1, 2):
-            for interval in time_intervals:
-                prediction = generate_prediction(match, interval)
-                all_predictions.append(prediction)
+        # Generate regular predictions
+        for interval in time_intervals:
+            # Regular independent predictions
+            prediction = generate_prediction(match, interval)
+            all_predictions.append(prediction)
+            
+            # Random chance to generate duplicate predictions
+            if random.random() < 0.3:  # 30% chance of duplicates for each interval
+                duplicate_group = random.choice(DUPLICATE_GROUPS)
+                duplicate_predictions = generate_duplicate_predictions(match, interval, duplicate_group)
+                print(f"Generated {len(duplicate_predictions)} duplicate predictions for match {match[0]}")
+                all_predictions.extend(duplicate_predictions)
     
     insert_predictions(cursor, all_predictions)
     

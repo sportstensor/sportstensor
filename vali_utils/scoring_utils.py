@@ -3,7 +3,7 @@ import numpy as np
 from scipy.stats import pareto
 import torch
 import datetime as dt
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 import pytz
 from typing import List, Dict, Tuple, Optional
 from tabulate import tabulate
@@ -11,12 +11,14 @@ import random
 
 import bittensor as bt
 from storage.sqlite_validator_storage import get_storage
-from vali_utils import utils
+from vali_utils.copycat_controller import CopycatDetectionController
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
-    NO_LEAGUE_COMMITMENT_PENALTY
+    NO_LEAGUE_COMMITMENT_PENALTY,
+    COPYCAT_PENALTY_SCORE,
+    COPYCAT_PUNISHMENT_START_DATE
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -294,6 +296,12 @@ def calculate_incentives_and_update_scores(vali):
     """
     storage = get_storage()
     all_uids = vali.metagraph.uids.tolist()
+
+    # Initialize Copycat Detection Controller
+    copycat_controller = CopycatDetectionController()
+    final_suspicious_miners = set()
+    final_copycat_penalties = set()
+    final_exact_matches = set()
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -302,6 +310,7 @@ def calculate_incentives_and_update_scores(vali):
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name}")
         league_table_data = []
+        predictions_for_copycat_analysis = []
 
         for index, uid in enumerate(all_uids):
             hotkey = vali.metagraph.hotkeys[uid]
@@ -317,6 +326,9 @@ def calculate_incentives_and_update_scores(vali):
             if not predictions_with_match_data:
                 continue  # No predictions for this league, keep score as 0
 
+            # Add eligible predictions to predictions_for_copycat_analysis
+            predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data if p.prediction.predictionDate.replace(tzinfo=timezone.utc) >= COPYCAT_PUNISHMENT_START_DATE])
+
             # Calculate rho
             rho = compute_significance_score(
                 num_miner_predictions=len(predictions_with_match_data),
@@ -330,7 +342,7 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.debug(f"  • Rho: {rho:.4f}")
             total_score = 0
             for pwmd in predictions_with_match_data:
-                log_prediction = random.random() < 0.01
+                log_prediction = random.random() < 0.005
 
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
@@ -405,6 +417,27 @@ def calculate_incentives_and_update_scores(vali):
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
+        # Analyze league for copycat patterns
+        earliest_match_date = min([p.prediction.matchDate for p in predictions_for_copycat_analysis], default=None)
+        pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
+        ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
+        ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
+        suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
+        # Print league results
+        print(f"\n==============================================================================")
+        print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
+
+        print(f"\nTotal miners with exact matches in {league.name}: {len(exact_matches)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(exact_matches))}")
+        
+        print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
+        print(f"==============================================================================")
+        final_suspicious_miners.update(suspicious_miners)
+        final_copycat_penalties.update(penalties)
+        final_exact_matches.update(exact_matches)
+
     # Update all_scores with weighted sum of league scores for each miner
     bt.logging.info("************ Applying leagues scoring percentages to scores ************")
     for league, percentage in vali.LEAGUE_SCORING_PERCENTAGES.items():
@@ -418,6 +451,25 @@ def calculate_incentives_and_update_scores(vali):
     all_scores = check_and_apply_league_commitment_penalties(vali, all_scores, all_uids)
     # Apply penalties for miners that have not responded to prediction requests
     all_scores = apply_no_prediction_response_penalties(vali, all_scores, all_uids)
+
+    # Log final copycat results
+    bt.logging.info(f"********************* Copycat Controller Findings  *********************")
+    bt.logging.info(f"Total suspicious miners across all leagues: {len(final_suspicious_miners)}")
+    if len(final_suspicious_miners) > 0:
+        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")
+
+    bt.logging.info(f"Total miners with exact matches across all leagues: {len(final_exact_matches)}")
+    if len(final_exact_matches) > 0:
+        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_exact_matches))}")
+
+    bt.logging.info(f"Total miners to penalize across all leagues: {len(final_copycat_penalties)}")
+    if len(final_copycat_penalties) > 0:
+        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_penalties))}")
+    bt.logging.info(f"************************************************************************")
+
+    for uid in final_copycat_penalties:
+        # Apply the penalty to the score
+        all_scores[uid] = COPYCAT_PENALTY_SCORE
     
     # Apply Pareto to all scores
     bt.logging.info(f"Applying Pareto distribution (mu: {vali.PARETO_MU}, alpha: {vali.PARETO_ALPHA}) to scores...")

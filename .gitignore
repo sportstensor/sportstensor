@@ -166,3 +166,6 @@ wandb/
 
 SportsTensor.db
 SportsTensorEdge.db
+
+.api-json/
+HOTFIX_*_MARKER_FILE.txt

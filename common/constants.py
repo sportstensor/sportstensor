@@ -1,3 +1,4 @@
+import datetime
 from common.data import League
 
 IS_DEV = False
@@ -49,6 +50,13 @@ MAX_TEAM_NAME_LENGTH = 32
 ########## SCORING CONSTANTS ##############
 NO_LEAGUE_COMMITMENT_PENALTY = -0.25
 NO_PREDICTION_RESPONSE_PENALTY = -0.1
+
+# Copycat punishment constants
+COPYCAT_PUNISHMENT_START_DATE = datetime.datetime(2024, 9, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+COPYCAT_PENALTY_SCORE = 0
+COPYCAT_VARIANCE_THRESHOLD = 0.80
+EXACT_MATCH_PREDICTIONS_THRESHOLD = 15
+SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD = 15
 
 ACTIVE_LEAGUES = [
     League.EPL,

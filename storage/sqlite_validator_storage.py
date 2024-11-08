@@ -495,7 +495,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 ]
                 return matches
             
-    def get_recently_completed_matches(self, matchDateSince: dt.datetime) -> List[Match]:
+    def get_recently_completed_matches(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> List[Match]:
         """Gets completed matches since the passed in date."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
@@ -503,13 +503,20 @@ class SqliteValidatorStorage(ValidatorStorage):
                 dateSince = matchDateSince.strftime("%Y-%m-%d %H:%M:%S")
 
                 cursor = connection.cursor()
+                params = [dateSince]
                 query = """
                     SELECT * 
                     FROM Matches
                     WHERE isComplete = 1
                     AND matchDate > ?
                     """
-                cursor.execute(query, (dateSince,))
+                
+                if league:
+                    query += "AND (league = ? OR league = ?)"
+                    params.append(league.name)
+                    params.append(league.value)
+                
+                cursor.execute(query, params)
                 
                 results = cursor.fetchall()
                 if not results:
@@ -914,7 +921,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                         "lastUpdated": row[13],
                         "predictionDate": row[14],
                         "probabilityChoice": row[15],
-                        "probability": row[16],
+                        "probability": round(row[16], 4),
                         "closingEdge": row[17],
                         "isArchived": row[18]
                     }
