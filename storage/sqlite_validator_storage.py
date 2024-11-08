@@ -512,8 +512,9 @@ class SqliteValidatorStorage(ValidatorStorage):
                     """
                 
                 if league:
-                    query += "AND league = ?"
+                    query += "AND (league = ? OR league = ?)"
                     params.append(league.name)
+                    params.append(league.value)
                 
                 cursor.execute(query, params)
                 

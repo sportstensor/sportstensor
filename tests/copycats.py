@@ -277,7 +277,7 @@ def main_api():
 
 def main():
     # Initialize our subtensor and metagraph
-    NETWORK = None # "test" or None
+    NETWORK = "test" # "test" or None
     NETUID = 41
     if NETWORK == "test":
         NETUID = 172
@@ -295,7 +295,7 @@ def main():
     
     # Run analysis
     leagues = ACTIVE_LEAGUES
-    #leagues = [League.NFL]
+    #leagues = [League.NBA]
 
     final_suspicious = set()
     final_penalties = set()
@@ -304,6 +304,7 @@ def main():
         league_predictions = []
         for index, uid in enumerate(all_uids):
             miner_hotkey = metagraph.hotkeys[uid]
+            #print(f"Fetching predictions for miner {uid} (hotkey: {miner_hotkey}) in league {league.name}...")
 
             predictions_with_match_data = storage.get_miner_match_predictions(
                 miner_hotkey=miner_hotkey,
@@ -314,12 +315,17 @@ def main():
             )
 
             if not predictions_with_match_data:
+                #print(f"No predictions found for miner {uid} (hotkey: {miner_hotkey}) in league {league.name}")
                 continue  # No predictions for this league, keep score as 0
 
             # Filter predictions by our start date
             predictions_with_match_data = [p for p in predictions_with_match_data if p.prediction.predictionDate.replace(tzinfo=datetime.timezone.utc) >= COPYCAT_PUNISHMENT_START_DATE]
 
             league_predictions.extend(predictions_with_match_data)
+
+        if len(league_predictions) == 0:
+            print(f"No predictions found for league {league.name}")
+            continue
 
         earliest_match_date = min([p.prediction.matchDate for p in league_predictions], default=None)
 
@@ -351,5 +357,5 @@ def main():
     print(f"==============================================================================")
 
 if __name__ == "__main__":
-    #main()
-    main_api()
+    main()
+    #main_api()

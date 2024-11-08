@@ -16,8 +16,7 @@ class StatisticalAnalyzer:
         self,
         predictions: list[MatchPredictionWithMatchData],
         ordered_matches: List[tuple[str, datetime]],
-        excluded_miners: set[int] = None,
-        window_size: int = 50
+        excluded_miners: set[int] = None
     ) -> dict[str, list[tuple]]:
         """
         Analyze predictions to find statistically suspicious clusters.
@@ -52,12 +51,10 @@ class StatisticalAnalyzer:
                     if pred1.probabilityChoice != pred2.probabilityChoice:
                         continue
                     
-                    difference = round(abs(pred1.probability - pred2.probability), 4)
-                    pronounced_difference = round(math.exp(-(pred1.probability*100 - pred2.probability*100) ** 2), 2)
+                    absolute_difference = round(abs(pred1.probability - pred2.probability), 4)
+                    difference = round(math.exp(-(pred1.probability*100 - pred2.probability*100) ** 2), 2)
                     
-                    #if difference > self.variance_threshold:
-                        #continue
-                    if pronounced_difference < 0.80:
+                    if difference < self.variance_threshold:
                         continue
                     
                     # Track the difference between these miners
@@ -65,7 +62,7 @@ class StatisticalAnalyzer:
                         'match_id': match_id,
                         'match_date': pred1.matchDate,
                         'difference': difference,
-                        'pronounced_difference': pronounced_difference,
+                        'absolute_difference': absolute_difference,
                         'choice': pred1.probabilityChoice,
                         'prob1': pred1.probability,
                         'prob2': pred2.probability
@@ -115,7 +112,7 @@ class StatisticalAnalyzer:
                 predictions_per_match = len(history) / len(suspicious_matches)
 
                 # Calculate the number of matches with exact predictions
-                num_matches_with_exact = len(set(h['match_id'] for h in history if h['difference'] == 0))
+                num_matches_with_exact = len(set(h['match_id'] for h in history if h['absolute_difference'] == 0))
                 
                 suspicious_relationships[relationship_key] = {
                     'miners': sorted([miner1, miner2]),  # Sort for consistency
@@ -124,7 +121,7 @@ class StatisticalAnalyzer:
                     'predictions_per_match': predictions_per_match,
                     'match_ids': list(suspicious_matches),  # Store match IDs for reference
                     'num_matches_with_exact': num_matches_with_exact,
-                    'num_exact_predictions': sum(1 for h in history if h['difference'] == 0),
+                    'num_exact_predictions': sum(1 for h in history if h['absolute_difference'] == 0),
                     'history': history
                 }
                         
@@ -147,8 +144,8 @@ class StatisticalAnalyzer:
         """
         consecutive_patterns = {}
         
-        # Create a match order lookup
-        #match_order = {match_id: idx for idx, (match_id, _) in enumerate(ordered_matches)}
+        if not ordered_matches or len(ordered_matches) < 2:
+            return consecutive_patterns
         
         for key, relationship in relationships.items():
             # Create a mapping of match_id to prediction details

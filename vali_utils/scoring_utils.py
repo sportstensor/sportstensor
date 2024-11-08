@@ -3,7 +3,7 @@ import numpy as np
 from scipy.stats import pareto
 import torch
 import datetime as dt
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 import pytz
 from typing import List, Dict, Tuple, Optional
 from tabulate import tabulate
@@ -326,6 +326,9 @@ def calculate_incentives_and_update_scores(vali):
             if not predictions_with_match_data:
                 continue  # No predictions for this league, keep score as 0
 
+            # Add eligible predictions to predictions_for_copycat_analysis
+            predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data if p.prediction.predictionDate.replace(tzinfo=timezone.utc) >= COPYCAT_PUNISHMENT_START_DATE])
+
             # Calculate rho
             rho = compute_significance_score(
                 num_miner_predictions=len(predictions_with_match_data),
@@ -339,7 +342,7 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.debug(f"  • Rho: {rho:.4f}")
             total_score = 0
             for pwmd in predictions_with_match_data:
-                log_prediction = random.random() < 0.01
+                log_prediction = random.random() < 0.005
 
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
@@ -359,9 +362,6 @@ def calculate_incentives_and_update_scores(vali):
                     prediction_date = pwmd.prediction.predictionDate.replace(tzinfo=dt.timezone.utc)
                 else:
                     prediction_date = pwmd.prediction.predictionDate
-
-                # Filter predictions by our start date for copycat analysis
-                predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data if prediction_date >= COPYCAT_PUNISHMENT_START_DATE])
 
                 # Calculate time delta in minutes    
                 delta_t = min(MAX_PREDICTION_DAYS_THRESHOLD * 24 * 60, (match_date - prediction_date).total_seconds() / 60)
@@ -418,7 +418,11 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.info(f"No non-zero scores for {league.name}")
 
         # Analyze league for copycat patterns
-        suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis)
+        earliest_match_date = min([p.prediction.matchDate for p in predictions_for_copycat_analysis], default=None)
+        pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
+        ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
+        ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
+        suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
         final_suspicious_miners.update(suspicious_miners)
         final_copycat_penalties.update(penalties)
         final_exact_matches.update(exact_matches)
