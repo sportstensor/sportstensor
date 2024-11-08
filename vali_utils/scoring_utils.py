@@ -423,6 +423,17 @@ def calculate_incentives_and_update_scores(vali):
         ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
         ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
         suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
+        # Print league results
+        print(f"\n==============================================================================")
+        print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
+
+        print(f"\nTotal miners with exact matches in {league.name}: {len(exact_matches)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(exact_matches))}")
+        
+        print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
+        print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
+        print(f"==============================================================================")
         final_suspicious_miners.update(suspicious_miners)
         final_copycat_penalties.update(penalties)
         final_exact_matches.update(exact_matches)
