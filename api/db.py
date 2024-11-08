@@ -16,7 +16,46 @@ GET_MATCH_QUERY = """
         mo.awayTeamOdds,
         mo.drawOdds,
         mo.lastUpdated,
-        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count
+        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 24 HOUR)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_24h,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated >= DATE_SUB(mlo.matchDate, INTERVAL 24 HOUR)
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 12 HOUR)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_12h,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated >= DATE_SUB(mlo.matchDate, INTERVAL 12 HOUR)
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 4 HOUR)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_4h,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM match_odds mo
+                WHERE mo.oddsapiMatchId = mlo.oddsapiMatchId 
+                AND mo.lastUpdated >= DATE_SUB(mlo.matchDate, INTERVAL 4 HOUR)
+                AND mo.lastUpdated < DATE_SUB(mlo.matchDate, INTERVAL 10 MINUTE)
+            ) THEN TRUE 
+            ELSE FALSE 
+        END AS t_10m
     FROM (
         SELECT
             m.matchId,
@@ -833,7 +872,7 @@ def insert_or_update_miner_coldkeys_and_ages(data_to_update):
         conn.close()
 
 
-def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, cutoff = None):
+def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, cutoff = None, include_deregged = None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -903,7 +942,7 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
                 FROM 
                     match_odds mo
             ) closing_odds ON closing_odds.oddsapiMatchId = ml.oddsapiMatchId AND closing_odds.rn = 1
-            WHERE m.miner_is_registered = 1 AND mps.vali_hotkey = %s
+            WHERE mps.vali_hotkey = %s
         """
 
         if cutoff:
@@ -927,6 +966,8 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
         if miner_hotkey:
             query += " AND mps.miner_hotkey = %s"
             params.append(miner_hotkey)
+        if include_deregged is None:
+            query += " AND m.miner_is_registered = 1"
         
         query += """ GROUP BY 
         mps.miner_id, 
