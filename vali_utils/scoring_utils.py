@@ -468,8 +468,9 @@ def calculate_incentives_and_update_scores(vali):
     bt.logging.info(f"************************************************************************")
 
     for uid in final_copycat_penalties:
+        index = all_uids.index(uid)
         # Apply the penalty to the score
-        all_scores[uid] = COPYCAT_PENALTY_SCORE
+        all_scores[index] = COPYCAT_PENALTY_SCORE
     
     # Apply Pareto to all scores
     bt.logging.info(f"Applying Pareto distribution (mu: {vali.PARETO_MU}, alpha: {vali.PARETO_ALPHA}) to scores...")
