@@ -16,7 +16,7 @@ GET_MATCH_QUERY = """
         mo.awayTeamOdds,
         mo.drawOdds,
         mo.lastUpdated,
-        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId) AS odds_count,
+        (SELECT COUNT(*) FROM match_odds mo WHERE mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.lastUpdated IS NOT NULL) AS odds_count,
         CASE 
             WHEN EXISTS (
                 SELECT 1 
@@ -267,7 +267,7 @@ def get_match_odds_by_id(match_id):
                 SELECT mo.*, ml.matchId
                 FROM match_odds mo
                 LEFT JOIN matches_lookup ml ON mo.oddsapiMatchId = ml.oddsapiMatchId
-                WHERE ml.matchId = %s
+                WHERE ml.matchId = %s AND mo.lastUpdated IS NOT NULL
                 ORDER BY mo.lastUpdated ASC
             """
             cursor.execute(query, (match_id,))
@@ -1043,6 +1043,8 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
         sorted_mpe.mls_score,
         sorted_mpe.epl_score,
         sorted_mpe.mlb_score;"""
+
+        logging.info(f"query============>{query}")
 
         if params:
             c.execute(query, params)
