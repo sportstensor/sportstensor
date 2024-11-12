@@ -35,7 +35,7 @@ def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: st
     reward_punishment = 1 if model_prediction_correct else -1
 
     # check if closing_odd is available
-    if closing_odds is None:
+    if closing_odds is None or prediction_prob == 0:
         return 0.0, 0
 
     edge = closing_odds - (1 / prediction_prob)

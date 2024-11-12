@@ -102,7 +102,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             isArchived          INTEGER         DEFAULT 0
                             )"""
     
-    HOTFIX_CE_DRAWS_MARKER_FILE = "HOTFIX_CE_DRAWS_MARKER_FILE.txt"
+    HOTFIX_ZERO_PROB_MARKER_FILE = "HOTFIX_ZERO_PROB_MARKER_FILE.txt"
 
     def __init__(self):
         self._initialized = False
@@ -141,7 +141,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
                 # Execute db hotfix ce_draws
-                self.execute_db_hotfix_ce_draws()
+                self.execute_db_hotfix_zero_prob()
 
                 # Commit the changes and close the connection
                 connection.commit()
@@ -171,9 +171,9 @@ class SqliteValidatorStorage(ValidatorStorage):
             raise RuntimeError("SqliteValidatorStorage has not been initialized")
         return self.continuous_connection_do_not_reuse
     
-    def execute_db_hotfix_ce_draws(self):
-        if os.path.exists(self.HOTFIX_CE_DRAWS_MARKER_FILE):
-            print(f"{self.HOTFIX_CE_DRAWS_MARKER_FILE} Update has already been executed. Skipping.")
+    def execute_db_hotfix_zero_prob(self):
+        if os.path.exists(self.HOTFIX_ZERO_PROB_MARKER_FILE):
+            print(f"{self.HOTFIX_ZERO_PROB_MARKER_FILE} Delete has already been executed. Skipping.")
             return
 
         try:
@@ -181,15 +181,15 @@ class SqliteValidatorStorage(ValidatorStorage):
                 with contextlib.closing(self._create_connection()) as connection:
                     cursor = connection.cursor()
                     cursor.execute(
-                        """UPDATE MatchPredictions SET isScored=0, scoredDate=NULL, closingEdge=NULL WHERE probabilityChoice = 'Draw'""",
+                        """DELETE FROM MatchPredictions WHERE probability = 0""",
                     )
                     connection.commit()
             
             # Create the marker file
-            with open(self.HOTFIX_CE_DRAWS_MARKER_FILE, "w") as f:
-                f.write("Update executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
+            with open(self.HOTFIX_ZERO_PROB_MARKER_FILE, "w") as f:
+                f.write("Delete executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
             
-            print(f"Marker file created: {self.HOTFIX_CE_DRAWS_MARKER_FILE}. This script will not run the update again.")
+            print(f"Marker file created: {self.HOTFIX_ZERO_PROB_MARKER_FILE}. This script will not run the delete again.")
         except Exception as e:
             print(f"An error occurred: {e}")
     
