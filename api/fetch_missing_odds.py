@@ -58,8 +58,7 @@ def fetch_odds(api_url, start, intervals):
 
         params = {
             "apiKey": ODDS_API_KEY,
-            "regions": "eu",
-            "bookmakers": "pinnacle",
+            "regions": "us,eu,uk",
             "date": start
         }
         logging.info(f"start============>{start}")
