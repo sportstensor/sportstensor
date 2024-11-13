@@ -12,7 +12,28 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-SPORTS_TYPES = ['baseball_mlb', 'americanfootball_nfl', 'soccer_usa_mls', 'soccer_epl', 'basketball_nba']
+SPORTS_TYPES = [
+    {
+        'sport_key': 'baseball_mlb',
+        'region': 'us,eu',
+    },
+    {
+        'sport_key': 'americanfootball_nfl',
+        'region': 'us,eu'
+    },
+    {
+        'sport_key': 'soccer_usa_mls',
+        'region': 'us,eu'
+    },
+    {
+        'sport_key': 'soccer_epl',
+        'region': 'uk,eu'
+    },
+    {
+        'sport_key': 'basketball_nba',
+        'region': 'us,eu'
+    },
+]
 
 league_mapping = {
     'EPL': 'English Premier League',
@@ -44,6 +65,8 @@ mismatch_teams_mapping = {
 
 def get_reduced_odds(all_odds):
     reduced_odds = []
+    avg_pinnacle_vig = db.get_average_pinnacle()
+    logging.info(f"avg_pinnacle_vig=============={avg_pinnacle_vig}")
     try:
         for odds in all_odds:
             api_id = odds["id"]  # Get the odds ID
@@ -54,8 +77,11 @@ def get_reduced_odds(all_odds):
             home_team_odds = None
             away_team_odds = None
             draw_odds = None
+            pinnacle_bookmaker = 1
             lastUpdated = None
+
             if odds["bookmakers"]:
+                # Check for Pinnacle bookmaker first
                 for bookmaker in odds["bookmakers"]:
                     if bookmaker["key"] == "pinnacle":
                         lastUpdated = bookmaker['last_update']
@@ -72,6 +98,34 @@ def get_reduced_odds(all_odds):
                                     elif outcome["name"] == "Draw":
                                         draw_odds = outcome["price"]
 
+                # If Pinnacle odds are not available, use the first available bookmaker
+                if home_team_odds is None or away_team_odds is None:
+                    found_bookmaker = odds['bookmakers'][0]
+                    found_home_team_odds = None
+                    found_away_team_odds = None
+                    found_draw_odds = None
+                    lastUpdated = found_bookmaker['last_update']
+                    pinnacle_bookmaker = 0
+                    for market in found_bookmaker["markets"]:
+                        if market["key"] == "h2h":
+                            outcomes = market["outcomes"]
+                            for outcome in outcomes:
+                                if outcome["name"] == odds["home_team"]:
+                                    found_home_team_odds = outcome["price"]
+                                elif outcome["name"] == odds["away_team"]:
+                                    found_away_team_odds = outcome["price"]
+                                elif outcome["name"] == "Draw":
+                                    found_draw_odds = outcome["price"]
+
+                    # Calculate vig for the found bookmaker
+                    vig = (1 / found_away_team_odds + 1 / found_home_team_odds + (1 / found_draw_odds if found_draw_odds is not None else 0)) - 1
+
+                    # Extract the vig and add the avg vig of the pinnacle to the found bookmaker
+                    home_team_odds = round((found_home_team_odds / (1 + avg_pinnacle_vig)) * (1 + vig), 2)
+                    away_team_odds = round((found_away_team_odds / (1 + avg_pinnacle_vig)) * (1 + vig), 2)
+                    if found_draw_odds is not None:
+                        draw_odds = round((found_draw_odds / (1 + avg_pinnacle_vig)) * (1 + vig), 2)
+
                 # Append the odds directly since they will not be None
                 reduced_odds.append({
                     "api_id": api_id,
@@ -82,6 +136,7 @@ def get_reduced_odds(all_odds):
                     "away_team_odds": away_team_odds,
                     "draw_odds": draw_odds,
                     "commence_time": commence_time,
+                    'pinnacle_bookmaker': pinnacle_bookmaker,
                     'last_updated': lastUpdated
                 })
         return reduced_odds
@@ -95,11 +150,10 @@ def get_reduced_odds(all_odds):
 def fetch_odds():
     all_odds = []
     for type in SPORTS_TYPES:
-        api_url = f"https://api.the-odds-api.com/v4/sports/{type}/odds/"
+        api_url = f"https://api.the-odds-api.com/v4/sports/{type['sport_key']}/odds/"
         params = {
             "apiKey": ODDS_API_KEY,
-            "regions": "eu",
-            "bookmakers": "pinnacle"
+            "regions": type['region'],
         }
         response = requests.get(api_url, params=params)
         if response.status_code == 200:
@@ -159,7 +213,7 @@ def store_match_odds(all_odds, stored_odds, inserting = True):
             match_odds_id = db.generate_uuid()
             should_update_match_odds, should_update_odds = check_if_odds_should_be_stored(stored_odds, odds, inserting)  # Get odd for the current match
             if should_update_match_odds:
-                match_odds_data.append((match_odds_id, odds['api_id'], odds['home_team_odds'], odds['away_team_odds'], odds['draw_odds'], odds['last_updated']))
+                match_odds_data.append((match_odds_id, odds['api_id'], odds['home_team_odds'], odds['away_team_odds'], odds['draw_odds'], odds['pinnacle_bookmaker'], odds['last_updated']))
             if should_update_odds:
                 odds_to_store.append((odds['api_id'], odds['sport_title'], odds['home_team'], odds['away_team'], odds['commence_time'], odds['last_updated']))
 
@@ -185,6 +239,7 @@ def fetch_and_store_match_odds():
     store_match_odds(all_odds, stored_odds, False)
 
 if __name__ == "__main__":
+    db.setup_match_odds_table()
     # Schedule the function to run every 4 minutes
     schedule.every(4).minutes.do(fetch_and_store_match_odds)
 

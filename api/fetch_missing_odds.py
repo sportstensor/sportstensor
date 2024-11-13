@@ -58,8 +58,7 @@ def fetch_odds(api_url, start, intervals):
 
         params = {
             "apiKey": ODDS_API_KEY,
-            "regions": "eu",
-            "bookmakers": "pinnacle",
+            "regions": "us,eu,uk",
             "date": start
         }
         logging.info(f"start============>{start}")
@@ -105,7 +104,12 @@ def fetch_missing_odds():
         t_0 = matchDate.strftime("%Y-%m-%dT%H:%M:%SZ")
         if completed_match['oddsData']:
             oddsData = json.loads(completed_match['oddsData'])
-            datetime_objects = [datetime.strptime(odds.get('lastUpdated'), "%Y-%m-%d %H:%M:%S.%f") for odds in oddsData]
+            # datetime_objects = [datetime.strptime(odds.get('lastUpdated'), "%Y-%m-%d %H:%M:%S.%f") for odds in oddsData]
+            datetime_objects = [
+                datetime.strptime(odds['lastUpdated'], "%Y-%m-%d %H:%M:%S.%f")
+                for odds in oddsData 
+                if odds.get('lastUpdated') is not None
+            ]
             if datetime_objects:
                 min_timeStamp = min(datetime_objects).strftime("%Y-%m-%dT%H:%M:%SZ")
                 max_timeStamp = max(datetime_objects).strftime("%Y-%m-%dT%H:%M:%SZ")
