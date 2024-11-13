@@ -920,7 +920,7 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
                     )
                 ) AS data
             FROM {prediction_scores_table_name} mps
-            LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey
+            LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey AND mps.miner_id = m.miner_uid
             LEFT JOIN (
                 SELECT mpe.*
                 FROM {prediction_edges_table_name} mpe
@@ -966,7 +966,7 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
         if miner_hotkey:
             query += " AND mps.miner_hotkey = %s"
             params.append(miner_hotkey)
-        if include_deregged is None:
+        if include_deregged is None or include_deregged == 0:
             query += " AND m.miner_is_registered = 1"
         
         query += """ GROUP BY 
