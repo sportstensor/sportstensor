@@ -77,17 +77,11 @@ GET_MATCH_QUERY = """
         FROM matches m
         LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
     ) mlo
-    LEFT JOIN (
-        SELECT 
-            id, 
-            oddsapiMatchId, 
-            homeTeamOdds, 
-            awayTeamOdds, 
-            drawOdds, 
-            lastUpdated,
-            ROW_NUMBER() OVER (PARTITION BY oddsapiMatchId ORDER BY lastUpdated DESC) as rn
-        FROM match_odds
-    ) mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.rn = 1
+    LEFT JOIN match_odds mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.lastUpdated = (
+        SELECT MAX(lastUpdated)
+        FROM match_odds AS mo_inner
+        WHERE mo_inner.oddsapiMatchId = mlo.oddsapiMatchId AND mo_inner.lastUpdated < mlo.matchDate
+    )
 """
 
 def match_id_exists(match_id):
