@@ -80,7 +80,7 @@ GET_MATCH_QUERY = """
     LEFT JOIN match_odds mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.lastUpdated = (
         SELECT MAX(lastUpdated)
         FROM match_odds AS mo_inner
-        WHERE mo_inner.oddsapiMatchId = mlo.oddsapiMatchId AND mo_inner.lastUpdated < mlo.matchDate
+        WHERE mo_inner.oddsapiMatchId = mlo.oddsapiMatchId AND mo_inner.lastUpdated < (mlo.matchDate + INTERVAL 5 MINUTE)
     )
 """
 
