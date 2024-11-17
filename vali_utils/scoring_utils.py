@@ -64,15 +64,18 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
     closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
 
-    # sigma here is set in such a way that as we deviate from closing_odds the drop off of the gaussian increases with the square
-    sigma = np.log(1/np.power(closing_odds, 2))
+    t = 1.0 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
+    b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
+    c = 3 # Minimum plateau width/boundary
 
-    w = (closing_odds - 1.0) * np.log(closing_odds)/2
+    w = a * np.exp(-b * (closing_odds - 1)) + c
     diff = abs(closing_odds - 1/pwmd.prediction.probability)
 
+    # note that sigma^2 = odds now
     # plateaued curve. 
-    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff,2)/(4*np.power(sigma,2)))
-    
+    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (t*2*closing_odds))
+
     return exp_component
 
 def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
@@ -419,7 +422,9 @@ def calculate_incentives_and_update_scores(vali):
 
         # Analyze league for copycat patterns
         earliest_match_date = min([p.prediction.matchDate for p in predictions_for_copycat_analysis], default=None)
-        pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
+        pred_matches = []
+        if earliest_match_date is not None:
+            pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
         ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
         ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
         suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
