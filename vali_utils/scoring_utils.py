@@ -17,6 +17,7 @@ from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     NO_LEAGUE_COMMITMENT_PENALTY,
+    NO_LEAGUE_COMMITMENT_GRACE_PERIOD,
     COPYCAT_PENALTY_SCORE,
     COPYCAT_PUNISHMENT_START_DATE
 )
@@ -315,7 +316,17 @@ def calculate_incentives_and_update_scores(vali):
         league_table_data = []
         predictions_for_copycat_analysis = []
 
-        for index, uid in enumerate(all_uids):
+        # Get all miners committed to this league within the grace period
+        league_miner_uids = []
+        for uid in all_uids:
+            if uid not in vali.uids_to_last_leagues:
+                continue
+            if league in vali.uids_to_last_leagues[uid] and vali.uids_to_leagues_last_updated[uid] >= (datetime.now(timezone.utc) - dt.timedelta(seconds=NO_LEAGUE_COMMITMENT_GRACE_PERIOD)):
+                league_miner_uids.append(uid)
+            elif league in vali.uids_to_leagues[uid] and vali.uids_to_leagues_last_updated[uid] < (datetime.now(timezone.utc) - dt.timedelta(seconds=NO_LEAGUE_COMMITMENT_GRACE_PERIOD)):
+                bt.logging.info(f"Miner {uid} has not committed to league {league.name} within the grace period. Last updated: {vali.uids_to_leagues_last_updated[uid]}. Miner's predictions will not be considered.")
+
+        for index, uid in enumerate(league_miner_uids):
             hotkey = vali.metagraph.hotkeys[uid]
 
             predictions_with_match_data = storage.get_miner_match_predictions(

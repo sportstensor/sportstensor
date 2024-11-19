@@ -137,6 +137,10 @@ class Validator(BaseValidatorNeuron):
         # Create a set of uids to corresponding leagues that miners are committed to.
         self.uids_to_leagues: Dict[int, List[League]] = {}
         self.uids_to_leagues_lock = threading.RLock()
+        self.uids_to_last_leagues: Dict[int, List[League]] = {}
+        self.uids_to_last_leagues_lock = threading.RLock()
+        self.uids_to_leagues_last_updated: Dict[int, dt.datetime] = {}
+        self.uids_to_leagues_last_updated_lock = threading.RLock()
 
         # Initialize the incentive scoring and weight setting thread
         self.stop_event = threading.Event()
