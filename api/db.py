@@ -216,7 +216,7 @@ def get_stored_odds(lastUpdated = None):
                     WHERE (oddsapiMatchId, lastUpdated) IN (
                         SELECT oddsapiMatchId, MAX(lastUpdated)
                         FROM match_odds
-                        WHERE lastUpdated < %s
+                        WHERE lastUpdated <= %s
                         GROUP BY oddsapiMatchId 
                     )
                 ) mo
