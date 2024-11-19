@@ -78,9 +78,11 @@ GET_MATCH_QUERY = """
         LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
     ) mlo
     LEFT JOIN match_odds mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.lastUpdated = (
-        SELECT MAX(lastUpdated)
+        SELECT lastUpdated
         FROM match_odds AS mo_inner
         WHERE mo_inner.oddsapiMatchId = mlo.oddsapiMatchId AND mo_inner.lastUpdated < (mlo.matchDate + INTERVAL 5 MINUTE)
+        ORDER BY lastUpdated DESC
+        LIMIT 1
     )
 """
 
@@ -214,7 +216,7 @@ def get_stored_odds(lastUpdated = None):
                     WHERE (oddsapiMatchId, lastUpdated) IN (
                         SELECT oddsapiMatchId, MAX(lastUpdated)
                         FROM match_odds
-                        WHERE lastUpdated < %s
+                        WHERE lastUpdated <= %s
                         GROUP BY oddsapiMatchId 
                     )
                 ) mo
