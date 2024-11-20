@@ -545,15 +545,17 @@ async def main():
             uvicorn.run,
             app,
             host="0.0.0.0",
-            port=8800,
+            port=443,
+            ssl_certfile="/root/origin-cert.pem",
+            ssl_keyfile="/root/origin-key.key",
         ),
         resync_miner_statuses(),
         check_vali_app_match_prediction_requests(),
     )
 
 
-# if __name__ == "__main__":
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 
 
 @app.get("/sentry-debug")
