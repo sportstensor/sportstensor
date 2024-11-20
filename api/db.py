@@ -737,7 +737,7 @@ def upload_prediction_edge_results(prediction_results):
         conn.close()
 
 
-def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, cutoff=None):
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -756,6 +756,11 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, cutoff=None):
         if miner_hotkey:
             query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
+        
+        if miner_id:
+            query += " AND miner_uid = %s"
+            params.append(miner_id)
+
         query += """
             ORDER BY lastUpdated DESC;
         """

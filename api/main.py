@@ -437,9 +437,10 @@ async def main():
     async def get_prediction_edge_results(
         vali_hotkey: str,
         miner_hotkey: Optional[str] = None,
+        miner_id: Optional[int] = None,
     ):
         try:
-            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey)
+            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey, miner_id)
 
             if results:
                 return {"results": results}
@@ -544,17 +545,15 @@ async def main():
             uvicorn.run,
             app,
             host="0.0.0.0",
-            port=443,
-            ssl_certfile="/root/origin-cert.pem",
-            ssl_keyfile="/root/origin-key.key",
+            port=8800,
         ),
         resync_miner_statuses(),
         check_vali_app_match_prediction_requests(),
     )
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# if __name__ == "__main__":
+asyncio.run(main())
 
 
 @app.get("/sentry-debug")
