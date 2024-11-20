@@ -437,9 +437,10 @@ async def main():
     async def get_prediction_edge_results(
         vali_hotkey: str,
         miner_hotkey: Optional[str] = None,
+        miner_id: Optional[int] = None,
     ):
         try:
-            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey)
+            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey, miner_id)
 
             if results:
                 return {"results": results}
