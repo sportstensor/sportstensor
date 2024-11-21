@@ -1818,6 +1818,7 @@ def create_tables():
             hotkey_mnemonic VARCHAR(64),
             miner_is_registered TINYINT(1),
             api_url VARCHAR(255),
+            port INTEGER,
             league_commited VARCHAR(255),
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
@@ -1832,6 +1833,7 @@ def create_tables():
             hotkey_mnemonic VARCHAR(64),
             miner_is_registered TINYINT(1),
             api_url VARCHAR(255),
+            port INTEGER,
             league_commited VARCHAR(255),
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
