@@ -21,6 +21,7 @@ import traceback
 import typing
 from dotenv import load_dotenv
 import bittensor as bt
+import api.db as db
 
 import base
 from base.miner import BaseMinerNeuron
@@ -39,11 +40,17 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
         self.league_commitments = []
+        self.external_api = None
         self.load_league_commitments()
 
     def load_league_commitments(self):
-        load_dotenv(dotenv_path=MINER_ENV_PATH, override=True)
-        league_commitments = os.getenv("LEAGUE_COMMITMENTS")
+        if self.config.non_builder_miner_id:
+            matched_miner = db.getLeagueCommitmenetsForNonBuilderMiner(self.config.non_builder_miner_id)
+            league_commitments = matched_miner['league_commited']
+            self.external_api = matched_miner['api_url']
+        else:
+            load_dotenv(dotenv_path=MINER_ENV_PATH, override=True)
+            league_commitments = os.getenv("LEAGUE_COMMITMENTS")
         leagues_list = league_commitments.split(",")
         
         leagues = []
@@ -82,7 +89,7 @@ class Miner(BaseMinerNeuron):
         )
 
         # Make the match prediction based on the requested MatchPrediction object
-        synapse.match_prediction = make_match_prediction(synapse.match_prediction)
+        synapse.match_prediction = make_match_prediction(synapse.match_prediction, self.external_api)
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(

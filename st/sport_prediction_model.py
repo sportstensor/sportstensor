@@ -4,7 +4,7 @@ import bittensor as bt
 from common.data import MatchPrediction, Sport, League, get_league_from_string, ProbabilityChoice
 import logging
 import random
-
+import requests
 
 class SportPredictionModel(ABC):
     def __init__(self, prediction):
@@ -44,7 +44,7 @@ class SportPredictionModel(ABC):
             self.prediction.probability = max(prob_a, prob_b)
 
 
-def make_match_prediction(prediction: MatchPrediction):
+def make_match_prediction(prediction: MatchPrediction, external_api = None):
     # Lazy import to avoid circular dependency
     from st.models.soccer import SoccerPredictionModel
     from st.models.football import FootballPredictionModel
@@ -81,32 +81,55 @@ def make_match_prediction(prediction: MatchPrediction):
     league_class = league_classes.get(league_enum)
     sport_class = sport_classes.get(prediction.sport)
 
-    # Check if we have a league-specific prediction model first
-    if league_class:
-        bt.logging.info(
-            f"Using league-specific prediction model: {league_class.__name__}"
-        )
-        league_prediction = league_class(prediction)
-        league_prediction.set_default_probability()
-        league_prediction.make_prediction()
-    # If not, check if we have a sport-specific prediction model
-    elif sport_class:
-        bt.logging.info(
-            f"Using sport-specific prediction model: {sport_class.__name__}"
-        )
-        sport_prediction = sport_class(prediction)
-        sport_prediction.set_default_probability()
-        sport_prediction.make_prediction()
-    # If we don't have a prediction model for the sport, return 0 for both scores
+    if external_api:
+        params = {
+            'homeTeamName': prediction.homeTeamName,
+            'awayTeamName': prediction.awayTeamName,
+            'matchDate': prediction.matchDate.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            'league': prediction.league
+        }
+        try:
+            response = requests.post(external_api, json=params)
+            response.raise_for_status()
+            data = response.json()
+            # Update the prediction object with the response data
+            prediction.probabilityChoice = data.get('choice')
+            prediction.probability = data.get('probability')
+        except requests.exceptions.HTTPError as http_err:
+            bt.logging.error(f"HTTP error occurred: {http_err}")
+        except requests.exceptions.RequestException as req_err:
+            bt.logging.error(f"Request error occurred: {req_err}")
+        except ValueError as json_err:
+            bt.logging.error(f"JSON decode error: {json_err}")
+        except Exception as e:
+            bt.logging.error(f"An unexpected error occurred: {e}")
     else:
-        bt.logging.info("Unknown sport, returning default probability.")
-        prob_a, prob_b = generate_random_probability_no_tie()
-        if prob_a > prob_b:
-            prediction.probabilityChoice = ProbabilityChoice.HOMETEAM
+        # Check if we have a league-specific prediction model first
+        if league_class:
+            bt.logging.info(
+                f"Using league-specific prediction model: {league_class.__name__}"
+            )
+            league_prediction = league_class(prediction)
+            league_prediction.set_default_probability()
+            league_prediction.make_prediction()
+        # If not, check if we have a sport-specific prediction model
+        elif sport_class:
+            bt.logging.info(
+                f"Using sport-specific prediction model: {sport_class.__name__}"
+            )
+            sport_prediction = sport_class(prediction)
+            sport_prediction.set_default_probability()
+            sport_prediction.make_prediction()
+        # If we don't have a prediction model for the sport, return 0 for both scores
         else:
-            prediction.probabilityChoice = ProbabilityChoice.AWAYTEAM
+            bt.logging.info("Unknown sport, returning default probability.")
+            prob_a, prob_b = generate_random_probability_no_tie()
+            if prob_a > prob_b:
+                prediction.probabilityChoice = ProbabilityChoice.HOMETEAM
+            else:
+                prediction.probabilityChoice = ProbabilityChoice.AWAYTEAM
 
-        prediction.probability = max(prob_a, prob_b)
+            prediction.probability = max(prob_a, prob_b)
 
     return prediction
 

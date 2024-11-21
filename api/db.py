@@ -1167,6 +1167,29 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         c.close()
         conn.close()
 
+def getLeagueCommitmenetsForNonBuilderMiner(miner_id):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        query = """
+            SELECT
+                league_commited,
+                api_url
+            FROM NonBuilderMiners_test
+            WHERE miner_uid = %s AND miner_is_registered = 1
+        """
+        c.execute(query, (miner_id,))
+        matched_miner = c.fetchall()
+
+        return matched_miner[0]
+    except Exception as e:
+        logging.error(
+            "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
 
 def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
     try:
@@ -1782,6 +1805,34 @@ def create_tables():
             total_predictions INTEGER,
             winner_predictions INTEGER,
             avg_score FLOAT,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS NonBuilderMiners (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_uid INTEGER,
+            miner_coldkey VARCHAR(64),
+            miner_hotkey VARCHAR(64),
+            hotkey_mnemonic VARCHAR(64),
+            miner_is_registered TINYINT(1),
+            api_url VARCHAR(255),
+            league_commited VARCHAR(255),
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS NonBuilderMiners_test (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_uid INTEGER,
+            miner_coldkey VARCHAR(64),
+            miner_hotkey VARCHAR(64),
+            hotkey_mnemonic VARCHAR(64),
+            miner_is_registered TINYINT(1),
+            api_url VARCHAR(255),
+            league_commited VARCHAR(255),
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
         )

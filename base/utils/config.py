@@ -144,6 +144,13 @@ def add_miner_args(cls, parser):
         type=int,
     )
 
+    parser.add_argument(
+        "--non_builder_miner_id",
+        help="Miner UID for non-builder",
+        default=None,
+        type=int,
+    )
+
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
