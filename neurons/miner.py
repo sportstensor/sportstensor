@@ -45,7 +45,7 @@ class Miner(BaseMinerNeuron):
 
     def load_league_commitments(self):
         if self.config.non_builder_miner_id:
-            matched_miner = db.getLeagueCommitmenetsForNonBuilderMiner(self.config.non_builder_miner_id)
+            matched_miner = db.getDataForNonBuilderMiner(self.config.non_builder_miner_id)
             league_commitments = matched_miner['league_commited']
             self.external_api = matched_miner['api_url']
         else:

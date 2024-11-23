@@ -1194,7 +1194,7 @@ def storeDataForNonBuilderMiner(minerId, coldKey, hotKey, hotKeyMnemonic, extern
         c.close()
         conn.close()
 
-def getLeagueCommitmenetsForNonBuilderMiner(miner_id):
+def getDataForNonBuilderMiner(miner_id):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
