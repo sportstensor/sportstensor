@@ -1167,16 +1167,46 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         c.close()
         conn.close()
 
+def storeDataForNonBuilderMiner(minerId, coldKey, hotKey, hotKeyMnemonic, externalAPI, league_committed, port):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        query = """
+            INSERT INTO NonBuilderMiners_test (miner_uid, miner_coldkey, miner_hotkey, hotkey_mnemonic, api_url, port, league_commited) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                miner_coldkey = VALUES(miner_coldkey),
+                hotkey_mnemonic = VALUES(hotkey_mnemonic),
+                api_url = VALUES(api_url),
+                port = VALUES(port),
+                league_commited = VALUES(league_commited),
+                last_updated = CURRENT_TIMESTAMP
+        """
+        c.execute(query, (minerId, coldKey, hotKey, hotKeyMnemonic, externalAPI, port, league_committed))
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(
+            "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
+
 def getLeagueCommitmenetsForNonBuilderMiner(miner_id):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
         query = """
             SELECT
-                league_commited,
-                api_url
-            FROM NonBuilderMiners_test
-            WHERE miner_uid = %s AND miner_is_registered = 1
+                nbm.league_commited,
+                nbm.api_url,
+                nbm.miner_uid,
+                m.miner_is_registered
+            FROM NonBuilderMiners_test nbm
+            LEFT JOIN Miners_test m ON nbm.miner_uid = m.miner_uid AND nbm.miner_hotkey = m.miner_hotkey
+            WHERE nbm.miner_uid = %s AND m.miner_is_registered = 1
         """
         c.execute(query, (miner_id,))
         matched_miner = c.fetchall()
@@ -1816,11 +1846,11 @@ def create_tables():
             miner_coldkey VARCHAR(64),
             miner_hotkey VARCHAR(64),
             hotkey_mnemonic VARCHAR(64),
-            miner_is_registered TINYINT(1),
             api_url VARCHAR(255),
             port INTEGER,
             league_commited VARCHAR(255),
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_miner (miner_uid, miner_hotkey)
         )"""
         )
         c.execute(
@@ -1831,11 +1861,11 @@ def create_tables():
             miner_coldkey VARCHAR(64),
             miner_hotkey VARCHAR(64),
             hotkey_mnemonic VARCHAR(64),
-            miner_is_registered TINYINT(1),
             api_url VARCHAR(255),
             port INTEGER,
             league_commited VARCHAR(255),
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_miner (miner_uid, miner_hotkey)
         )"""
         )
         conn.commit()

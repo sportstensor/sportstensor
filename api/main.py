@@ -1,7 +1,7 @@
 from typing import Annotated, List, Optional
-from pydantic import conint
+from pydantic import conint, BaseModel
 from traceback import print_exception
-
+import subprocess
 import bittensor
 import uvicorn
 import asyncio
@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from starlette import status
 from substrateinterface import Keypair
-
+import os
 from fastapi import FastAPI
 import sentry_sdk
 
@@ -478,6 +478,91 @@ async def main():
                 )
         except Exception as e:
             logging.error(f"Error posting scoredPredictions: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
+
+    class PredictionRequest(BaseModel):
+        homeTeamName: str
+        awayTeamName: str
+        matchDate: str
+        league: str
+
+    @app.post("/inference")
+    async def retreive_model_inference_result(request: PredictionRequest):
+        try:
+            # Log input data
+            logging.info("Received prediction request: %s", request.dict())
+
+            # Set up their model inference
+            # prediction = make_prediction(homeTeamName, awayTeamName, matchDate, league)
+            # return {
+            #     'choice': prediction.choice,
+            #     'probability': prediction.probability
+            # }
+            return {
+                'choice': 'HomeTeam',
+                'probability': 0.2
+            }
+        except Exception as e:
+            logging.error(f"Error inferencing models: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
+    class SetupRequest(BaseModel):
+        coldKey: str
+        hotKey: str
+        hotKeyMnemonic: str
+        externalAPI: str
+        minerId: int
+        league_committed: str
+
+    @app.post("/setup-miner")
+    async def setup_miner_for_non_builder(request: SetupRequest):
+        try:
+            # Log input data
+            logging.info("Received setup-miner request: %s", request.dict())
+            setupRequest = request.dict()
+            coldKey = setupRequest.get('coldKey')
+            hotKey = setupRequest.get('hotKey')
+            hotKeyMnemonic = setupRequest.get('hotKeyMnemonic')
+            externalAPI = setupRequest.get('externalAPI')
+            minerId = setupRequest.get('minerId')
+            league_committed = setupRequest.get('league_committed')
+            port = 9000
+            # Construct the absolute path to the miner.py script
+            script_path = os.path.join(os.path.dirname(__file__), '../neurons/miner.py')
+            # Create a wallet on the server and run pm2 instance
+            # Prepare the pm2 command
+            # Determine netuid and subtensor.network based on environment
+            netuid = "41" if IS_PROD else "172"
+            subtensor_network = "finney" if IS_PROD else "test"
+            pm2_command = [
+                "pm2", "start", script_path,
+                "--name", f"Sportstensor-{minerId}",
+                "--", "--netuid", netuid,
+                "--subtensor.network", subtensor_network,
+                "--wallet.name", "test",
+                "--wallet.hotkey", "test-miner-hotkey",
+                "--axon.port", str(port),
+                "--blacklist.validator_min_stake", "0",
+                "--non_builder_miner_id", str(minerId)
+            ]
+            
+            # Run the pm2 command and capture output
+            result = subprocess.run(pm2_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Log the output
+            logging.info(f"pm2 command output: {result.stdout.decode().strip()}")
+            logging.info(f"pm2 command error (if any): {result.stderr.decode().strip()}")
+
+            result = db.storeDataForNonBuilderMiner(minerId, coldKey, hotKey, hotKeyMnemonic, externalAPI, league_committed, port)
+            if result:
+                logging.info(f"Stored non-builder miner{minerId}(hotkey-{hotKey})'s neuron data")
+                raise HTTPException(status_code=200, detail=f"Starting miner on port {port}")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error running pm2 command: {e}")
+            logging.error(f"Command output: {e.stdout.decode().strip()}")
+            logging.error(f"Command error output: {e.stderr.decode().strip()}")
+            raise HTTPException(status_code=500, detail=f"Failed to start miner process. {e.stderr.decode().strip()}")
+        except Exception as e:
+            logging.error(f"Error setting up and running miner instance: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
 
     @app.get("/predictionResults")
