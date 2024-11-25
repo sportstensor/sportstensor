@@ -30,6 +30,7 @@ from vali_utils.scoring_utils import (
     calculate_clv,
     calculate_incentive_score,
     apply_gaussian_filter,
+    apply_gaussian_filter_v3,
     apply_pareto,
     update_miner_scores,
     check_and_apply_league_commitment_penalties,
@@ -52,7 +53,7 @@ def calculate_incentives_and_update_scores():
     :param vali: Validator, the validator object
     """
     # Initialize our subtensor and metagraph
-    NETWORK = "test" # "test" or None
+    NETWORK = None # "test" or None
     NETUID = 41
     if NETWORK == "test":
         NETUID = 172
@@ -74,7 +75,10 @@ def calculate_incentives_and_update_scores():
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
 
-    for league in ACTIVE_LEAGUES:
+    leagues_to_analyze = ACTIVE_LEAGUES
+    #leagues_to_analyze = [League.NBA]
+
+    for league in leagues_to_analyze:
         print(f"Processing league: {league.name}")
         league_table_data = []
         predictions_for_copycat_analysis = []
@@ -109,8 +113,8 @@ def calculate_incentives_and_update_scores():
             print(f"  • Rho: {rho:.4f}")
             total_score = 0
             for pwmd in predictions_with_match_data:
-                #log_prediction = random.random() < 0.1
-                log_prediction = False
+                log_prediction = random.random() < 0.1
+                #log_prediction = False
 
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
@@ -159,10 +163,19 @@ def calculate_incentives_and_update_scores():
                     print(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter(pwmd)
-                #gfilter = apply_gaussian_filter_v2(pwmd)
+                #gfilter = apply_gaussian_filter(pwmd)
+                gfilter = apply_gaussian_filter_v3(pwmd)
                 if log_prediction:
                     print(f"      • Gaussian filter: {gfilter:.4f}")
+                
+                # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
+                if ((pwmd.prediction.probability > 0.5 and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner()) \
+                    or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
+                    and round(gfilter, 4) > 0 and gfilter < 1:
+                    
+                    gfilter = max(0.4, gfilter)
+                    if log_prediction:
+                        print(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
                 # Apply sigma and G (gaussian filter) to v
                 total_score += v * sigma * gfilter
@@ -177,12 +190,13 @@ def calculate_incentives_and_update_scores():
             print(f"  • Final score: {final_score:.4f}")
             print("-" * 50)
 
-            league_table_data.append([uid, final_score, len(predictions_with_match_data)])
+            total_lay_preds = len([p for p in predictions_with_match_data if p.prediction.probability < 0.5])
+            league_table_data.append([uid, final_score, len(predictions_with_match_data), total_lay_preds])
 
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions'], tablefmt='grid'))
+            print("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', '# Lay Predictions'], tablefmt='grid'))
         else:
             print(f"No non-zero scores for {league.name}")
 

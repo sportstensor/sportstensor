@@ -18,7 +18,8 @@ from common.constants import (
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     NO_LEAGUE_COMMITMENT_PENALTY,
     COPYCAT_PENALTY_SCORE,
-    COPYCAT_PUNISHMENT_START_DATE
+    COPYCAT_PUNISHMENT_START_DATE,
+    MAX_GFILTER_FOR_WRONG_PREDICTION
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -76,6 +77,30 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     # plateaued curve. 
     exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (t*2*closing_odds))
 
+    return exp_component
+
+def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
+    """
+    Apply a Gaussian filter to the closing odds and prediction probability. 
+    This filter is used to suppress the score when the prediction is far from the closing odds, simulating a more realistic prediction.
+
+    :param pwmd: MatchPredictionWithMatchData
+    :return: float, the calculated Gaussian filter
+    """
+    closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
+
+    t = 0.5
+    a = -2
+    b = 0.3
+    c = 1
+
+    # Plateau width calculation
+    w = c - a * np.exp(-b * (closing_odds - 1))
+    diff = abs(closing_odds - 1 / closing_odds)
+
+    # Plateaud curve with with uniform decay
+    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t)
+    
     return exp_component
 
 def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
@@ -394,9 +419,18 @@ def calculate_incentives_and_update_scores(vali):
                     bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter(pwmd)
+                gfilter = apply_gaussian_filter_v3(pwmd)
                 if log_prediction:
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
+                
+                # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
+                if ((pwmd.prediction.probability > 0.5 and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner()) \
+                    or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
+                    and round(gfilter, 4) > 0 and gfilter < 1:
+                    
+                    gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
+                    if log_prediction:
+                        bt.logging.debug(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
                 # Apply sigma and G (gaussian filter) to v
                 total_score += v * sigma * gfilter
