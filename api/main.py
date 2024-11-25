@@ -17,6 +17,7 @@ from substrateinterface import Keypair
 import os
 from fastapi import FastAPI
 import sentry_sdk
+import socket
 
 # mysqlclient install issues: https://stackoverflow.com/a/77020207
 import mysql.connector
@@ -112,6 +113,20 @@ def get_active_vali_hotkey(metagraph, exclude_hotkeys=[]):
     
     return random_vali_hotkey
 
+def find_available_port():
+    """Find an available port on the local machine."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))  # Bind to an available port
+        return s.getsockname()[1]  # Return the port number
+
+def run_btcli_command(command):
+    try:
+        # Execute the command
+        result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred when runing btcli: {e.stderr}")
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate wallet {e.stderr}")
 
 async def main():
     app = FastAPI()
@@ -515,31 +530,67 @@ async def main():
 
     @app.post("/setup-miner")
     async def setup_miner_for_non_builder(request: SetupRequest):
+        # Log input data
+        logging.info("Received setup-miner request: %s", request.dict())
+        setupRequest = request.dict()
+        coldKey = setupRequest.get('coldKey')
+        hotKey = setupRequest.get('hotKey')
+        hotKeyMnemonic = setupRequest.get('hotKeyMnemonic')
+        externalAPI = setupRequest.get('externalAPI')
+        minerId = setupRequest.get('minerId')
+        league_committed = setupRequest.get('league_committed')
+        if not authenticate_with_bittensor(hotKey, metagraph):
+            print(f"Valid hotkey required, returning 403. hotkey: {hotKey}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Valid hotkey required.",
+            )
         try:
-            # Log input data
-            logging.info("Received setup-miner request: %s", request.dict())
-            setupRequest = request.dict()
-            coldKey = setupRequest.get('coldKey')
-            hotKey = setupRequest.get('hotKey')
-            hotKeyMnemonic = setupRequest.get('hotKeyMnemonic')
-            externalAPI = setupRequest.get('externalAPI')
-            minerId = setupRequest.get('minerId')
-            league_committed = setupRequest.get('league_committed')
-            port = 9000
+            
+            # Find an available port
+            port = find_available_port()
+
             # Construct the absolute path to the miner.py script
             script_path = os.path.join(os.path.dirname(__file__), '../neurons/miner.py')
             # Create a wallet on the server and run pm2 instance
-            # Prepare the pm2 command
+            wallet_name = f"auto-gen-wallet-{coldKey}"
+            wallet_hotkey_name = f"auto-gen-wallet-hotkey-{hotKey}"
+            regen_coldkeypub_command = f"btcli wallet regen_coldkeypub --ss58_address {coldKey} --wallet.name {wallet_name}"
+            regen_hotkey_command = f"btcli wallet regen_hotkey --wallet.name {wallet_name} --wallet.hotkey {wallet_hotkey_name} --mnemonic {hotKeyMnemonic} --no-use-password"
+            isWalletAlreadyGenerated = db.walletAlreadyGenerated(coldKey)
+            if not isWalletAlreadyGenerated:
+                coldkey_pub_output = run_btcli_command(regen_coldkeypub_command)
+                if coldkey_pub_output:
+                    logging.info(f"Wallet regenerated: {wallet_name}")
+                    # Regenerate hotkey
+                    hotkey_output = run_btcli_command(regen_hotkey_command)
+                    logging.info(f"Wallet Hotkey regenerated: {wallet_name}")
+                    if hotkey_output is None:
+                        raise HTTPException(status_code=500, detail=f"Failed to regenerate hotkey wallet")
+                else:
+                    raise HTTPException(status_code=500, detail=f"Failed to regenerate wallet")
+            else:
+                logging.info(f"Wallet already generated: {wallet_name}")
+                isWalletHotkeyAlreadyGenerated = db.walletAlreadyGenerated(coldKey, hotKey, hotKeyMnemonic)
+                if not isWalletHotkeyAlreadyGenerated:
+                    # Regenerate hotkey
+                    hotkey_output = run_btcli_command(regen_hotkey_command)
+                    if hotkey_output is None:
+                        raise HTTPException(status_code=500, detail=f"Failed to regenerate hotkey wallet")
+                else:
+                    logging.info(f"Wallet hotkey already generated: {wallet_hotkey_name}")
+
             # Determine netuid and subtensor.network based on environment
             netuid = "41" if IS_PROD else "172"
             subtensor_network = "finney" if IS_PROD else "test"
+            # Prepare the pm2 command
             pm2_command = [
                 "pm2", "start", script_path,
                 "--name", f"Sportstensor-{minerId}",
                 "--", "--netuid", netuid,
                 "--subtensor.network", subtensor_network,
-                "--wallet.name", "test",
-                "--wallet.hotkey", "test-miner-hotkey",
+                "--wallet.name", wallet_name,
+                "--wallet.hotkey", wallet_hotkey_name,
                 "--axon.port", str(port),
                 "--blacklist.validator_min_stake", "0",
                 "--non_builder_miner_id", str(minerId)
@@ -555,7 +606,7 @@ async def main():
             result = db.storeDataForNonBuilderMiner(minerId, coldKey, hotKey, hotKeyMnemonic, externalAPI, league_committed, port)
             if result:
                 logging.info(f"Stored non-builder miner{minerId}(hotkey-{hotKey})'s neuron data")
-                raise HTTPException(status_code=200, detail=f"Starting miner on port {port}")
+                return {"status": "success", "detail": f"Starting miner on port {port}"}
         except subprocess.CalledProcessError as e:
             logging.error(f"Error running pm2 command: {e}")
             logging.error(f"Command output: {e.stdout.decode().strip()}")

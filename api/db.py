@@ -1171,8 +1171,11 @@ def storeDataForNonBuilderMiner(minerId, coldKey, hotKey, hotKeyMnemonic, extern
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
-        query = """
-            INSERT INTO NonBuilderMiners_test (miner_uid, miner_coldkey, miner_hotkey, hotkey_mnemonic, api_url, port, league_commited) 
+        non_builders_miner_table = "NonBuilderMiners"
+        if not IS_PROD:
+            non_builders_miner_table += "_test"
+        query = f"""
+            INSERT INTO {non_builders_miner_table} (miner_uid, miner_coldkey, miner_hotkey, hotkey_mnemonic, api_url, port, league_commited) 
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE 
                 miner_coldkey = VALUES(miner_coldkey),
@@ -1198,13 +1201,16 @@ def getDataForNonBuilderMiner(miner_id):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
-        query = """
+        non_builders_miner_table = "NonBuilderMiners"
+        if not IS_PROD:
+            non_builders_miner_table += "_test"
+        query = f"""
             SELECT
                 nbm.league_commited,
                 nbm.api_url,
                 nbm.miner_uid,
                 m.miner_is_registered
-            FROM NonBuilderMiners_test nbm
+            FROM {non_builders_miner_table} nbm
             LEFT JOIN Miners_test m ON nbm.miner_uid = m.miner_uid AND nbm.miner_hotkey = m.miner_hotkey
             WHERE nbm.miner_uid = %s AND m.miner_is_registered = 1
         """
@@ -1215,6 +1221,36 @@ def getDataForNonBuilderMiner(miner_id):
     except Exception as e:
         logging.error(
             "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def walletAlreadyGenerated(coldKey, hotKey=None, hotKeyMnemonic=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        non_builders_miner_table = "NonBuilderMiners"
+        if not IS_PROD:
+            non_builders_miner_table += "_test"
+        params = [coldKey]
+        query = f"""
+            SELECT
+                id
+            FROM {non_builders_miner_table}
+            WHERE miner_coldkey = %s
+        """
+        if hotKey:
+            query += " AND miner_hotkey = %s AND hotkey_mnemonic = %s"
+            params.append(hotKey)
+            params.append(hotKeyMnemonic)
+        c.execute(query, params)
+        matched_miner = c.fetchall()
+        return len(matched_miner) > 0
+    except Exception as e:
+        logging.error(
+            "Failed to query the non-builder miner from MySQL database", exc_info=True
         )
         return False
     finally:
@@ -1845,7 +1881,7 @@ def create_tables():
             miner_uid INTEGER,
             miner_coldkey VARCHAR(64),
             miner_hotkey VARCHAR(64),
-            hotkey_mnemonic VARCHAR(64),
+            hotkey_mnemonic VARCHAR(255),
             api_url VARCHAR(255),
             port INTEGER,
             league_commited VARCHAR(255),
@@ -1860,7 +1896,7 @@ def create_tables():
             miner_uid INTEGER,
             miner_coldkey VARCHAR(64),
             miner_hotkey VARCHAR(64),
-            hotkey_mnemonic VARCHAR(64),
+            hotkey_mnemonic VARCHAR(255),
             api_url VARCHAR(255),
             port INTEGER,
             league_commited VARCHAR(255),
