@@ -1003,7 +1003,7 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
                     FROM {prediction_edges_table_name}
                     GROUP BY miner_hotkey, vali_hotkey
                 )
-            ) sorted_mpe ON mps.miner_hotkey = sorted_mpe.miner_hotkey AND mps.vali_hotkey = sorted_mpe.vali_hotkey
+            ) sorted_mpe ON mps.miner_hotkey = sorted_mpe.miner_hotkey AND mps.miner_id = sorted_mpe.miner_uid AND mps.vali_hotkey = sorted_mpe.vali_hotkey
             LEFT JOIN matches ON matches.matchId = mps.matchId
             LEFT JOIN matches_lookup ml ON (ml.matchId = mps.matchId)
             LEFT JOIN (
