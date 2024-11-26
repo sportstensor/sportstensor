@@ -366,8 +366,6 @@ async def send_league_commitments_to_miners(
                     vali.uids_to_last_leagues[uid] = leagues
                     vali.uids_to_leagues_last_updated[uid] = dt.datetime.now(dt.timezone.utc)
 
-        print("UID 1 LEAGUE COMMITMENT: ", vali.uids_to_leagues[1])
-
         return (all_finished_responses, all_working_miner_uids)
 
     except Exception as e:

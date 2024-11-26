@@ -52,7 +52,7 @@ def calculate_incentives_and_update_scores():
     :param vali: Validator, the validator object
     """
     # Initialize our subtensor and metagraph
-    NETWORK = "test" # "test" or None
+    NETWORK = None # "test" or None
     NETUID = 41
     if NETWORK == "test":
         NETUID = 172
@@ -79,7 +79,18 @@ def calculate_incentives_and_update_scores():
         league_table_data = []
         predictions_for_copycat_analysis = []
 
-        for index, uid in enumerate(all_uids):
+        # Get all miners committed to this league within the grace period
+        league_miner_uids = []
+        for uid in all_uids:
+            # Randomly select a subset of miners to commit to the league. UIDs 0-90 goto NBA. UIDs 91-180 goto NFL. UIDs 181-240 goto EPL.
+            if league == League.NBA and uid < 90:
+                league_miner_uids.append(uid)
+            elif league == League.NFL and 90 <= uid < 180:
+                league_miner_uids.append(uid)
+            elif league == League.EPL and 180 <= uid < 240:
+                league_miner_uids.append(uid)
+
+        for index, uid in enumerate(league_miner_uids):
             hotkey = metagraph.hotkeys[uid]
 
             predictions_with_match_data = storage.get_miner_match_predictions(

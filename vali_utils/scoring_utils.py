@@ -501,11 +501,18 @@ def calculate_incentives_and_update_scores(vali):
     # Prepare final scores table
     final_scores_table = []
     for i, uid in enumerate(all_uids):
-        final_scores_table.append([uid, all_scores[i], vali.scores[i]])
+        miner_league = ""
+        miner_league_last_updated = ""
+        if uid in vali.uids_to_last_leagues and len(vali.uids_to_last_leagues[uid]) > 0:
+            miner_league = vali.uids_to_last_leagues[uid][0].name
+        if uid in vali.uids_to_leagues_last_updated and vali.uids_to_leagues_last_updated[uid] is not None:
+            miner_league_last_updated = vali.uids_to_leagues_last_updated[uid].strftime("%Y-%m-%d %H:%M")
+
+        final_scores_table.append([uid, miner_league, miner_league_last_updated, all_scores[i], vali.scores[i]])
 
     # Log final scores
     bt.logging.info("\nFinal Weighted Scores:")
-    bt.logging.info("\n" + tabulate(final_scores_table, headers=['UID', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
+    bt.logging.info("\n" + tabulate(final_scores_table, headers=['UID', 'League', 'Last Commitment', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in vali.scores if score > 0]
