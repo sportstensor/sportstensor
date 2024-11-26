@@ -13,6 +13,7 @@ from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     COPYCAT_PUNISHMENT_START_DATE,
+    MAX_GFILTER_FOR_WRONG_PREDICTION,
     SENSITIVITY_ALPHA,
     GAMMA,
     TRANSITION_KAPPA,
@@ -29,7 +30,6 @@ from vali_utils.scoring_utils import (
     compute_significance_score,
     calculate_clv,
     calculate_incentive_score,
-    apply_gaussian_filter,
     apply_gaussian_filter_v3,
     apply_pareto,
     update_miner_scores,
@@ -113,8 +113,8 @@ def calculate_incentives_and_update_scores():
             print(f"  • Rho: {rho:.4f}")
             total_score = 0
             for pwmd in predictions_with_match_data:
-                log_prediction = random.random() < 0.1
-                #log_prediction = False
+                #log_prediction = random.random() < 0.1
+                log_prediction = False
 
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
@@ -163,7 +163,6 @@ def calculate_incentives_and_update_scores():
                     print(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                #gfilter = apply_gaussian_filter(pwmd)
                 gfilter = apply_gaussian_filter_v3(pwmd)
                 if log_prediction:
                     print(f"      • Gaussian filter: {gfilter:.4f}")
@@ -173,7 +172,7 @@ def calculate_incentives_and_update_scores():
                     or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
                     and round(gfilter, 4) > 0 and gfilter < 1:
                     
-                    gfilter = max(0.4, gfilter)
+                    gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                     if log_prediction:
                         print(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
@@ -239,6 +238,19 @@ def calculate_incentives_and_update_scores():
 
     # Log final copycat results
     print(f"********************* Copycat Controller Findings  *********************")
+    # Get a unique list of coldkeys from metagraph
+    coldkeys = list(set(metagraph.coldkeys))
+    for coldkey in coldkeys:
+        uids_for_coldkey = []
+        for miner_uid in final_suspicious_miners:
+            if metagraph.coldkeys[miner_uid] == coldkey:
+                if miner_uid in final_copycat_penalties:
+                    miner_uid = f"{miner_uid} 💀"
+                uids_for_coldkey.append(str(miner_uid))
+        if len(uids_for_coldkey) > 0:
+            print(f"\nColdkey: {coldkey}")
+            print(f"Suspicious Miners: {', '.join(str(m) for m in sorted(uids_for_coldkey))}")
+
     print(f"Total suspicious miners across all leagues: {len(final_suspicious_miners)}")
     if len(final_suspicious_miners) > 0:
         print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")

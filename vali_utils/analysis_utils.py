@@ -1,7 +1,7 @@
 import math
 from collections import defaultdict
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from common.data import MatchPredictionWithMatchData
 from common.constants import COPYCAT_VARIANCE_THRESHOLD, EXACT_MATCH_PREDICTIONS_THRESHOLD, SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD
@@ -51,8 +51,20 @@ class StatisticalAnalyzer:
                     if pred1.probabilityChoice != pred2.probabilityChoice:
                         continue
 
+                    # Ensure pred1.predictionDate is offset-aware
+                    if pred1.predictionDate.tzinfo is None:
+                        pred1_predictionDate = pred1.predictionDate.replace(tzinfo=timezone.utc)
+                    else:
+                        pred1_predictionDate = pred1.predictionDate
+
+                    # Ensure pred2.predictionDate is offset-aware
+                    if pred2.predictionDate.tzinfo is None:
+                        pred2_predictionDate = pred2.predictionDate.replace(tzinfo=timezone.utc)
+                    else:
+                        pred2_predictionDate = pred2.predictionDate
+
                     # Only compare if predictions are within 1 hour of each other
-                    if abs((pred1.predictionDate - pred2.predictionDate).total_seconds()) > 3600:
+                    if abs((pred1_predictionDate - pred2_predictionDate).total_seconds()) > 3600:
                         continue
                     
                     absolute_difference = round(abs(pred1.probability - pred2.probability), 4)
@@ -70,8 +82,8 @@ class StatisticalAnalyzer:
                         'choice': pred1.probabilityChoice,
                         'prob1': pred1.probability,
                         'prob2': pred2.probability,
-                        'pred1_date': pred1.predictionDate.strftime('%Y-%m-%d %H:%M:%S'),
-                        'pred2_date': pred2.predictionDate.strftime('%Y-%m-%d %H:%M:%S')
+                        'pred1_date': pred1_predictionDate.strftime('%Y-%m-%d %H:%M:%S'),
+                        'pred2_date': pred2_predictionDate.strftime('%Y-%m-%d %H:%M:%S')
                     })
 
         # Analyze the relationships

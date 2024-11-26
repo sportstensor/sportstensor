@@ -55,30 +55,6 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
-def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
-    """
-    Apply a Gaussian filter to the closing odds and prediction probability. 
-    This filter is used to suppress the score when the prediction is far from the closing odds, simulating a more realistic prediction.
-
-    :param pwmd: MatchPredictionWithMatchData
-    :return: float, the calculated Gaussian filter
-    """
-    closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
-
-    t = 1.0 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
-    a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
-    b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
-    c = 3 # Minimum plateau width/boundary
-
-    w = a * np.exp(-b * (closing_odds - 1)) + c
-    diff = abs(closing_odds - 1/pwmd.prediction.probability)
-
-    # note that sigma^2 = odds now
-    # plateaued curve. 
-    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (t*2*closing_odds))
-
-    return exp_component
-
 def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
     """
     Apply a Gaussian filter to the closing odds and prediction probability. 
@@ -89,14 +65,14 @@ def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
     """
     closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
 
-    t = 0.5
-    a = -2
-    b = 0.3
-    c = 1
+    t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
+    b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
+    c = 1 # Minimum plateau width/boundary
 
     # Plateau width calculation
     w = c - a * np.exp(-b * (closing_odds - 1))
-    diff = abs(closing_odds - 1 / closing_odds)
+    diff = abs(closing_odds - 1 / pwmd.prediction.probability)
 
     # Plateaud curve with with uniform decay
     exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t)
