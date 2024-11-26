@@ -18,7 +18,8 @@ from common.constants import (
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     NO_LEAGUE_COMMITMENT_PENALTY,
     COPYCAT_PENALTY_SCORE,
-    COPYCAT_PUNISHMENT_START_DATE
+    COPYCAT_PUNISHMENT_START_DATE,
+    MAX_GFILTER_FOR_WRONG_PREDICTION
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -54,7 +55,7 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
-def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
+def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
     """
     Apply a Gaussian filter to the closing odds and prediction probability. 
     This filter is used to suppress the score when the prediction is far from the closing odds, simulating a more realistic prediction.
@@ -64,18 +65,18 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
     closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
 
-    t = 1.0 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
     a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
-    c = 3 # Minimum plateau width/boundary
+    c = 1 # Minimum plateau width/boundary
 
-    w = a * np.exp(-b * (closing_odds - 1)) + c
-    diff = abs(closing_odds - 1/pwmd.prediction.probability)
+    # Plateau width calculation
+    w = c - a * np.exp(-b * (closing_odds - 1))
+    diff = abs(closing_odds - 1 / pwmd.prediction.probability)
 
-    # note that sigma^2 = odds now
-    # plateaued curve. 
-    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (t*2*closing_odds))
-
+    # Plateaud curve with with uniform decay
+    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t)
+    
     return exp_component
 
 def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
@@ -394,9 +395,18 @@ def calculate_incentives_and_update_scores(vali):
                     bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter(pwmd)
+                gfilter = apply_gaussian_filter_v3(pwmd)
                 if log_prediction:
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
+                
+                # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
+                if ((pwmd.prediction.probability > 0.5 and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner()) \
+                    or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
+                    and round(gfilter, 4) > 0 and gfilter < 1:
+                    
+                    gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
+                    if log_prediction:
+                        bt.logging.debug(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
                 # Apply sigma and G (gaussian filter) to v
                 total_score += v * sigma * gfilter
