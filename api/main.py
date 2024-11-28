@@ -728,7 +728,14 @@ async def main():
 
     @app.post("/stop-miner")
     async def stop_miner_for_non_builder(minerId: str, current_user: UserInDB=Depends(get_current_user)):
+        storedMinerData = db.getDataForNonBuilderMiner(minerId)
         userName = current_user['username']
+        if userName != storedMinerData['username']:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         instance_name = f"{userName}-{minerId}"
         logging.info(f"Stopping miner with ID: {minerId}")
 
@@ -776,7 +783,14 @@ async def main():
     
     @app.post("/resume-miner")
     async def resume_miner_for_non_builder(minerId: str, current_user: UserInDB=Depends(get_current_user)):
+        storedMinerData = db.getDataForNonBuilderMiner(minerId)
         userName = current_user['username']
+        if userName != storedMinerData['username']:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         instance_name = f"{userName}-{minerId}"
         logging.info(f"Resuming miner with ID: {minerId}")
 
@@ -813,7 +827,14 @@ async def main():
     
     @app.get("/logs")
     async def get_logs_for_non_builder(minerId: str, current_user: UserInDB=Depends(get_current_user)):
+        storedMinerData = db.getDataForNonBuilderMiner(minerId)
         userName = current_user['username']
+        if userName != storedMinerData['username']:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         instance_name = f"{userName}-{minerId}"
         logging.info(f"Fetching logs for miner with ID: {minerId}")
 

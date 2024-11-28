@@ -1202,16 +1202,22 @@ def getDataForNonBuilderMiner(miner_id):
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
         non_builders_miner_table = "NonBuilderMiners"
+        non_builders_user_table = "NonBuilderUsers"
+        miners_table = "Miners"
         if not IS_PROD:
             non_builders_miner_table += "_test"
+            miners_table += "_test"
+            non_builders_user_table += "_test"
         query = f"""
             SELECT
                 nbm.league_commited,
                 nbm.api_url,
                 nbm.miner_uid,
-                m.miner_is_registered
+                m.miner_is_registered,
+                nbu.username
             FROM {non_builders_miner_table} nbm
-            LEFT JOIN Miners_test m ON nbm.miner_uid = m.miner_uid AND nbm.miner_hotkey = m.miner_hotkey
+            LEFT JOIN {miners_table} m ON nbm.miner_uid = m.miner_uid AND nbm.miner_hotkey = m.miner_hotkey
+            LEFT JOIN {non_builders_user_table} nbu ON nbu.id = nbm.user_id
             WHERE nbm.miner_uid = %s AND m.miner_is_registered = 1
         """
         c.execute(query, (miner_id,))
