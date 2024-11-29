@@ -1228,7 +1228,7 @@ def getDataForNonBuilderMiner(miner_id):
         logging.error(
             "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
         )
-        return False
+        return None
     finally:
         c.close()
         conn.close()

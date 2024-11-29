@@ -26,7 +26,8 @@ from common.constants import ENABLE_APP, APP_PREDICTIONS_UNFULFILLED_THRESHOLD
 from concurrent.futures import ThreadPoolExecutor
 import re
 from models import SetupRequest, User, UserInDB, Token
-from helper import get_password_hash, create_access_token, verify_password, get_current_user
+from helper import get_password_hash, create_access_token, verify_password, get_current_user, validate_miner_access
+from typing import Dict, Any
 
 sentry_sdk.init(
     dsn="https://d9cce5fe3664e00bf8857b2e425d9ec5@o4507644404236288.ingest.de.sentry.io/4507644429271120",
@@ -77,7 +78,7 @@ def get_hotkey(credentials: Annotated[HTTPBasicCredentials, Depends(security)]) 
     )
 
 
-def authenticate_with_bittensor(hotkey, metagraph):
+def authenticate_with_bittensor(hotkey, metagraph, minerId = None):
     if hotkey not in metagraph.hotkeys:
         print(f"Hotkey not found in metagraph.")
         return False
@@ -86,6 +87,8 @@ def authenticate_with_bittensor(hotkey, metagraph):
     if not metagraph.validator_permit[uid] and NETWORK != "test":
         print("Bittensor validator permit required")
         return False
+    if minerId is not None:
+        return minerId == uid
 
     if metagraph.S[uid] < 1000 and NETWORK != "test":
         print("Bittensor validator requires 1000+ staked TAO")
@@ -642,11 +645,11 @@ async def main():
         externalAPI = setupRequest.get('externalAPI')
         minerId = setupRequest.get('minerId')
         league_committed = setupRequest.get('league_committed')
-        if not authenticate_with_bittensor(hotKey, metagraph):
+        if not authenticate_with_bittensor(hotKey, metagraph, minerId):
             print(f"Valid hotkey required, returning 403. hotkey: {hotKey}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Valid hotkey required.",
+                detail=f"Valid hotkey or minerId required.",
             )
         try:
             
@@ -727,15 +730,8 @@ async def main():
             raise HTTPException(status_code=500, detail="Internal server error.")
 
     @app.post("/stop-miner")
-    async def stop_miner_for_non_builder(minerId: str, current_user: UserInDB=Depends(get_current_user)):
-        storedMinerData = db.getDataForNonBuilderMiner(minerId)
-        userName = current_user['username']
-        if userName != storedMinerData['username']:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+    async def stop_miner_for_non_builder(minerId: str, storedMinerData: Dict[str, Any] = Depends(validate_miner_access)):
+        userName = storedMinerData['username']
         instance_name = f"{userName}-{minerId}"
         logging.info(f"Stopping miner with ID: {minerId}")
 
@@ -782,15 +778,8 @@ async def main():
             raise HTTPException(status_code=500, detail="An internal error occurred.")
     
     @app.post("/resume-miner")
-    async def resume_miner_for_non_builder(minerId: str, current_user: UserInDB=Depends(get_current_user)):
-        storedMinerData = db.getDataForNonBuilderMiner(minerId)
-        userName = current_user['username']
-        if userName != storedMinerData['username']:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+    async def resume_miner_for_non_builder(minerId: str, storedMinerData: Dict[str, Any] = Depends(validate_miner_access)):
+        userName = storedMinerData['username']
         instance_name = f"{userName}-{minerId}"
         logging.info(f"Resuming miner with ID: {minerId}")
 
@@ -826,15 +815,8 @@ async def main():
             raise HTTPException(status_code=500, detail="An internal error occurred.")
     
     @app.get("/logs")
-    async def get_logs_for_non_builder(minerId: str, current_user: UserInDB=Depends(get_current_user)):
-        storedMinerData = db.getDataForNonBuilderMiner(minerId)
-        userName = current_user['username']
-        if userName != storedMinerData['username']:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+    async def get_logs_for_non_builder(minerId: str, storedMinerData: Dict[str, Any] = Depends(validate_miner_access)):
+        userName = storedMinerData['username']
         instance_name = f"{userName}-{minerId}"
         logging.info(f"Fetching logs for miner with ID: {minerId}")
 

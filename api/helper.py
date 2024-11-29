@@ -2,10 +2,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict, Any
 from config import SECRET_KEY, ALGORITHM
 from passlib.context import CryptContext
 import api.db as db
+from models import UserInDB
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -42,9 +43,34 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        if 'expired' in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         raise credentials_exception
     user = db.get_user_by_username(username)
     if user is None:
         raise credentials_exception
     return user
+
+async def validate_miner_access(minerId: str, current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
+    storedMinerData = db.getDataForNonBuilderMiner(minerId)
+    userName = current_user['username']
+    
+    if storedMinerData is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bad request",
+        )
+        
+    if userName != storedMinerData['username']:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    return storedMinerData
