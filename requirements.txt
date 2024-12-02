@@ -1,11 +1,6 @@
-bittensor==6.9.4
+bittensor==8.4.2
 pandas
-beautifulsoup4
-huggingface_hub
-tensorflow
 scikit-learn
-matplotlib
-openpyxl
 wandb
 tabulate
 python-dotenv

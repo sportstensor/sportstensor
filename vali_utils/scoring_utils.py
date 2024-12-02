@@ -1,7 +1,6 @@
 import math
 import numpy as np
 from scipy.stats import pareto
-import torch
 import datetime as dt
 from datetime import datetime, timezone
 import pytz
@@ -492,8 +491,8 @@ def calculate_incentives_and_update_scores(vali):
     
     # Update our main self.scores, which scatters the scores
     update_miner_scores(
-        vali, 
-        torch.FloatTensor(final_scores).to(vali.device),
+        vali,
+        np.array(final_scores),
         all_uids
     )
 
@@ -519,25 +518,43 @@ def calculate_incentives_and_update_scores(vali):
 
     return league_scores, league_pred_counts, all_scores
 
-def update_miner_scores(vali, rewards: torch.FloatTensor, uids: List[int]):
+def update_miner_scores(vali, rewards: np.ndarray, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
     # Check if rewards contains NaN values.
-    if torch.isnan(rewards).any():
+    if np.isnan(rewards).any():
         bt.logging.warning(f"NaN values detected in rewards: {rewards}")
         # Replace any NaN values in rewards with 0.
-        rewards = torch.nan_to_num(rewards, 0)
+        rewards = np.nan_to_num(rewards, nan=0)
 
-    # Check if `uids` is already a tensor and clone it to avoid the warning.
-    if isinstance(uids, torch.Tensor):
-        uids_tensor = uids.clone().detach()
+    # Ensure rewards is a numpy array.
+    rewards = np.asarray(rewards)
+
+    # Check if `uids` is already a numpy array and copy it to avoid the warning.
+    if isinstance(uids, np.ndarray):
+        uids_array = uids.copy()
     else:
-        uids_tensor = torch.tensor(uids).to(vali.device)
+        uids_array = np.array(uids)
+
+    # Handle edge case: If either rewards or uids_array is empty.
+    if rewards.size == 0 or uids_array.size == 0:
+        bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array}")
+        bt.logging.warning(
+            "Either rewards or uids_array is empty. No updates will be performed."
+        )
+        return
+
+    # Check if sizes of rewards and uids_array match.
+    if rewards.size != uids_array.size:
+        raise ValueError(
+            f"Shape mismatch: rewards array of shape {rewards.shape} "
+            f"cannot be broadcast to uids array of shape {uids_array.shape}"
+        )
 
     # Compute forward pass rewards, assumes uids are mutually exclusive.
     # shape: [ metagraph.n ]
-    vali.scores: torch.FloatTensor = vali.scores.scatter(
-        0, uids_tensor, rewards
-    ).to(vali.device)
+    scattered_rewards: np.ndarray = np.zeros_like(vali.scores)
+    scattered_rewards[uids_array] = rewards
+    vali.scores = scattered_rewards
     bt.logging.debug(f"Scattered rewards. self.scores: {vali.scores}")
-    bt.logging.debug(f"UIDs: {uids_tensor}")
+    bt.logging.debug(f"UIDs: {uids_array}")

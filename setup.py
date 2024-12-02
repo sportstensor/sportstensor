@@ -68,7 +68,7 @@ setup(
     description="sportstensor",  # TODO(developer): Change this value to your module subnet description.
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/xzistance/sportstensor",  # TODO(developer): Change this url to your module subnet github url.
+    url="https://github.com/sportstensor/sportstensor",  # TODO(developer): Change this url to your module subnet github url.
     author="sportstensor.com",  # TODO(developer): Change this value to your module subnet author name.
     packages=find_packages(),
     include_package_data=True,
