@@ -21,7 +21,9 @@ from common.constants import (
     IS_DEV,
     VALIDATOR_TIMEOUT,
     SCORING_CUTOFF_IN_DAYS,
-    LEAGUES_ALLOWING_DRAWS
+    LEAGUES_ALLOWING_DRAWS,
+    MIN_PROBABILITY,
+    MIN_PROB_FOR_DRAWS
 )
 
 from neurons.validator import Validator
@@ -659,11 +661,19 @@ def is_match_prediction_valid(
             f"Probability {prediction.probability} is not a float",
         )
     
-    if round(prediction.probability, 4) <= 0 or round(prediction.probability, 4) > 1:
-        return (
-            False,
-            f"Probability {prediction.probability} rounded to {round(prediction.probability, 4)} is not between 0 and 1",
-        )
+    # Check that the probability is within the allowed range
+    if input_synapse.match_prediction.league in LEAGUES_ALLOWING_DRAWS:
+        if round(prediction.probability, 4) <= MIN_PROB_FOR_DRAWS or round(prediction.probability, 4) > 1:
+            return (
+                False,
+                f"Probability {prediction.probability} rounded to {round(prediction.probability, 4)} is not between {MIN_PROB_FOR_DRAWS} and 1 for leagues allowing draws",
+            )
+    else:
+        if round(prediction.probability, 4) <= MIN_PROBABILITY or round(prediction.probability, 4) > 1:
+            return (
+                False,
+                f"Probability {prediction.probability} rounded to {round(prediction.probability, 4)} is not between {MIN_PROBABILITY} and 1",
+            )
     
     # Check that the current time is before the match date
     current_time = dt.datetime.now(dt.timezone.utc)
