@@ -55,10 +55,12 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
-def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
+def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
     Apply a Gaussian filter to the closing odds and prediction probability. 
     This filter is used to suppress the score when the prediction is far from the closing odds, simulating a more realistic prediction.
+
+    Plateau width is narrower at lower odds and wider at higher odds. Assumes no lay betting.
 
     :param pwmd: MatchPredictionWithMatchData
     :return: float, the calculated Gaussian filter
@@ -68,15 +70,14 @@ def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
     t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
     a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
-    c = 1 # Minimum plateau width/boundary
+    c = 2 # Minimum plateau width/boundary
 
     # Plateau width calculation
-    w = c - a * np.exp(-b * (closing_odds - 1))
+    w = a * np.exp(-b * (closing_odds - 1)) + c
     diff = abs(closing_odds - 1 / pwmd.prediction.probability)
 
-    # Plateaud curve with with uniform decay
-    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t)
-    
+    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (t*2*closing_odds))
+
     return exp_component
 
 def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
@@ -395,7 +396,7 @@ def calculate_incentives_and_update_scores(vali):
                     bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter_v3(pwmd)
+                gfilter = apply_gaussian_filter(pwmd)
                 if log_prediction:
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
                 
