@@ -418,6 +418,113 @@ def get_match_by_id(match_id):
         conn.close()
 
 
+def insert_match_from_oddsdb(match_id, match, sport_type, is_complete, current_utc_time):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        # Extracting the scores safely
+        home_team_name = match.get("home_team")
+        away_team_name = match.get("away_team")
+        scores = match.get("scores")
+
+        if scores:
+            home_team_score = next((int(score["score"]) for score in scores if score["name"] == home_team_name), None)
+            away_team_score = next((int(score["score"]) for score in scores if score["name"] == away_team_name), None)
+        else:
+            home_team_score = None
+            away_team_score = None
+        c.execute(
+            """
+            INSERT INTO matches (matchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, matchLeague, isComplete, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                matchDate=VALUES(matchDate),
+                sport=VALUES(sport),
+                homeTeamName=VALUES(homeTeamName),
+                awayTeamName=VALUES(awayTeamName),
+                homeTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(homeTeamScore), 0)
+                    ELSE VALUES(homeTeamScore)
+                END,
+                awayTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(awayTeamScore), 0)
+                    ELSE VALUES(awayTeamScore)
+                END,
+                matchLeague=VALUES(matchLeague),
+                isComplete=VALUES(isComplete),
+                lastUpdated=VALUES(lastUpdated)
+            """,
+            (
+                match_id,
+                match.get("commence_time"),
+                sport_type,
+                match.get("home_team"),
+                match.get("away_team"),
+                home_team_score,
+                away_team_score,
+                match.get("sport_title"),
+                is_complete,
+                current_utc_time,
+            ),
+        )
+
+        conn.commit()
+        logging.info("Data inserted or updated in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_oddsdb_match_lookup(match_id, oddsapiMatchId):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT IGNORE INTO matches_lookup (matchId, oddsapiMatchId) 
+            VALUES (%s, %s)
+            """,
+            (
+                match_id,
+                oddsapiMatchId
+            ),
+        )
+
+        conn.commit()
+        logging.info("Match lookup inserted in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match lookup in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def query_oddsdb_match_lookup(oddspaiMatchId):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT matchId FROM matches_lookup WHERE oddsapiMatchId = %s",
+            (oddspaiMatchId,),
+        )
+        match_id = cursor.fetchone()
+
+        return match_id[0] if match_id else None
+
+    except Exception as e:
+        logging.error("Failed to query sportsdb match lookup in MySQL database", exc_info=True)
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
 def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
     try:
         conn = get_db_conn()
