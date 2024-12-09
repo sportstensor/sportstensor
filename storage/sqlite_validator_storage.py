@@ -773,6 +773,10 @@ class SqliteValidatorStorage(ValidatorStorage):
                         #"isArchived": row[18]
                     }
                     try:
+                        # Ensure all required fields are present in prediction_data
+                        prediction_data.setdefault('scoredDate', None)
+                        prediction_data.setdefault('closingEdge', None)
+
                         combined_predictions.append(
                             MatchPredictionWithMatchData(
                                 prediction=MatchPrediction(**prediction_data),
