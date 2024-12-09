@@ -45,6 +45,7 @@ from common.constants import (
     LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES,
     LEAGUE_SCORING_PERCENTAGES,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
+    LEAGUE_SENSITIVITY_ALPHAS,
     SENSITIVITY_ALPHA,
     GAMMA,
     TRANSITION_KAPPA,
@@ -247,12 +248,20 @@ class Validator(BaseValidatorNeuron):
                 for line in lines[1:]
                 if line.split(",")[3].strip() == "Active"
             ]
+            active_league_sensitivity_alphas = [
+                float(line.split(",")[6].strip())
+                for line in lines[1:]
+                if line.split(",")[3].strip() == "Active"
+            ]
             self.ACTIVE_LEAGUES = [get_league_from_string(league) for league in active_leagues]
             self.LEAGUE_SCORING_PERCENTAGES = {
                 get_league_from_string(league): percentage for league, percentage in zip(active_leagues, active_league_percentages)
             }
             self.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
                 get_league_from_string(league): rolling_threshold for league, rolling_threshold in zip(active_leagues, active_league_rolling_thresholds)
+            }
+            self.LEAGUE_SENSITIVITY_ALPHAS = {
+                get_league_from_string(league): alpha for league, alpha in zip(active_leagues, active_league_sensitivity_alphas)
             }
             bt.logging.info("************ Setting active leagues ************")
             for league in self.ACTIVE_LEAGUES:
@@ -269,6 +278,11 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.info(f"  • {league}: {rolling_threshold}")
             bt.logging.info("*************************************************************")
 
+            bt.logging.info("************ Setting leagues sensitivity alphas ************")
+            for league, alpha in self.LEAGUE_SENSITIVITY_ALPHAS.items():
+                bt.logging.info(f"  • {league}: {alpha}")
+            bt.logging.info("*************************************************************")
+
             # Validate the league scoring percentages to make sure we're good.
             self.validate_league_percentages(self.LEAGUE_SCORING_PERCENTAGES)
             bt.logging.info(f"Loaded league controls successfully.")
@@ -278,6 +292,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(f"Using fallback control constants.")
             self.ACTIVE_LEAGUES = ACTIVE_LEAGUES
             self.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE
+            self.LEAGUE_SENSITIVITY_ALPHAS = LEAGUE_SENSITIVITY_ALPHAS
             self.LEAGUE_SCORING_PERCENTAGES = LEAGUE_SCORING_PERCENTAGES
             # Validate the league scoring percentages to make sure we're good.
             self.validate_league_percentages(self.LEAGUE_SCORING_PERCENTAGES)

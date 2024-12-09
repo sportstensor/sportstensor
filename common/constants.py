@@ -65,7 +65,6 @@ SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD = 10
 
 ACTIVE_LEAGUES = [
     League.EPL,
-    League.MLS,
     League.NFL,
     League.NBA
 ]
@@ -77,9 +76,9 @@ LEAGUES_ALLOWING_DRAWS = [
 
 ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
     League.MLB: 250,
-    League.NBA: 250,
-    League.EPL: 40,
-    League.MLS: 48,
+    League.NBA: 180,
+    League.EPL: 60,
+    League.MLS: 60,
     League.NFL: 64
 }
 
@@ -87,12 +86,21 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 LEAGUE_SCORING_PERCENTAGES = {
     League.MLB: 0.0,
     League.NBA: 0.35,
-    League.EPL: 0.20,
-    League.MLS: 0.10,
+    League.EPL: 0.30,
+    League.MLS: 0.0,
     League.NFL: 0.35
 }
 
-# ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the more predictions needed.
+# ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the less predictions needed.
+LEAGUE_SENSITIVITY_ALPHAS = {
+    League.MLB: 0.025,
+    League.NBA: 0.03,
+    League.EPL: 0.1,
+    League.MLS: 0.1,
+    League.NFL: 0.1
+}
+
+# Single sensitivity alpha depcrecated for league-specific sensitivity alphas
 SENSITIVITY_ALPHA = 0.025
 # GAMMA controls the time decay of CLV. Higher the GAMMA, the faster the decay.
 GAMMA = 0.00125
