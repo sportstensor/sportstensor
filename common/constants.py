@@ -65,7 +65,6 @@ SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD = 10
 
 ACTIVE_LEAGUES = [
     League.EPL,
-    League.MLS,
     League.NFL,
     League.NBA
 ]
@@ -87,8 +86,8 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 LEAGUE_SCORING_PERCENTAGES = {
     League.MLB: 0.0,
     League.NBA: 0.35,
-    League.EPL: 0.20,
-    League.MLS: 0.10,
+    League.EPL: 0.30,
+    League.MLS: 0.0,
     League.NFL: 0.35
 }
 
