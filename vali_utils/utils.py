@@ -428,7 +428,7 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
                 match_predictions.append(
                     MatchPrediction(
                         matchId=match.matchId,
-                        matchDate=str(match.matchDate),
+                        matchDate=match.matchDate,
                         sport=match.sport,
                         league=match.league,
                         homeTeamName=match.homeTeamName,
@@ -475,10 +475,6 @@ async def send_predictions_to_miners(
         async def process_batch(batch_uids: List[int]):
             axons = [vali.metagraph.axons[uid] for uid in batch_uids]
 
-            # convert matchDate to string for serialization
-            input_synapse.match_prediction.matchDate = str(
-                input_synapse.match_prediction.matchDate
-            )
             responses = await vali.dendrite(
                 axons=axons,
                 synapse=input_synapse,
