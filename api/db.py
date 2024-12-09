@@ -1167,6 +1167,152 @@ def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False
         c.close()
         conn.close()
 
+def storeDataForNonBuilderMiner(minerId, coldKey, hotKey, hotKeyMnemonic, externalAPI, league_committed, port, userId):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        non_builders_miner_table = "NonBuilderMiners"
+        if not IS_PROD:
+            non_builders_miner_table += "_test"
+        query = f"""
+            INSERT INTO {non_builders_miner_table} (miner_uid, miner_coldkey, miner_hotkey, hotkey_mnemonic, api_url, port, league_commited, user_id) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                miner_coldkey = VALUES(miner_coldkey),
+                hotkey_mnemonic = VALUES(hotkey_mnemonic),
+                api_url = VALUES(api_url),
+                port = VALUES(port),
+                league_commited = VALUES(league_commited),
+                last_updated = CURRENT_TIMESTAMP
+        """
+        c.execute(query, (minerId, coldKey, hotKey, hotKeyMnemonic, externalAPI, port, league_committed, userId))
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(
+            "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def getDataForNonBuilderMiner(miner_id):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        non_builders_miner_table = "NonBuilderMiners"
+        non_builders_user_table = "NonBuilderUsers"
+        miners_table = "Miners"
+        if not IS_PROD:
+            non_builders_miner_table += "_test"
+            miners_table += "_test"
+            non_builders_user_table += "_test"
+        query = f"""
+            SELECT
+                nbm.league_commited,
+                nbm.api_url,
+                nbm.miner_uid,
+                m.miner_is_registered,
+                nbu.username
+            FROM {non_builders_miner_table} nbm
+            LEFT JOIN {miners_table} m ON nbm.miner_uid = m.miner_uid AND nbm.miner_hotkey = m.miner_hotkey
+            LEFT JOIN {non_builders_user_table} nbu ON nbu.id = nbm.user_id
+            WHERE nbm.miner_uid = %s AND m.miner_is_registered = 1
+        """
+        c.execute(query, (miner_id,))
+        matched_miner = c.fetchall()
+
+        return matched_miner[0]
+    except Exception as e:
+        logging.error(
+            "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
+        )
+        return None
+    finally:
+        c.close()
+        conn.close()
+
+def walletAlreadyGenerated(coldKey, hotKey=None, hotKeyMnemonic=None):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        non_builders_miner_table = "NonBuilderMiners"
+        if not IS_PROD:
+            non_builders_miner_table += "_test"
+        params = [coldKey]
+        query = f"""
+            SELECT
+                id
+            FROM {non_builders_miner_table}
+            WHERE miner_coldkey = %s
+        """
+        if hotKey:
+            query += " AND miner_hotkey = %s AND hotkey_mnemonic = %s"
+            params.append(hotKey)
+            params.append(hotKeyMnemonic)
+        c.execute(query, params)
+        matched_miner = c.fetchall()
+        return len(matched_miner) > 0
+    except Exception as e:
+        logging.error(
+            "Failed to query the non-builder miner from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def get_user_by_username(username: str):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        non_builder_users_table = "NonBuilderUsers"
+        if not IS_PROD:
+            non_builder_users_table += "_test"
+        query = f"""
+            SELECT
+                *
+            FROM {non_builder_users_table}
+            WHERE username = %s
+        """
+        c.execute(query, (username,))
+        user = c.fetchone()
+
+        return user
+    except Exception as e:
+        logging.error(
+            "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
+        )
+        return None
+    finally:
+        c.close()
+        conn.close()
+
+def store_user_info_for_non_builders(username, hashed_password):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor(dictionary=True)
+        non_builder_users_table = "NonBuilderUsers"
+        if not IS_PROD:
+            non_builder_users_table += "_test"
+        query = f"""
+            INSERT INTO {non_builder_users_table} (username, hashed_password)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE
+                hashed_password=VALUES(hashed_password)
+        """
+        c.execute(query, (username, hashed_password))
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(
+            "Failed to query league commitments of the non-builder miner from MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        c.close()
+        conn.close()
 
 def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
     try:
@@ -1783,6 +1929,60 @@ def create_tables():
             winner_predictions INTEGER,
             avg_score FLOAT,
             last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS NonBuilderUsers (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                hashed_password VARCHAR(255) NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS NonBuilderMiners (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_uid INTEGER,
+            miner_coldkey VARCHAR(64),
+            miner_hotkey VARCHAR(64),
+            hotkey_mnemonic VARCHAR(255),
+            api_url VARCHAR(255),
+            port INTEGER,
+            league_commited VARCHAR(255),
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            user_id INT,
+            FOREIGN KEY (user_id) REFERENCES NonBuilderUsers(id),
+            UNIQUE KEY unique_miner (miner_uid, miner_hotkey)
+        )"""
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS NonBuilderUsers_test (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                hashed_password VARCHAR(255) NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS NonBuilderMiners_test (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            miner_uid INTEGER,
+            miner_coldkey VARCHAR(64),
+            miner_hotkey VARCHAR(64),
+            hotkey_mnemonic VARCHAR(255),
+            api_url VARCHAR(255),
+            port INTEGER,
+            league_commited VARCHAR(255),
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            user_id INT,
+            FOREIGN KEY (user_id) REFERENCES NonBuilderUsers_test(id),
+            UNIQUE KEY unique_miner (miner_uid, miner_hotkey)
         )"""
         )
         conn.commit()
