@@ -17,7 +17,10 @@ from common.constants import (
     NO_LEAGUE_COMMITMENT_PENALTY,
     COPYCAT_PENALTY_SCORE,
     COPYCAT_PUNISHMENT_START_DATE,
-    MAX_GFILTER_FOR_WRONG_PREDICTION
+    MAX_GFILTER_FOR_WRONG_PREDICTION,
+    LEAGUES_ALLOWING_DRAWS,
+    MIN_PROBABILITY,
+    MIN_PROB_FOR_DRAWS,
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -53,29 +56,28 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
-def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
+def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
     """
     Apply a Gaussian filter to the closing odds and prediction probability. 
     This filter is used to suppress the score when the prediction is far from the closing odds, simulating a more realistic prediction.
 
-    Plateau width is narrower at lower odds and wider at higher odds. Assumes no lay betting.
-
     :param pwmd: MatchPredictionWithMatchData
     :return: float, the calculated Gaussian filter
     """
-    closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
+    closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
 
     t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
     a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
-    b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
-    c = 1.0 # Minimum plateau width/boundary
+    b = 10.0 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
+    c = 0.25 # Minimum plateau width/boundary
 
     # Plateau width calculation
-    w = a * np.exp(-b * (closing_odds - 1)) + c
+    w = c - a * np.exp(-b * (closing_odds - 1))
     diff = abs(closing_odds - 1 / pwmd.prediction.probability)
 
-    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (t*2*closing_odds))
-
+    # Plateaud curve with with uniform decay
+    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t)
+    
     return exp_component
 
 def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
@@ -352,8 +354,6 @@ def calculate_incentives_and_update_scores(vali):
                 if match_odds is None or len(match_odds) == 0:
                     bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                     continue
-                
-                # Calculate our time delta expressed in minutes
 
                 # Ensure prediction.matchDate is offset-aware
                 if pwmd.prediction.matchDate.tzinfo is None:
@@ -394,14 +394,23 @@ def calculate_incentives_and_update_scores(vali):
                     bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter(pwmd)
+                gfilter = apply_gaussian_filter_v3(pwmd)
                 if log_prediction:
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
                 
                 # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                if ((pwmd.prediction.probability > 0.5 and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner()) \
-                    or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
-                    and round(gfilter, 4) > 0 and gfilter < 1:
+                if  (
+                        (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or 
+                        (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) or \
+                    (
+                        (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or
+                        (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) \
+                    and round(gfilter, 4) > 0 and gfilter < 1 \
+                    and sigma < 0:
                     
                     gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                     if log_prediction:
@@ -505,6 +514,15 @@ def calculate_incentives_and_update_scores(vali):
     # Log final scores
     bt.logging.info("\nFinal Weighted Scores:")
     bt.logging.info("\n" + tabulate(final_scores_table, headers=['UID', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
+
+    # Create top 25 scores table
+    top_scores_table = []
+    # Sort the final scores in descending order. We need to sort the uids as well so they match
+    top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
+    for i in range(25):
+        top_scores_table.append([top_uids[i], top_scores[i]])
+    bt.logging.info("\nTop 25 Miner Scores:")
+    bt.logging.info("\n" + tabulate(top_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in vali.scores if score > 0]
