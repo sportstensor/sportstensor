@@ -58,6 +58,10 @@ def make_match_prediction(prediction: MatchPrediction):
     from st.models.football_nfl import NFLFootballPredictionModel
     from st.models.basketball_nba import NBABasketballPredictionModel
 
+    from st.models.base import SportstensorBaseModel
+    base_classes = {
+        'base': SportstensorBaseModel
+    }
     sport_classes = {
         Sport.SOCCER: SoccerPredictionModel,
         Sport.FOOTBALL: FootballPredictionModel,
@@ -78,16 +82,22 @@ def make_match_prediction(prediction: MatchPrediction):
         bt.logging.error(f"Unknown league: {prediction.league}. Returning.")
         return prediction
 
+    base_class = base_classes.get('base')
     league_class = league_classes.get(league_enum)
     sport_class = sport_classes.get(prediction.sport)
 
+    # Check if we have a base prediction model first
+    if base_class:
+        bt.logging.info("Using base prediction model.")
+        base_prediction = base_class(prediction)
+        base_prediction.make_prediction()
     # Check if we have a league-specific prediction model first
-    if league_class:
+    elif league_class:
         bt.logging.info(
             f"Using league-specific prediction model: {league_class.__name__}"
         )
         league_prediction = league_class(prediction)
-        league_prediction.set_default_probability()
+        #league_prediction.set_default_probability()
         league_prediction.make_prediction()
     # If not, check if we have a sport-specific prediction model
     elif sport_class:
