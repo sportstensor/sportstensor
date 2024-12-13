@@ -12,7 +12,8 @@ from pydantic import (
     Field,
     PositiveInt,
     NonNegativeInt,
-    validator,
+    field_validator,
+    model_serializer,
 )
 
 
@@ -79,7 +80,7 @@ def get_league_from_string(league_string: str) -> League:
 class Match(StrictBaseModel):
     """Represents a match/game, sport agnostic."""
 
-    matchId: str = Field(description="Unique ID that represents a match.")
+    matchId: str = Field(info={"description": "Unique ID that represents a match."})
 
     # The datetime of the starting time of the match. Should be in UTC?
     matchDate: dt.datetime
@@ -101,20 +102,18 @@ class Match(StrictBaseModel):
     drawOdds: Optional[float]
 
     # Validators to ensure immutability
-    @validator(
+    @field_validator(
         "matchId",
         "matchDate",
         "sport",
         "league",
         "homeTeamName",
         "awayTeamName",
-        pre=True,
-        always=True,
-        check_fields=False,
+        mode="before",
     )
-    def match_fields_are_immutable(cls, v, values, field):
-        if field.name in values and v != values[field.name]:
-            raise ValueError(f"{field.name} is immutable and cannot be changed")
+    def match_fields_are_immutable(cls, v, info):
+        if info.data.get(info.field_name) is not None and v != info.data[info.field_name]:
+            raise ValueError(f"{info.field_name} is immutable and cannot be changed")
         return v
 
 
@@ -122,16 +121,22 @@ class Prediction(StrictBaseModel):
     """Represents a base prediction, sport agnostic."""
 
     predictionId: Optional[PositiveInt] = Field(
+        default=None,
         description="Unique ID that represents a predication."
     )
 
     minerId: Optional[NonNegativeInt] = Field(
+        default=None,
         description="Unique ID that represents a miner."
     )
 
-    hotkey: Optional[str] = Field(description="A unique identifier for the miner.")
+    hotkey: Optional[str] = Field(
+        default=None, 
+        description="A unique identifier for the miner."
+    )
 
     predictionDate: Optional[dt.datetime] = Field(
+        default=None,
         description="The datetime the prediction was made. Should be UTC"
     )
 
@@ -147,22 +152,20 @@ class Prediction(StrictBaseModel):
 
     # Set variable to keep track if the prediction has been scored. Default to False.
     isScored: bool = False
-    scoredDate: Optional[dt.datetime]
+    scoredDate: Optional[dt.datetime] = Field(default=None)
 
     # Validators to ensure immutability
-    @validator(
+    @field_validator(
         "predictionId",
         "matchId",
         "matchDate",
         "sport",
         "league",
-        pre=True,
-        always=True,
-        check_fields=False,
+        mode="before",
     )
-    def base_fields_are_immutable(cls, v, values, field):
-        if field.name in values and v != values[field.name]:
-            raise ValueError(f"{field.name} is immutable and cannot be changed")
+    def match_fields_are_immutable(cls, v, info):
+        if info.data.get(info.field_name) is not None and v != info.data[info.field_name]:
+            raise ValueError(f"{info.field_name} is immutable and cannot be changed")
         return v
 
     def __str__(self):
@@ -204,13 +207,13 @@ class MatchPrediction(Prediction):
 
     homeTeamName: str
     awayTeamName: str
-    homeTeamScore: Optional[int]
-    awayTeamScore: Optional[int]
+    homeTeamScore: Optional[int] = Field(default=None)
+    awayTeamScore: Optional[int] = Field(default=None)
 
-    probabilityChoice: Optional[ProbabilityChoice]
-    probability: Optional[float]
+    probabilityChoice: Optional[ProbabilityChoice] = Field(default=None)
+    probability: Optional[float] = Field(default=None)
     
-    closingEdge: Optional[float]
+    closingEdge: Optional[float] = Field(default=None)
 
     def get_predicted_team(self) -> str:
         """Get the predicted team or Draw based on the probability choice."""
@@ -222,14 +225,26 @@ class MatchPrediction(Prediction):
             return "Draw"
         else:
             return "Unknown"
+        
+    @model_serializer(mode="wrap")
+    def serialize_dates(self, handler):
+        data = handler(self)
+        # Convert datetime objects to ISO strings for serialization
+        if isinstance(data['matchDate'], dt.datetime):
+            data['matchDate'] = data['matchDate'].isoformat()
+        if isinstance(data['predictionDate'], dt.datetime):
+            data['predictionDate'] = data['predictionDate'].isoformat()
+        if isinstance(data['scoredDate'], dt.datetime):
+            data['scoredDate'] = data['scoredDate'].isoformat()
+        return data
 
     # Validators to ensure immutability
-    @validator(
-        "homeTeamName", "awayTeamName", pre=True, always=True, check_fields=False
+    @field_validator(
+        "homeTeamName", "awayTeamName", mode="before"
     )
-    def match_fields_are_immutable(cls, v, values, field):
-        if field.name in values and v != values[field.name]:
-            raise ValueError(f"{field.name} is immutable and cannot be changed")
+    def match_fields_are_immutable(cls, v, info):
+        if info.data.get(info.field_name) is not None and v != info.data[info.field_name]:
+            raise ValueError(f"{info.field_name} is immutable and cannot be changed")
         return v
 
     def __str__(self):

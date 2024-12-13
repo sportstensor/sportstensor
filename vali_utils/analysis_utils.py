@@ -1,7 +1,7 @@
 import math
 from collections import defaultdict
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from common.data import MatchPredictionWithMatchData
 from common.constants import COPYCAT_VARIANCE_THRESHOLD, EXACT_MATCH_PREDICTIONS_THRESHOLD, SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD
@@ -50,6 +50,22 @@ class StatisticalAnalyzer:
                     # Only compare predictions with same choice
                     if pred1.probabilityChoice != pred2.probabilityChoice:
                         continue
+
+                    # Ensure pred1.predictionDate is offset-aware
+                    if pred1.predictionDate.tzinfo is None:
+                        pred1_predictionDate = pred1.predictionDate.replace(tzinfo=timezone.utc)
+                    else:
+                        pred1_predictionDate = pred1.predictionDate
+
+                    # Ensure pred2.predictionDate is offset-aware
+                    if pred2.predictionDate.tzinfo is None:
+                        pred2_predictionDate = pred2.predictionDate.replace(tzinfo=timezone.utc)
+                    else:
+                        pred2_predictionDate = pred2.predictionDate
+
+                    # Only compare if predictions are within 1 hour of each other
+                    if abs((pred1_predictionDate - pred2_predictionDate).total_seconds()) > 3600:
+                        continue
                     
                     absolute_difference = round(abs(pred1.probability - pred2.probability), 4)
                     difference = round(math.exp(-(pred1.probability*100 - pred2.probability*100) ** 2), 2)
@@ -65,7 +81,9 @@ class StatisticalAnalyzer:
                         'absolute_difference': absolute_difference,
                         'choice': pred1.probabilityChoice,
                         'prob1': pred1.probability,
-                        'prob2': pred2.probability
+                        'prob2': pred2.probability,
+                        'pred1_date': pred1_predictionDate.strftime('%Y-%m-%d %H:%M:%S'),
+                        'pred2_date': pred2_predictionDate.strftime('%Y-%m-%d %H:%M:%S')
                     })
 
         # Analyze the relationships
@@ -109,7 +127,7 @@ class StatisticalAnalyzer:
                     continue
                 
                 # Calculate predictions per match for additional context
-                predictions_per_match = len(history) / len(suspicious_matches)
+                predictions_per_match = round(len(history) / len(suspicious_matches), 2)
 
                 # Calculate the number of matches with exact predictions
                 num_matches_with_exact = len(set(h['match_id'] for h in history if h['absolute_difference'] == 0))
@@ -151,7 +169,9 @@ class StatisticalAnalyzer:
             # Create a mapping of match_id to prediction details
             match_predictions = defaultdict(list)
             for pred in relationship['history']:
-                match_predictions[pred['match_id']].append(pred)
+                # Skip if we've already analyzed this match
+                if pred['match_id'] not in match_predictions:
+                    match_predictions[pred['match_id']].append(pred)
             
             current_streak = 0
             max_streak = 0

@@ -1,7 +1,6 @@
 import math
 import numpy as np
 from scipy.stats import pareto
-import torch
 import datetime as dt
 from datetime import datetime, timezone
 import pytz
@@ -15,11 +14,14 @@ from vali_utils.copycat_controller import CopycatDetectionController
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
-    ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     NO_LEAGUE_COMMITMENT_PENALTY,
     NO_LEAGUE_COMMITMENT_GRACE_PERIOD,
     COPYCAT_PENALTY_SCORE,
-    COPYCAT_PUNISHMENT_START_DATE
+    COPYCAT_PUNISHMENT_START_DATE,
+    MAX_GFILTER_FOR_WRONG_PREDICTION,
+    LEAGUES_ALLOWING_DRAWS,
+    MIN_PROBABILITY,
+    MIN_PROB_FOR_DRAWS,
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -63,20 +65,25 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     :param pwmd: MatchPredictionWithMatchData
     :return: float, the calculated Gaussian filter
     """
-    closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
+    closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
 
-    t = 1.0 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
-    a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
+    t = 0.4 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    t2 = 0.15 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
+    a = 0.25 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
-    c = 3 # Minimum plateau width/boundary
+    c = 0.25 # Minimum plateau width/boundary
 
-    w = a * np.exp(-b * (closing_odds - 1)) + c
-    diff = abs(closing_odds - 1/pwmd.prediction.probability)
+    # Plateau width calculation
+    w = c - a * np.exp(-b * (closing_odds - 1))
+    diff = abs(closing_odds - 1 / pwmd.prediction.probability)
 
-    # note that sigma^2 = odds now
-    # plateaued curve. 
-    exp_component = 1.0 if diff <= w else np.exp(-np.power(diff, 2) / (t*2*closing_odds))
+    # If wp is less than implied wp, or wp odds is greater than implied odds, then use t2
+    if closing_odds < 1 / pwmd.prediction.probability:
+        t = t2
 
+    # Plateaud curve with with uniform decay
+    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t * (closing_odds-1))
+    
     return exp_component
 
 def calculate_incentive_score(delta_t: int, clv: float, gamma: float, kappa: float, beta: float) -> float:
@@ -178,8 +185,6 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
             bt.logging.debug(f"      • Time Difference: {time_diff_readable}")
             bt.logging.debug(f"      • Prediction Time Odds: {closest_odds}")
             bt.logging.debug(f"      • Probability Choice: {probability_choice}")
-    else:
-        bt.logging.debug(f"No suitable odds found before or at the prediction time: {prediction_time}")
 
     return closest_odds
 
@@ -312,7 +317,7 @@ def calculate_incentives_and_update_scores(vali):
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
-        bt.logging.info(f"Processing league: {league.name}")
+        bt.logging.info(f"Processing league: {league.name} (Rolling Pred Threshold: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
         league_table_data = []
         predictions_for_copycat_analysis = []
 
@@ -334,7 +339,7 @@ def calculate_incentives_and_update_scores(vali):
                 miner_uid=uid,
                 league=league,
                 scored=True,
-                batchSize=(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
+                batchSize=(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
             )
 
             if not predictions_with_match_data:
@@ -346,25 +351,25 @@ def calculate_incentives_and_update_scores(vali):
             # Calculate rho
             rho = compute_significance_score(
                 num_miner_predictions=len(predictions_with_match_data),
-                num_threshold_predictions=ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league],
-                alpha=vali.SENSITIVITY_ALPHA
+                num_threshold_predictions=vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league],
+                alpha=vali.LEAGUE_SENSITIVITY_ALPHAS[league]
             )
-
-            bt.logging.debug(f"Scoring predictions for miner {uid} in league {league.name}:")
-            bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
-            bt.logging.debug(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
-            bt.logging.debug(f"  • Rho: {rho:.4f}")
+            
             total_score = 0
             for pwmd in predictions_with_match_data:
                 log_prediction = random.random() < 0.005
+                if log_prediction:
+                    bt.logging.debug(f"Randomly logged prediction for miner {uid} in league {league.name}:")
+                    bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
+                    bt.logging.debug(f"  • League rolling threshold count: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
+                    bt.logging.debug(f"  • League rho sensitivity alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}")
+                    bt.logging.debug(f"  • Rho: {rho:.4f}")
 
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
                 if match_odds is None or len(match_odds) == 0:
                     bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                     continue
-                
-                # Calculate our time delta expressed in minutes
 
                 # Ensure prediction.matchDate is offset-aware
                 if pwmd.prediction.matchDate.tzinfo is None:
@@ -408,6 +413,24 @@ def calculate_incentives_and_update_scores(vali):
                 gfilter = apply_gaussian_filter(pwmd)
                 if log_prediction:
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
+                
+                # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
+                if  (
+                        (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or 
+                        (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) or \
+                    (
+                        (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or
+                        (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) \
+                    and round(gfilter, 4) > 0 and gfilter < 1 \
+                    and sigma < 0:
+                    
+                    gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
+                    if log_prediction:
+                        bt.logging.debug(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
                 # Apply sigma and G (gaussian filter) to v
                 total_score += v * sigma * gfilter
@@ -419,15 +442,16 @@ def calculate_incentives_and_update_scores(vali):
             final_score = rho * total_score
             league_scores[league][index] = final_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
-            bt.logging.debug(f"  • Final score: {final_score:.4f}")
-            bt.logging.debug("-" * 50)
+            if log_prediction:
+                bt.logging.debug(f"  • Final score: {final_score:.4f}")
+                bt.logging.debug("-" * 50)
 
-            league_table_data.append([uid, final_score, len(predictions_with_match_data)])
+            league_table_data.append([uid, final_score, len(predictions_with_match_data), rho])
 
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Rho'], tablefmt='grid'))
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
@@ -493,8 +517,8 @@ def calculate_incentives_and_update_scores(vali):
     
     # Update our main self.scores, which scatters the scores
     update_miner_scores(
-        vali, 
-        torch.FloatTensor(final_scores).to(vali.device),
+        vali,
+        np.array(final_scores),
         all_uids
     )
 
@@ -514,6 +538,15 @@ def calculate_incentives_and_update_scores(vali):
     bt.logging.info("\nFinal Weighted Scores:")
     bt.logging.info("\n" + tabulate(final_scores_table, headers=['UID', 'League', 'Last Commitment', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
 
+    # Create top 25 scores table
+    top_scores_table = []
+    # Sort the final scores in descending order. We need to sort the uids as well so they match
+    top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
+    for i in range(25):
+        top_scores_table.append([top_uids[i], top_scores[i]])
+    bt.logging.info("\nTop 25 Miner Scores:")
+    bt.logging.info("\n" + tabulate(top_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
+
     # Log summary statistics
     non_zero_scores = [score for score in vali.scores if score > 0]
     if non_zero_scores:
@@ -527,25 +560,43 @@ def calculate_incentives_and_update_scores(vali):
 
     return league_scores, league_pred_counts, all_scores
 
-def update_miner_scores(vali, rewards: torch.FloatTensor, uids: List[int]):
+def update_miner_scores(vali, rewards: np.ndarray, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""
 
     # Check if rewards contains NaN values.
-    if torch.isnan(rewards).any():
+    if np.isnan(rewards).any():
         bt.logging.warning(f"NaN values detected in rewards: {rewards}")
         # Replace any NaN values in rewards with 0.
-        rewards = torch.nan_to_num(rewards, 0)
+        rewards = np.nan_to_num(rewards, nan=0)
 
-    # Check if `uids` is already a tensor and clone it to avoid the warning.
-    if isinstance(uids, torch.Tensor):
-        uids_tensor = uids.clone().detach()
+    # Ensure rewards is a numpy array.
+    rewards = np.asarray(rewards)
+
+    # Check if `uids` is already a numpy array and copy it to avoid the warning.
+    if isinstance(uids, np.ndarray):
+        uids_array = uids.copy()
     else:
-        uids_tensor = torch.tensor(uids).to(vali.device)
+        uids_array = np.array(uids)
+
+    # Handle edge case: If either rewards or uids_array is empty.
+    if rewards.size == 0 or uids_array.size == 0:
+        bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array}")
+        bt.logging.warning(
+            "Either rewards or uids_array is empty. No updates will be performed."
+        )
+        return
+
+    # Check if sizes of rewards and uids_array match.
+    if rewards.size != uids_array.size:
+        raise ValueError(
+            f"Shape mismatch: rewards array of shape {rewards.shape} "
+            f"cannot be broadcast to uids array of shape {uids_array.shape}"
+        )
 
     # Compute forward pass rewards, assumes uids are mutually exclusive.
     # shape: [ metagraph.n ]
-    vali.scores: torch.FloatTensor = vali.scores.scatter(
-        0, uids_tensor, rewards
-    ).to(vali.device)
+    scattered_rewards: np.ndarray = np.zeros_like(vali.scores)
+    scattered_rewards[uids_array] = rewards
+    vali.scores = scattered_rewards
     bt.logging.debug(f"Scattered rewards. self.scores: {vali.scores}")
-    bt.logging.debug(f"UIDs: {uids_tensor}")
+    bt.logging.debug(f"UIDs: {uids_array}")

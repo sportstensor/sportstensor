@@ -78,9 +78,17 @@ GET_MATCH_QUERY = """
         LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
     ) mlo
     LEFT JOIN match_odds mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.lastUpdated = (
-        SELECT MAX(lastUpdated)
+        SELECT lastUpdated
         FROM match_odds AS mo_inner
         WHERE mo_inner.oddsapiMatchId = mlo.oddsapiMatchId AND mo_inner.lastUpdated < (mlo.matchDate + INTERVAL 5 MINUTE)
+        ORDER BY lastUpdated DESC
+        LIMIT 1
+    ) AND mo.id = (
+        SELECT id
+        FROM match_odds AS mo_inner
+        WHERE mo_inner.oddsapiMatchId = mlo.oddsapiMatchId AND mo_inner.lastUpdated < (mlo.matchDate + INTERVAL 5 MINUTE)
+        ORDER BY lastUpdated DESC
+        LIMIT 1
     )
 """
 
@@ -214,7 +222,7 @@ def get_stored_odds(lastUpdated = None):
                     WHERE (oddsapiMatchId, lastUpdated) IN (
                         SELECT oddsapiMatchId, MAX(lastUpdated)
                         FROM match_odds
-                        WHERE lastUpdated < %s
+                        WHERE lastUpdated <= %s
                         GROUP BY oddsapiMatchId 
                     )
                 ) mo
@@ -735,7 +743,7 @@ def upload_prediction_edge_results(prediction_results):
         conn.close()
 
 
-def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, cutoff=None):
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -754,6 +762,11 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, cutoff=None):
         if miner_hotkey:
             query += " AND miner_hotkey = %s"
             params.append(miner_hotkey)
+        
+        if miner_id:
+            query += " AND miner_uid = %s"
+            params.append(miner_id)
+
         query += """
             ORDER BY lastUpdated DESC;
         """
@@ -990,7 +1003,7 @@ def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, 
                     FROM {prediction_edges_table_name}
                     GROUP BY miner_hotkey, vali_hotkey
                 )
-            ) sorted_mpe ON mps.miner_hotkey = sorted_mpe.miner_hotkey AND mps.vali_hotkey = sorted_mpe.vali_hotkey
+            ) sorted_mpe ON mps.miner_hotkey = sorted_mpe.miner_hotkey AND mps.miner_id = sorted_mpe.miner_uid AND mps.vali_hotkey = sorted_mpe.vali_hotkey
             LEFT JOIN matches ON matches.matchId = mps.matchId
             LEFT JOIN matches_lookup ml ON (ml.matchId = mps.matchId)
             LEFT JOIN (

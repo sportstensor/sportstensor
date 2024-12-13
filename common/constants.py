@@ -48,20 +48,24 @@ SCORING_INTERVAL_IN_MINUTES = 1
 MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
+# min probability for a prediction to be considered valid. 0.5 removes lay predictions
+MIN_PROBABILITY = 0.5
+MIN_PROB_FOR_DRAWS = 0.3340
+
 NO_LEAGUE_COMMITMENT_PENALTY = -0.25
 NO_PREDICTION_RESPONSE_PENALTY = -1.0
 NO_LEAGUE_COMMITMENT_GRACE_PERIOD = 60 * 60 * 24 # 24 hours
+MAX_GFILTER_FOR_WRONG_PREDICTION = 0.3
 
 # Copycat punishment constants
 COPYCAT_PUNISHMENT_START_DATE = datetime.datetime(2024, 9, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 COPYCAT_PENALTY_SCORE = 0
-COPYCAT_VARIANCE_THRESHOLD = 0.80
+COPYCAT_VARIANCE_THRESHOLD = 0.70
 EXACT_MATCH_PREDICTIONS_THRESHOLD = 15
 SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD = 10
 
 ACTIVE_LEAGUES = [
     League.EPL,
-    League.MLS,
     League.NFL,
     League.NBA
 ]
@@ -73,9 +77,9 @@ LEAGUES_ALLOWING_DRAWS = [
 
 ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
     League.MLB: 250,
-    League.NBA: 250,
-    League.EPL: 40,
-    League.MLS: 48,
+    League.NBA: 180,
+    League.EPL: 60,
+    League.MLS: 60,
     League.NFL: 64
 }
 
@@ -83,12 +87,21 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 LEAGUE_SCORING_PERCENTAGES = {
     League.MLB: 0.0,
     League.NBA: 0.35,
-    League.EPL: 0.20,
-    League.MLS: 0.10,
+    League.EPL: 0.30,
+    League.MLS: 0.0,
     League.NFL: 0.35
 }
 
-# ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the more predictions needed.
+# ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the less predictions needed.
+LEAGUE_SENSITIVITY_ALPHAS = {
+    League.MLB: 0.025,
+    League.NBA: 0.03,
+    League.EPL: 0.1,
+    League.MLS: 0.1,
+    League.NFL: 0.1
+}
+
+# Single sensitivity alpha depcrecated for league-specific sensitivity alphas
 SENSITIVITY_ALPHA = 0.025
 # GAMMA controls the time decay of CLV. Higher the GAMMA, the faster the decay.
 GAMMA = 0.00125

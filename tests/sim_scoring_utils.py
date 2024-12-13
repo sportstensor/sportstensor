@@ -13,6 +13,7 @@ from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     COPYCAT_PUNISHMENT_START_DATE,
+    MAX_GFILTER_FOR_WRONG_PREDICTION,
     SENSITIVITY_ALPHA,
     GAMMA,
     TRANSITION_KAPPA,
@@ -29,7 +30,7 @@ from vali_utils.scoring_utils import (
     compute_significance_score,
     calculate_clv,
     calculate_incentive_score,
-    apply_gaussian_filter,
+    apply_gaussian_filter_v3,
     apply_pareto,
     update_miner_scores,
     check_and_apply_league_commitment_penalties,
@@ -74,7 +75,10 @@ def calculate_incentives_and_update_scores():
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
 
-    for league in ACTIVE_LEAGUES:
+    leagues_to_analyze = ACTIVE_LEAGUES
+    #leagues_to_analyze = [League.NBA]
+
+    for league in leagues_to_analyze:
         print(f"Processing league: {league.name}")
         league_table_data = []
         predictions_for_copycat_analysis = []
@@ -170,10 +174,18 @@ def calculate_incentives_and_update_scores():
                     print(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter(pwmd)
-                #gfilter = apply_gaussian_filter_v2(pwmd)
+                gfilter = apply_gaussian_filter_v3(pwmd)
                 if log_prediction:
                     print(f"      • Gaussian filter: {gfilter:.4f}")
+                
+                # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
+                if ((pwmd.prediction.probability > 0.5 and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner()) \
+                    or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
+                    and round(gfilter, 4) > 0 and gfilter < 1:
+                    
+                    gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
+                    if log_prediction:
+                        print(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
                 # Apply sigma and G (gaussian filter) to v
                 total_score += v * sigma * gfilter
@@ -188,12 +200,13 @@ def calculate_incentives_and_update_scores():
             print(f"  • Final score: {final_score:.4f}")
             print("-" * 50)
 
-            league_table_data.append([uid, final_score, len(predictions_with_match_data)])
+            total_lay_preds = len([p for p in predictions_with_match_data if p.prediction.probability < 0.5])
+            league_table_data.append([uid, final_score, len(predictions_with_match_data), total_lay_preds])
 
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions'], tablefmt='grid'))
+            print("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', '# Lay Predictions'], tablefmt='grid'))
         else:
             print(f"No non-zero scores for {league.name}")
 
@@ -236,6 +249,19 @@ def calculate_incentives_and_update_scores():
 
     # Log final copycat results
     print(f"********************* Copycat Controller Findings  *********************")
+    # Get a unique list of coldkeys from metagraph
+    coldkeys = list(set(metagraph.coldkeys))
+    for coldkey in coldkeys:
+        uids_for_coldkey = []
+        for miner_uid in final_suspicious_miners:
+            if metagraph.coldkeys[miner_uid] == coldkey:
+                if miner_uid in final_copycat_penalties:
+                    miner_uid = f"{miner_uid} 💀"
+                uids_for_coldkey.append(str(miner_uid))
+        if len(uids_for_coldkey) > 0:
+            print(f"\nColdkey: {coldkey}")
+            print(f"Suspicious Miners: {', '.join(str(m) for m in sorted(uids_for_coldkey))}")
+
     print(f"Total suspicious miners across all leagues: {len(final_suspicious_miners)}")
     if len(final_suspicious_miners) > 0:
         print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")
