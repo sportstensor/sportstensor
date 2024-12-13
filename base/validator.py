@@ -86,6 +86,9 @@ class BaseValidatorNeuron(BaseNeuron):
         self.last_update_check = dt.datetime.now()
         self.update_check_interval = 1800  # 30 minutes
 
+        # Add a lock for bittensor websocket operations
+        self.websocket_lock = threading.RLock()
+
     def serve_axon(self):
         """Serve axon to enable external connections."""
 
@@ -163,7 +166,8 @@ class BaseValidatorNeuron(BaseNeuron):
         """
 
         # Check that validator is registered on the network.
-        self.sync()
+        with self.websocket_lock:
+            self.sync()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
 
@@ -171,7 +175,6 @@ class BaseValidatorNeuron(BaseNeuron):
         try:
             while True:
                 start_time = time.time()
-                bt.logging.info(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
                 self.loop.run_until_complete(self.concurrent_forward())
@@ -185,7 +188,9 @@ class BaseValidatorNeuron(BaseNeuron):
                     raise KeyboardInterrupt
 
                 # Sync metagraph and potentially set weights.
-                self.sync()
+                with self.websocket_lock:
+                    bt.logging.info(f"step({self.step}) block({self.block})")
+                    self.sync()
 
                 self.step += 1
 
@@ -332,19 +337,20 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.debug("uint_uids", uint_uids)
 
         # Set the weights on chain via our subtensor connection.
-        result, msg = self.subtensor.set_weights(
-            wallet=self.wallet,
-            netuid=self.config.netuid,
-            uids=uint_uids,
-            weights=uint_weights,
-            wait_for_finalization=False,
-            wait_for_inclusion=False,
-            version_key=self.spec_version,
-        )
-        if result is True:
-            bt.logging.info("set_weights on chain successfully!")
-        else:
-            bt.logging.error("set_weights failed", msg)
+        with self.websocket_lock:
+            result, msg = self.subtensor.set_weights(
+                wallet=self.wallet,
+                netuid=self.config.netuid,
+                uids=uint_uids,
+                weights=uint_weights,
+                wait_for_finalization=False,
+                wait_for_inclusion=False,
+                version_key=self.spec_version,
+            )
+            if result is True:
+                bt.logging.info("set_weights on chain successfully!")
+            else:
+                bt.logging.error("set_weights failed", msg)
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
@@ -354,7 +360,8 @@ class BaseValidatorNeuron(BaseNeuron):
         previous_metagraph = copy.deepcopy(self.metagraph)
 
         # Sync the metagraph.
-        self.metagraph.sync(subtensor=self.subtensor)
+        with self.websocket_lock:
+            self.metagraph.sync(subtensor=self.subtensor)
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
