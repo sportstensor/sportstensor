@@ -14,11 +14,13 @@ from vali_utils.copycat_controller import CopycatDetectionController
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
-    ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     NO_LEAGUE_COMMITMENT_PENALTY,
     COPYCAT_PENALTY_SCORE,
     COPYCAT_PUNISHMENT_START_DATE,
-    MAX_GFILTER_FOR_WRONG_PREDICTION
+    MAX_GFILTER_FOR_WRONG_PREDICTION,
+    LEAGUES_ALLOWING_DRAWS,
+    MIN_PROBABILITY,
+    MIN_PROB_FOR_DRAWS,
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -54,7 +56,7 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     denominator = 1 + math.exp(exponent)
     return 1 / denominator
 
-def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
+def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
     Apply a Gaussian filter to the closing odds and prediction probability. 
     This filter is used to suppress the score when the prediction is far from the closing odds, simulating a more realistic prediction.
@@ -62,19 +64,24 @@ def apply_gaussian_filter_v3(pwmd: MatchPredictionWithMatchData) -> float:
     :param pwmd: MatchPredictionWithMatchData
     :return: float, the calculated Gaussian filter
     """
-    closing_odds = pwmd.get_actual_winner_odds() if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner() else pwmd.get_actual_loser_odds()
+    closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
 
-    t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
-    a = -2 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
+    t = 0.4 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    t2 = 0.15 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
+    a = 0.25 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
-    c = 1 # Minimum plateau width/boundary
+    c = 0.25 # Minimum plateau width/boundary
 
     # Plateau width calculation
     w = c - a * np.exp(-b * (closing_odds - 1))
     diff = abs(closing_odds - 1 / pwmd.prediction.probability)
 
+    # If wp is less than implied wp, or wp odds is greater than implied odds, then use t2
+    if closing_odds < 1 / pwmd.prediction.probability:
+        t = t2
+
     # Plateaud curve with with uniform decay
-    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t)
+    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t * (closing_odds-1))
     
     return exp_component
 
@@ -177,8 +184,6 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
             bt.logging.debug(f"      • Time Difference: {time_diff_readable}")
             bt.logging.debug(f"      • Prediction Time Odds: {closest_odds}")
             bt.logging.debug(f"      • Probability Choice: {probability_choice}")
-    else:
-        bt.logging.debug(f"No suitable odds found before or at the prediction time: {prediction_time}")
 
     return closest_odds
 
@@ -311,7 +316,7 @@ def calculate_incentives_and_update_scores(vali):
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
-        bt.logging.info(f"Processing league: {league.name}")
+        bt.logging.info(f"Processing league: {league.name} (Rolling Pred Threshold: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
         league_table_data = []
         predictions_for_copycat_analysis = []
 
@@ -323,7 +328,7 @@ def calculate_incentives_and_update_scores(vali):
                 miner_uid=uid,
                 league=league,
                 scored=True,
-                batchSize=(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
+                batchSize=(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
             )
 
             if not predictions_with_match_data:
@@ -335,25 +340,25 @@ def calculate_incentives_and_update_scores(vali):
             # Calculate rho
             rho = compute_significance_score(
                 num_miner_predictions=len(predictions_with_match_data),
-                num_threshold_predictions=ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league],
-                alpha=vali.SENSITIVITY_ALPHA
+                num_threshold_predictions=vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league],
+                alpha=vali.LEAGUE_SENSITIVITY_ALPHAS[league]
             )
-
-            bt.logging.debug(f"Scoring predictions for miner {uid} in league {league.name}:")
-            bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
-            bt.logging.debug(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
-            bt.logging.debug(f"  • Rho: {rho:.4f}")
+            
             total_score = 0
             for pwmd in predictions_with_match_data:
                 log_prediction = random.random() < 0.005
+                if log_prediction:
+                    bt.logging.debug(f"Randomly logged prediction for miner {uid} in league {league.name}:")
+                    bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
+                    bt.logging.debug(f"  • League rolling threshold count: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
+                    bt.logging.debug(f"  • League rho sensitivity alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}")
+                    bt.logging.debug(f"  • Rho: {rho:.4f}")
 
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
                 if match_odds is None or len(match_odds) == 0:
                     bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                     continue
-                
-                # Calculate our time delta expressed in minutes
 
                 # Ensure prediction.matchDate is offset-aware
                 if pwmd.prediction.matchDate.tzinfo is None:
@@ -394,14 +399,23 @@ def calculate_incentives_and_update_scores(vali):
                     bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter_v3(pwmd)
+                gfilter = apply_gaussian_filter(pwmd)
                 if log_prediction:
                     bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
                 
                 # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                if ((pwmd.prediction.probability > 0.5 and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner()) \
-                    or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
-                    and round(gfilter, 4) > 0 and gfilter < 1:
+                if  (
+                        (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or 
+                        (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) or \
+                    (
+                        (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or
+                        (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) \
+                    and round(gfilter, 4) > 0 and gfilter < 1 \
+                    and sigma < 0:
                     
                     gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                     if log_prediction:
@@ -417,15 +431,16 @@ def calculate_incentives_and_update_scores(vali):
             final_score = rho * total_score
             league_scores[league][index] = final_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
-            bt.logging.debug(f"  • Final score: {final_score:.4f}")
-            bt.logging.debug("-" * 50)
+            if log_prediction:
+                bt.logging.debug(f"  • Final score: {final_score:.4f}")
+                bt.logging.debug("-" * 50)
 
-            league_table_data.append([uid, final_score, len(predictions_with_match_data)])
+            league_table_data.append([uid, final_score, len(predictions_with_match_data), rho])
 
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Rho'], tablefmt='grid'))
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
@@ -504,6 +519,15 @@ def calculate_incentives_and_update_scores(vali):
     # Log final scores
     bt.logging.info("\nFinal Weighted Scores:")
     bt.logging.info("\n" + tabulate(final_scores_table, headers=['UID', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
+
+    # Create top 25 scores table
+    top_scores_table = []
+    # Sort the final scores in descending order. We need to sort the uids as well so they match
+    top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
+    for i in range(25):
+        top_scores_table.append([top_uids[i], top_scores[i]])
+    bt.logging.info("\nTop 25 Miner Scores:")
+    bt.logging.info("\n" + tabulate(top_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in vali.scores if score > 0]
