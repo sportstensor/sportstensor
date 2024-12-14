@@ -1,3 +1,7 @@
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+
 import datetime as dt
 from datetime import timezone
 import random
@@ -12,8 +16,12 @@ from common.constants import (
     ACTIVE_LEAGUES,
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
+    LEAGUE_SENSITIVITY_ALPHAS,
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
+    MIN_PROBABILITY,
+    MIN_PROB_FOR_DRAWS,
+    LEAGUES_ALLOWING_DRAWS,
     SENSITIVITY_ALPHA,
     GAMMA,
     TRANSITION_KAPPA,
@@ -27,14 +35,12 @@ from common.constants import (
 from vali_utils.copycat_controller import CopycatDetectionController
 
 from vali_utils.scoring_utils import (
+    calculate_edge,
     compute_significance_score,
     calculate_clv,
     calculate_incentive_score,
-    apply_gaussian_filter_v3,
+    apply_gaussian_filter,
     apply_pareto,
-    update_miner_scores,
-    check_and_apply_league_commitment_penalties,
-    apply_no_prediction_response_penalties,
 )
 
 
@@ -74,12 +80,15 @@ def calculate_incentives_and_update_scores():
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    # Use this to get payouts to calculate ROI
+    league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
 
     leagues_to_analyze = ACTIVE_LEAGUES
     #leagues_to_analyze = [League.NBA]
 
     for league in leagues_to_analyze:
-        print(f"Processing league: {league.name}")
+        print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
         league_table_data = []
         predictions_for_copycat_analysis = []
 
@@ -115,25 +124,35 @@ def calculate_incentives_and_update_scores():
             rho = compute_significance_score(
                 num_miner_predictions=len(predictions_with_match_data),
                 num_threshold_predictions=ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league],
-                alpha=SENSITIVITY_ALPHA
+                alpha=LEAGUE_SENSITIVITY_ALPHAS[league]
             )
 
-            print(f"Scoring predictions for miner {uid} in league {league.name}:")
-            print(f"  • Number of predictions: {len(predictions_with_match_data)}")
-            print(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
-            print(f"  • Rho: {rho:.4f}")
             total_score = 0
+            total_wrong_pred_pos_edge_penalty_preds = 0
             for pwmd in predictions_with_match_data:
-                #log_prediction = random.random() < 0.1
+                log_prediction = random.random() < 0.1
                 log_prediction = False
+                #if pwmd.prediction.probability <= MIN_PROBABILITY:
+                    #log_prediction = True
+                if log_prediction:
+                    print(f"Randomly logged prediction for miner {uid} in league {league.name}:")
+                    print(f"  • Number of predictions: {len(predictions_with_match_data)}")
+                    print(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
+                    print(f"  • Rho: {rho:.4f}")
 
                 # Grab the match odds from local db
                 match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
                 if match_odds is None or len(match_odds) == 0:
                     print(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                     continue
-                
-                # Calculate our time delta expressed in minutes
+
+                # if predictionDate within 10 minutes of matchDate, calculate roi payout
+                if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10 and pwmd.prediction.predictionDate >= dt.datetime(2024, 12, 3, 0, 0, 0):
+                    league_roi_counts[league][index] += 1
+                    if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
+                        league_roi_payouts[league][index] += 100 * (pwmd.get_actual_winner_odds()-1)
+                    else:
+                        league_roi_payouts[league][index] -= 100
 
                 # Ensure prediction.matchDate is offset-aware
                 if pwmd.prediction.matchDate.tzinfo is None:
@@ -170,26 +189,47 @@ def calculate_incentives_and_update_scores():
 
                 # Get sigma, aka the closing edge
                 sigma = pwmd.prediction.closingEdge
+                #sigma, correct_winner_score = calculate_edge(
+                #    prediction_team=pwmd.prediction.get_predicted_team(),
+                #    prediction_prob=pwmd.prediction.probability,
+                #    actual_team=pwmd.get_actual_winner(),
+                #    closing_odds=pwmd.get_closing_odds_for_predicted_outcome(),
+                #)
                 if log_prediction:
                     print(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
-
+                
                 # Calculate the Gaussian filter
-                gfilter = apply_gaussian_filter_v3(pwmd)
+                gfilter = apply_gaussian_filter(pwmd)
                 if log_prediction:
                     print(f"      • Gaussian filter: {gfilter:.4f}")
                 
+                # Zero out all lay predictions, that is if the prediction probability is less than MIN_PROBABILITY
+                #if (pwmd.prediction.league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.probability <= MIN_PROB_FOR_DRAWS) or pwmd.prediction.probability <= MIN_PROBABILITY:
+                    #gfilter = 0
                 # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                if ((pwmd.prediction.probability > 0.5 and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner()) \
-                    or (pwmd.prediction.probability < 0.5 and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())) \
-                    and round(gfilter, 4) > 0 and gfilter < 1:
+                #elif pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner() and round(gfilter, 4) > 0 and gfilter < 1 and sigma < 0:
+                
+                # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
+                if  (
+                        (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or 
+                        (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) or \
+                    (
+                        (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
+                        or
+                        (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
+                    ) \
+                    and round(gfilter, 4) > 0 and gfilter < 1 \
+                    and sigma < 0:
                     
                     gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                     if log_prediction:
                         print(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
-
+            
                 # Apply sigma and G (gaussian filter) to v
                 total_score += v * sigma * gfilter
-                
+            
                 if log_prediction:
                     print(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                     print("-" * 50)
@@ -197,16 +237,23 @@ def calculate_incentives_and_update_scores():
             final_score = rho * total_score
             league_scores[league][index] = final_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
-            print(f"  • Final score: {final_score:.4f}")
-            print("-" * 50)
+            if log_prediction:
+                print(f"  • Final score: {final_score:.4f}")
+                print("-" * 50)
 
-            total_lay_preds = len([p for p in predictions_with_match_data if p.prediction.probability < 0.5])
-            league_table_data.append([uid, final_score, len(predictions_with_match_data), total_lay_preds])
+            total_lay_preds = len([
+                pwmd for pwmd in predictions_with_match_data if pwmd.get_closing_odds_for_predicted_outcome() < 1 / pwmd.prediction.probability
+                #if (pwmd.prediction.league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.probability <= MIN_PROB_FOR_DRAWS) or pwmd.prediction.probability <= MIN_PROBABILITY
+            ])
+            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * 100) if league_roi_counts[league][index] > 0 else 0.0
+            league_table_data.append([uid, round(final_score, 2), len(predictions_with_match_data), round(final_score/len(predictions_with_match_data), 4), round(rho, 2), str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), str(round(roi*100, 2)) + "%"])
+            #league_table_data.append([uid, final_score, len(predictions_with_match_data), rho, total_wrong_pred_pos_edge_penalty_preds])
 
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', '# Lay Predictions'], tablefmt='grid'))
+            print(tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Avg Pred Score', 'Rho', '# Lay Predictions', 'ROI'], tablefmt='grid'))
+            #print(tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Rho', '# Wrong Pred Pos Edge'], tablefmt='grid'))
         else:
             print(f"No non-zero scores for {league.name}")
 
@@ -217,7 +264,8 @@ def calculate_incentives_and_update_scores():
             pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
         ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
         ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
-        suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
+        #suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
+        suspicious_miners, penalties, exact_matches = [], [], []
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
@@ -290,7 +338,19 @@ def calculate_incentives_and_update_scores():
 
     # Log final scores
     print("\nFinal Weighted Scores:")
-    print("\n" + tabulate(final_scores_table, headers=['UID', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
+    print(tabulate(final_scores_table, headers=['UID', 'Pre-Pareto Score', 'Final Score'], tablefmt='grid'))
+
+    # Create top 50 scores table
+    top_scores_table = []
+    # Sort the final scores in descending order. We need to sort the uids as well so they match
+    top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
+    for i in range(50):
+        is_cabal = ""
+        if metagraph.coldkeys[top_uids[i]] in []:
+            is_cabal = "✔"
+        top_scores_table.append([top_uids[i], top_scores[i], is_cabal, metagraph.coldkeys[top_uids[i]][:8]])
+    print("\nTop 50 Miner Scores:")
+    print(tabulate(top_scores_table, headers=['UID', 'Final Score', 'Cabal?', 'Coldkey'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in final_scores if score > 0]
@@ -302,6 +362,49 @@ def calculate_incentives_and_update_scores():
         print(f"Lowest non-zero score: {min(non_zero_scores):.6f}")
     else:
         print("\nNo non-zero scores recorded.")
+
+    # Generate graph of Pre-Pareto vs Final Pareto Scores
+    graph_results(all_uids, all_scores, final_scores)
+
+
+def graph_results(all_uids, all_scores, final_scores):
+    """
+    Graphs the Pre-Pareto and Final Pareto scores with smaller, transparent dots and improved aesthetics.
+
+    :param all_uids: List of unique identifiers for the miners
+    :param all_scores: List of Pre-Pareto scores
+    :param final_scores: List of Final Pareto scores
+    """
+    # Sort the miners based on Pre-Pareto Scores
+    sorted_indices = np.argsort(all_scores)
+    sorted_pre_pareto_scores = np.array(all_scores)[sorted_indices]
+    sorted_final_pareto_scores = np.array(final_scores)[sorted_indices]
+
+    # X-axis for the miners (from 0 to number of miners)
+    x_axis = np.arange(len(all_uids))
+
+    # Create the output directory if it doesn't exist
+    output_dir = "tests/imgs"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Plot the graph with smaller, transparent dots
+    plt.figure(figsize=(12, 6))
+    #plt.scatter(x_axis, sorted_pre_pareto_scores, label="Pre-Pareto Score", color='blue', s=10, alpha=0.6)
+    plt.scatter(x_axis, sorted_final_pareto_scores, label="Final Pareto Score", color='orange', s=10, alpha=0.6)
+    plt.xlabel("Miners (sorted by Pre-Pareto Score)")
+    plt.ylabel("Scores")
+    plt.title("Final Scores")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+
+    # Save the graph as an image
+    output_path = os.path.join(output_dir, "pareto_scores.png")
+    plt.savefig(output_path)
+    plt.close()
+
+    return output_path
+
 
 if "__main__" == __name__:
     calculate_incentives_and_update_scores()
