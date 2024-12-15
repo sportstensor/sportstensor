@@ -292,52 +292,53 @@ class BaseValidatorNeuron(BaseNeuron):
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
 
-        # Check if self.scores contains any NaN values and log a warning if it does.
-        if np.isnan(self.scores).any():
-            bt.logging.warning(
-                f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
-            )
-
-        # Calculate the average reward for each uid across non-zero values.
-        # Replace any NaN values with 0.
-        # Compute the norm of the scores
-        norm = np.linalg.norm(self.scores, ord=1, axis=0, keepdims=True)
-
-        # Check if the norm is zero or contains NaN values
-        if np.any(norm == 0) or np.isnan(norm).any():
-            norm = np.ones_like(norm)  # Avoid division by zero or NaN
-
-        # Compute raw_weights safely
-        raw_weights = self.scores / norm
-
-        bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
-        # Process the raw weights to final_weights via subtensor limitations.
-        (
-            processed_weight_uids,
-            processed_weights,
-        ) = bt.utils.weight_utils.process_weights_for_netuid(
-            uids=self.metagraph.uids,
-            weights=raw_weights,
-            netuid=self.config.netuid,
-            subtensor=self.subtensor,
-            metagraph=self.metagraph,
-        )
-        bt.logging.debug("processed_weights", processed_weights)
-        bt.logging.debug("processed_weight_uids", processed_weight_uids)
-
-        # Convert to uint16 weights and uids.
-        (
-            uint_uids,
-            uint_weights,
-        ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
-            uids=processed_weight_uids, weights=processed_weights
-        )
-        bt.logging.debug("uint_weights", uint_weights)
-        bt.logging.debug("uint_uids", uint_uids)
-
-        # Set the weights on chain via our subtensor connection.
         with self.websocket_lock:
+
+            # Check if self.scores contains any NaN values and log a warning if it does.
+            if np.isnan(self.scores).any():
+                bt.logging.warning(
+                    f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
+                )
+
+            # Calculate the average reward for each uid across non-zero values.
+            # Replace any NaN values with 0.
+            # Compute the norm of the scores
+            norm = np.linalg.norm(self.scores, ord=1, axis=0, keepdims=True)
+
+            # Check if the norm is zero or contains NaN values
+            if np.any(norm == 0) or np.isnan(norm).any():
+                norm = np.ones_like(norm)  # Avoid division by zero or NaN
+
+            # Compute raw_weights safely
+            raw_weights = self.scores / norm
+
+            bt.logging.debug("raw_weights", raw_weights)
+            bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
+            # Process the raw weights to final_weights via subtensor limitations.
+            (
+                processed_weight_uids,
+                processed_weights,
+            ) = bt.utils.weight_utils.process_weights_for_netuid(
+                uids=self.metagraph.uids,
+                weights=raw_weights,
+                netuid=self.config.netuid,
+                subtensor=self.subtensor,
+                metagraph=self.metagraph,
+            )
+            bt.logging.debug("processed_weights", processed_weights)
+            bt.logging.debug("processed_weight_uids", processed_weight_uids)
+
+            # Convert to uint16 weights and uids.
+            (
+                uint_uids,
+                uint_weights,
+            ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
+                uids=processed_weight_uids, weights=processed_weights
+            )
+            bt.logging.debug("uint_weights", uint_weights)
+            bt.logging.debug("uint_uids", uint_uids)
+
+            # Set the weights on chain via our subtensor connection.
             result, msg = self.subtensor.set_weights(
                 wallet=self.wallet,
                 netuid=self.config.netuid,
