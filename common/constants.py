@@ -48,7 +48,7 @@ SCORING_INTERVAL_IN_MINUTES = 1
 MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
-# min probability for a prediction to be considered valid. 0.5 removes lay predictions
+# min probability for a prediction to determine lay prediction.
 MIN_PROBABILITY = 0.5
 MIN_PROB_FOR_DRAWS = 0.3340
 
