@@ -1,4 +1,4 @@
-bittensor==8.4.5
+bittensor==8.5.1
 pandas
 scikit-learn
 wandb
