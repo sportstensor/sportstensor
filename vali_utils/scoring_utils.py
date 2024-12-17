@@ -394,13 +394,13 @@ def calculate_incentives_and_update_scores(vali):
                     # Calculate closing line value
                     clv = calculate_clv(match_odds, pwmd, log_prediction)
                     if clv is None:
-                        if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                        if (match_date - prediction_date).total_seconds() / 60 <= 10:
                             t_interval = "T-10m"
-                        elif (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 240:
+                        elif (match_date - prediction_date).total_seconds() / 60 <= 240:
                             t_interval = "T-4h"
-                        elif (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 720:
+                        elif (match_date - prediction_date).total_seconds() / 60 <= 720:
                             t_interval = "T-12h"
-                        elif (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 1440:
+                        elif (match_date - prediction_date).total_seconds() / 60 <= 1440:
                             t_interval = "T-24h"
                         # only add to matches_without_odds if the match and t-interval are not already in the list
                         if {pwmd.prediction.matchId, t_interval} not in matches_without_odds:
