@@ -58,7 +58,7 @@ async def make_match_prediction(prediction: MatchPrediction):
     from st.models.football_nfl import NFLFootballPredictionModel
     from st.models.basketball_nba import NBABasketballPredictionModel
 
-    from st.models.st_base import SportstensorBaseModel
+    from st.models.base import SportstensorBaseModel
 
     bt.logging.info(f"Starting prediction for {prediction.league} match: {prediction.homeTeamName} vs {prediction.awayTeamName}")
 
