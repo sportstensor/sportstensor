@@ -1,5 +1,6 @@
 import datetime as dt
 import os
+import asyncio  # Add asyncio import
 from common.data import Sport, League, MatchPrediction
 from st.sport_prediction_model import make_match_prediction
 
@@ -7,7 +8,7 @@ from st.sport_prediction_model import make_match_prediction
 # from sportstensor.predictions import make_match_prediction
 
 
-def mls():
+async def mls():
     matchDate = "2024-08-20"
     match_prediction = MatchPrediction(
         matchId=1234,
@@ -18,7 +19,7 @@ def mls():
         awayTeamName="Miami Fusion",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     print(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
@@ -28,7 +29,7 @@ def mls():
     return match_prediction
 
 
-def mlb():
+async def mlb():
     matchDate = "2024-08-25"
     match_prediction = MatchPrediction(
         matchId=1234,
@@ -39,7 +40,7 @@ def mlb():
         awayTeamName="Oakland Athletics",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     print("match_prediction", match_prediction)
 
@@ -48,10 +49,10 @@ def mlb():
     Prediction: {match_prediction.probabilityChoice} ({match_prediction.get_predicted_team()}) with probability {match_prediction.probability}"
     )
 
-def epl():
+async def epl():
     matchDate = "2024-09-20"
     match_prediction = MatchPrediction(
-        matchId=1234,
+        matchId="0b25bc4bd29ca0cd5d4b8031a3a36480",
         matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
         sport=Sport.SOCCER,
         league=League.EPL,
@@ -59,27 +60,25 @@ def epl():
         awayTeamName="Chelsea",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
-
-    print("match_prediction", match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     print(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
     Prediction: {match_prediction.probabilityChoice} ({match_prediction.get_predicted_team()}) with probability {match_prediction.probability}"
     )
 
-def nfl():
-    matchDate = "2024-09-20"
+async def nfl():
+    matchDate = "2024-12-20"
     match_prediction = MatchPrediction(
-        matchId=1234,
+        matchId="1bbabf31f6f1b885b0bfdbc4950d1c76",
         matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
         sport=Sport.FOOTBALL,
         league=League.NFL,
-        homeTeamName="Cincinnati Bengals",
-        awayTeamName="Tampa Bay Buccaneers",
+        homeTeamName="Los Angeles Chargers",
+        awayTeamName="Denver Broncos",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     print(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
@@ -88,18 +87,18 @@ def nfl():
 
     return match_prediction
 
-def nba():
-    matchDate = "2024-09-20"
+async def nba():
+    matchDate = "2024-12-20"
     match_prediction = MatchPrediction(
-        matchId=1234,
+        matchId="f7e9876fa54793d1ec8e693b27c99375",
         matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
         sport=Sport.BASKETBALL,
         league=League.NBA,
-        homeTeamName="Los Angeles Lakers",
-        awayTeamName="Boston Celtics",
+        homeTeamName="Detroit Pistons",
+        awayTeamName="Utah Jazz",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     print(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
@@ -112,5 +111,5 @@ if __name__ == "__main__":
     #mls()
     #mlb()
     #epl()
-    #nfl()
-    nba()
+    #asyncio.run(nfl())
+    asyncio.run(nba())

@@ -12,7 +12,7 @@ class SportPredictionModel(ABC):
         self.huggingface_model = None
 
     @abstractmethod
-    def make_prediction(self):
+    async def make_prediction(self):
         pass
 
     def set_default_scores(self):
@@ -44,7 +44,7 @@ class SportPredictionModel(ABC):
             self.prediction.probability = max(prob_a, prob_b)
 
 
-def make_match_prediction(prediction: MatchPrediction):
+async def make_match_prediction(prediction: MatchPrediction):
     # Lazy import to avoid circular dependency
     from st.models.soccer import SoccerPredictionModel
     from st.models.football import FootballPredictionModel
@@ -58,7 +58,7 @@ def make_match_prediction(prediction: MatchPrediction):
     from st.models.football_nfl import NFLFootballPredictionModel
     from st.models.basketball_nba import NBABasketballPredictionModel
 
-    from st.models.base import SportstensorBaseModel
+    from st.models.st_base import SportstensorBaseModel
     base_classes = {
         'base': SportstensorBaseModel
     }
@@ -90,7 +90,7 @@ def make_match_prediction(prediction: MatchPrediction):
     if base_class:
         bt.logging.info("Using base prediction model.")
         base_prediction = base_class(prediction)
-        base_prediction.make_prediction()
+        await base_prediction.make_prediction()
     # Check if we have a league-specific prediction model first
     elif league_class:
         bt.logging.info(
@@ -98,7 +98,7 @@ def make_match_prediction(prediction: MatchPrediction):
         )
         league_prediction = league_class(prediction)
         #league_prediction.set_default_probability()
-        league_prediction.make_prediction()
+        await league_prediction.make_prediction()
     # If not, check if we have a sport-specific prediction model
     elif sport_class:
         bt.logging.info(
@@ -106,7 +106,7 @@ def make_match_prediction(prediction: MatchPrediction):
         )
         sport_prediction = sport_class(prediction)
         sport_prediction.set_default_probability()
-        sport_prediction.make_prediction()
+        await sport_prediction.make_prediction()
     # If we don't have a prediction model for the sport, return 0 for both scores
     else:
         bt.logging.info("Unknown sport, returning default probability.")
