@@ -1,8 +1,12 @@
 import datetime as dt
 import os
-import asyncio  # Add asyncio import
+import asyncio
+import bittensor as bt
 from common.data import Sport, League, MatchPrediction
 from st.sport_prediction_model import make_match_prediction
+
+bt.logging.set_trace(True)
+bt.logging.set_debug(True)
 
 
 # from sportstensor.predictions import make_match_prediction
@@ -50,14 +54,14 @@ async def mlb():
     )
 
 async def epl():
-    matchDate = "2024-09-20"
+    matchDate = "2024-12-20"
     match_prediction = MatchPrediction(
         matchId="0b25bc4bd29ca0cd5d4b8031a3a36480",
         matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
         sport=Sport.SOCCER,
         league=League.EPL,
-        homeTeamName="Arsenal",
-        awayTeamName="Chelsea",
+        homeTeamName="Aston Villa",
+        awayTeamName="Manchester City",
     )
 
     match_prediction = await make_match_prediction(match_prediction)
@@ -110,6 +114,6 @@ async def nba():
 if __name__ == "__main__":
     #mls()
     #mlb()
-    #epl()
+    asyncio.run(epl())
     #asyncio.run(nfl())
-    asyncio.run(nba())
+    #asyncio.run(nba())

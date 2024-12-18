@@ -12,7 +12,7 @@ class SportPredictionModel(ABC):
         self.huggingface_model = None
 
     @abstractmethod
-    async def make_prediction(self):
+    def make_prediction(self):
         pass
 
     def set_default_scores(self):
@@ -59,6 +59,9 @@ async def make_match_prediction(prediction: MatchPrediction):
     from st.models.basketball_nba import NBABasketballPredictionModel
 
     from st.models.st_base import SportstensorBaseModel
+
+    bt.logging.info(f"Starting prediction for {prediction.league} match: {prediction.homeTeamName} vs {prediction.awayTeamName}")
+
     base_classes = {
         'base': SportstensorBaseModel
     }
@@ -76,11 +79,21 @@ async def make_match_prediction(prediction: MatchPrediction):
         League.NBA: NBABasketballPredictionModel,
     }
 
-    # Convert the league string back to the League enum
-    league_enum = get_league_from_string(prediction.league)
-    if league_enum is None:
-        bt.logging.error(f"Unknown league: {prediction.league}. Returning.")
-        return prediction
+    # Convert the league to enum if it's not already one
+    if not isinstance(prediction.league, League):
+        bt.logging.info(f"Converting league string '{prediction.league}' to enum")
+        try:
+            league_enum = get_league_from_string(str(prediction.league))
+            if league_enum is None:
+                bt.logging.error(f"Unknown league: {prediction.league}. Returning.")
+                return prediction
+            prediction.league = league_enum
+        except ValueError as e:
+            bt.logging.error(f"Failed to convert league: {prediction.league}. Error: {e}")
+            return prediction
+    else:
+        league_enum = prediction.league
+        bt.logging.info(f"League is already an enum: {league_enum.name}")
 
     base_class = base_classes.get('base')
     league_class = league_classes.get(league_enum)
@@ -90,23 +103,23 @@ async def make_match_prediction(prediction: MatchPrediction):
     if base_class:
         bt.logging.info("Using base prediction model.")
         base_prediction = base_class(prediction)
-        await base_prediction.make_prediction()
+        prediction = await base_prediction.make_prediction()
+        if prediction.probability is not None:
+            bt.logging.info(f"Base prediction successful: {prediction.probabilityChoice} with probability {prediction.probability}")
+            return prediction
     # Check if we have a league-specific prediction model first
     elif league_class:
         bt.logging.info(
             f"Using league-specific prediction model: {league_class.__name__}"
         )
         league_prediction = league_class(prediction)
-        #league_prediction.set_default_probability()
-        await league_prediction.make_prediction()
-    # If not, check if we have a sport-specific prediction model
+        prediction = await league_prediction.make_prediction()
     elif sport_class:
         bt.logging.info(
             f"Using sport-specific prediction model: {sport_class.__name__}"
         )
         sport_prediction = sport_class(prediction)
-        sport_prediction.set_default_probability()
-        await sport_prediction.make_prediction()
+        prediction = await sport_prediction.make_prediction()
     # If we don't have a prediction model for the sport, return 0 for both scores
     else:
         bt.logging.info("Unknown sport, returning default probability.")
