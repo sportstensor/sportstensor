@@ -53,11 +53,11 @@ SPORTS_TYPES = [
 ]
 
 league_mapping = {
-    'EPL': 'English Premier League',
-    'MLS': 'American Major League Soccer',
-    'MLB': 'MLB',
-    'NFL': 'NFL',
     'NBA': 'NBA',
+    'NFL': 'NFL',
+    'MLS': 'MLS',
+    'EPL': 'EPL',
+    'MLB': 'MLB',
 }
 
 class SportstensorBaseModel(SportPredictionModel):
@@ -71,7 +71,7 @@ class SportstensorBaseModel(SportPredictionModel):
         self.timeout = 3
 
     async def fetch_odds(self, sport_key: str, region: str) -> Optional[dict]:
-        """Fetch odds from TOA API."""
+        """Fetch odds from the new API."""
         url = f"{API_URL}{sport_key}/odds/"
         params = {
             "apiKey": ODDS_API_KEY,
@@ -112,19 +112,18 @@ class SportstensorBaseModel(SportPredictionModel):
         try:
             # Dynamically determine sport_key
             league_to_sport_key = {
-                League.NBA: "basketball_nba",
-                League.NFL: "americanfootball_nfl",
-                League.MLS: "soccer_usa_mls",
-                League.EPL: "soccer_epl",
-                League.MLB: "baseball_mlb",
+                'NBA': "basketball_nba",
+                'NFL': "americanfootball_nfl",
+                'MLS': "soccer_usa_mls",
+                'EPL': "soccer_epl",
+                'MLB': "baseball_mlb",
             }
 
-            sport_key = league_to_sport_key.get(self.prediction.league, None)
+            sport_key = league_to_sport_key.get(self.prediction.league.name, None)
 
             if not sport_key:
-                bt.logging.error(f"Unknown league: {self.prediction.league}. Unable to determine sport_key.")
+                bt.logging.error(f"Unknown league: {self.prediction.league.name}. Unable to determine sport_key.")
                 return
-
 
             # Determine the region (optional customization for regions)
             region = "us,eu" if sport_key in ["baseball_mlb", "americanfootball_nfl", "basketball_nba"] else "uk,eu"
@@ -136,61 +135,35 @@ class SportstensorBaseModel(SportPredictionModel):
                 bt.logging.error("No odds data fetched.")
                 return
 
-            bt.logging.info(f"Fetched odds data: {odds_data}")
-
             # Find the match
             for odds in odds_data:
                 home_team = self.map_team_name(self.prediction.homeTeamName)
                 away_team = self.map_team_name(self.prediction.awayTeamName)
 
                 if odds["home_team"] == home_team and odds["away_team"] == away_team:
-                    if not odds.get("bookmakers") or not odds["bookmakers"][0].get("markets"):
-                        bt.logging.error("No bookmakers or markets data found")
-                        return
-
-                    # Find the correct outcome for each team
-                    outcomes = odds["bookmakers"][0]["markets"][0]["outcomes"]
-                    bt.logging.info(f"Processing outcomes: {outcomes}")
-
-                    home_odds = None
-                    away_odds = None
+                    home_odds = odds["bookmakers"][0]["markets"][0]["outcomes"][0]["price"]
+                    away_odds = odds["bookmakers"][0]["markets"][0]["outcomes"][1]["price"]
                     draw_odds = None
 
-                    for outcome in outcomes:
-                        if outcome["name"] == home_team:
-                            home_odds = outcome["price"]
-                        elif outcome["name"] == away_team:
-                            away_odds = outcome["price"]
-                        elif outcome["name"].lower() == "draw":
-                            draw_odds = outcome["price"]
-
-                    if not home_odds or not away_odds:
-                        bt.logging.error(f"Could not find odds for both teams. Home: {home_odds}, Away: {away_odds}")
-                        return
+                    if self.prediction.league in LEAGUES_ALLOWING_DRAWS:
+                        draw_odds = odds["bookmakers"][0]["markets"][0]["outcomes"][2]["price"]
 
                     probabilities = self.odds_to_probabilities(home_odds, away_odds, draw_odds)
 
                     # Find the highest probability outcome
-                    max_prob = max(
-                        filter(None, [
-                            probabilities["home"],
-                            probabilities["away"],
-                            probabilities.get("draw", 0)
-                        ])
-                    )
+                    max_prob = max(probabilities["home"], probabilities["away"], probabilities.get("draw", 0))
 
                     if max_prob == probabilities["home"]:
                         self.prediction.probabilityChoice = ProbabilityChoice.HOMETEAM
                     elif max_prob == probabilities["away"]:
                         self.prediction.probabilityChoice = ProbabilityChoice.AWAYTEAM
-                    elif probabilities.get("draw") and max_prob == probabilities["draw"]:
+                    else:
                         self.prediction.probabilityChoice = ProbabilityChoice.DRAW
 
                     self.prediction.probability = max_prob
+
                     bt.logging.info(f"Prediction made: {self.prediction.probabilityChoice} with probability {self.prediction.probability}")
                     return
-
-            bt.logging.warning("Match not found in fetched odds data.")
 
             bt.logging.warning("Match not found in fetched odds data.")
         except Exception as e:
