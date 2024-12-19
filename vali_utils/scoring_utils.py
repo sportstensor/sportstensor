@@ -403,7 +403,7 @@ def calculate_incentives_and_update_scores(vali):
                         elif (match_date - prediction_date).total_seconds() / 60 <= 1440:
                             t_interval = "T-24h"
                         # only add to matches_without_odds if the match and t-interval are not already in the list
-                        if {pwmd.prediction.matchId, t_interval} not in matches_without_odds:
+                        if (pwmd.prediction.matchId, t_interval) not in matches_without_odds:
                             matches_without_odds.append((pwmd.prediction.matchId, t_interval))
                         continue
                     elif log_prediction:
