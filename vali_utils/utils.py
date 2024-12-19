@@ -327,16 +327,17 @@ async def send_league_commitments_to_miners(
                     bt.logging.info(
                         f"UID {uid}: Miner failed to respond to league commitments."
                     )
+                    uid_league_updates[uid] = []
                     continue
                 else:
                     working_miner_uids.append(uid)
                     finished_responses.append(response)
-                    valid_leagues = [league for league in response.leagues if league in League]
+                    valid_leagues = [league for league in response.leagues if league in vali.ACTIVE_LEAGUES]
                     if len(valid_leagues) != len(response.leagues):
                         bt.logging.info(
                             f"UID {uid}: Some leagues were invalid and have been filtered out."
                         )
-                    uid_league_updates[uid] = valid_leagues
+                    uid_league_updates[uid] = [valid_leagues[0]] if valid_leagues else [] # Only one league commitment per miner
 
             return finished_responses, working_miner_uids, uid_league_updates
 
@@ -359,10 +360,13 @@ async def send_league_commitments_to_miners(
         bt.logging.info(f"Received responses from {len(all_working_miner_uids)} miners")
         bt.logging.info(f"Storing miner league commitments to validator storage.")
         
-        # Bulk update of uids_to_leagues
-        with vali.uids_to_leagues_lock:
+        # Bulk update of uids_to_leagues, uids_to_last_leagues, and uids_to_leagues_last_updated
+        with vali.uids_to_leagues_lock and vali.uids_to_last_leagues_lock and vali.uids_to_leagues_last_updated_lock:
             for uid, leagues in all_uid_league_updates.items():
                 vali.uids_to_leagues[uid] = leagues
+                if len(leagues) > 0:
+                    vali.uids_to_last_leagues[uid] = leagues
+                    vali.uids_to_leagues_last_updated[uid] = dt.datetime.now(dt.timezone.utc)
 
         return (all_finished_responses, all_working_miner_uids)
 
@@ -658,18 +662,11 @@ def is_match_prediction_valid(
         )
     
     # Check that the probability is within the allowed range
-    if input_synapse.match_prediction.league in LEAGUES_ALLOWING_DRAWS:
-        if round(prediction.probability, 4) <= MIN_PROB_FOR_DRAWS or round(prediction.probability, 4) > 1:
-            return (
-                False,
-                f"Probability {prediction.probability} rounded to {round(prediction.probability, 4)} is not between {MIN_PROB_FOR_DRAWS} and 1 for leagues allowing draws",
-            )
-    else:
-        if round(prediction.probability, 4) <= MIN_PROBABILITY or round(prediction.probability, 4) > 1:
-            return (
-                False,
-                f"Probability {prediction.probability} rounded to {round(prediction.probability, 4)} is not between {MIN_PROBABILITY} and 1",
-            )
+    if round(prediction.probability, 4) <= 0 or round(prediction.probability, 4) >= 1:
+        return (
+            False,
+            f"Probability {prediction.probability} rounded to {round(prediction.probability, 4)} is not between 0 and 1",
+        )
     
     # Check that the current time is before the match date
     current_time = dt.datetime.now(dt.timezone.utc)
