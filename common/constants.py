@@ -48,13 +48,14 @@ SCORING_INTERVAL_IN_MINUTES = 1
 MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
-# min probability for a prediction to be considered valid. 0.5 removes lay predictions
+# min probability for a prediction to determine lay prediction.
 MIN_PROBABILITY = 0.5
 MIN_PROB_FOR_DRAWS = 0.3340
 
 NO_LEAGUE_COMMITMENT_PENALTY = -0.25
-NO_PREDICTION_RESPONSE_PENALTY = -0.1
-MAX_GFILTER_FOR_WRONG_PREDICTION = 0.3
+NO_PREDICTION_RESPONSE_PENALTY = -1.0
+NO_LEAGUE_COMMITMENT_GRACE_PERIOD = 60 * 60 * 24 # 24 hours
+MAX_GFILTER_FOR_WRONG_PREDICTION = 0.5
 
 # Copycat punishment constants
 COPYCAT_PUNISHMENT_START_DATE = datetime.datetime(2024, 9, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
