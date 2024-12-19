@@ -83,8 +83,7 @@ def make_match_prediction(prediction: MatchPrediction):
         bt.logging.error(f"Unknown league: {prediction.league}. Returning.")
         return prediction
 
-    #base_class = base_classes.get('base')
-    base_class = None
+    base_class = base_classes.get('base')
     league_class = league_classes.get(league_enum)
     sport_class = sport_classes.get(prediction.sport)
 
