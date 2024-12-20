@@ -294,6 +294,175 @@ def calculate_incentives_and_update_scores():
         255: 'NBA'     # NBA: 0.0698644, EPL: -0.00341698, NFL: -0.000143775
     }
 
+    uid_to_best_league = {
+        0: 'NBA',
+        4: 'NBA',
+        5: 'NBA',
+        6: 'NBA',
+        7: 'NBA',
+        8: 'NBA',
+        9: 'NBA',
+        10: 'NBA',
+        11: 'NFL',
+        12: 'NBA',
+        13: 'NFL',
+        14: 'NFL',
+        15: 'NBA',
+        16: 'NFL',
+        17: 'NBA',
+        18: 'NBA',
+        19: 'NBA',
+        20: 'NFL',
+        21: 'NFL',
+        22: 'NBA',
+        23: 'NBA',
+        24: 'NFL',
+        25: 'NBA',
+        26: 'NBA',
+        27: 'NBA',
+        28: 'NBA',
+        29: 'NBA',
+        30: 'NFL',
+        31: 'NFL',
+        32: 'NBA',
+        33: 'NBA',
+        34: 'NFL',
+        35: 'NBA',
+        36: 'NBA',
+        37: 'NBA',
+        38: 'NFL',
+        40: 'NBA',
+        41: 'NBA',
+        42: 'NBA',
+        43: 'NBA',
+        44: 'NBA',
+        45: 'NBA',
+        46: 'NBA',
+        47: 'NBA',
+        48: 'NFL',
+        49: 'NBA',
+        50: 'NBA',
+        51: 'NBA',
+        52: 'NBA',
+        53: 'NBA',
+        54: 'NFL',
+        56: 'NBA',
+        57: 'NFL',
+        58: 'NBA',
+        59: 'NBA',
+        60: 'NBA',
+        61: 'NBA',
+        62: 'NBA',
+        63: 'NBA',
+        64: 'NFL',
+        65: 'NBA',
+        66: 'NBA',
+        67: 'NFL',
+        68: 'NFL',
+        69: 'NBA',
+        71: 'NBA',
+        73: 'NFL',
+        74: 'NBA',
+        75: 'NFL',
+        78: 'NFL',
+        80: 'NFL',
+        81: 'NBA',
+        83: 'NBA',
+        84: 'NBA',
+        86: 'NBA',
+        88: 'NBA',
+        90: 'NFL',
+        92: 'NBA',
+        93: 'NFL',
+        97: 'NFL',
+        99: 'NFL',
+        100: 'NFL',
+        102: 'NFL',
+        104: 'NFL',
+        106: 'NBA',
+        107: 'NBA',
+        109: 'NBA',
+        110: 'NBA',
+        111: 'NBA',
+        113: 'NFL',
+        114: 'NFL',
+        115: 'NFL',
+        116: 'NBA',
+        118: 'NFL',
+        119: 'NFL',
+        120: 'NFL',
+        121: 'NFL',
+        122: 'NBA',
+        123: 'NFL',
+        124: 'NBA',
+        125: 'NBA',
+        126: 'NFL',
+        127: 'NBA',
+        128: 'NFL',
+        129: 'NFL',
+        130: 'NBA',
+        131: 'NFL',
+        132: 'NBA',
+        133: 'NFL',
+        134: 'NFL',
+        135: 'NBA',
+        136: 'NBA',
+        137: 'NFL',
+        138: 'NFL',
+        139: 'NBA',
+        141: 'NBA',
+        143: 'NBA',
+        145: 'NBA',
+        146: 'NBA',
+        147: 'NBA',
+        148: 'NBA',
+        150: 'NFL',
+        152: 'NFL',
+        153: 'NFL',
+        155: 'NFL',
+        157: 'NFL',
+        158: 'NFL',
+        159: 'NBA',
+        160: 'NBA',
+        163: 'NFL',
+        167: 'NBA',
+        168: 'NFL',
+        170: 'NFL',
+        171: 'NFL',
+        173: 'NFL',
+        175: 'NFL',
+        178: 'NFL',
+        181: 'NFL',
+        187: 'NFL',
+        191: 'NFL',
+        192: 'NFL',
+        194: 'NFL',
+        195: 'NFL',
+        197: 'NFL',
+        199: 'NBA',
+        201: 'NBA',
+        202: 'NBA',
+        204: 'NFL',
+        206: 'NFL',
+        207: 'NFL',
+        210: 'NFL',
+        211: 'NFL',
+        213: 'NFL',
+        216: 'NFL',
+        220: 'NFL',
+        222: 'NFL',
+        223: 'NFL',
+        224: 'NFL',
+        226: 'NBA',
+        230: 'EPL',
+        234: 'NBA',
+        237: 'NFL',
+        240: 'NFL',
+        249: 'NFL',
+        252: 'NFL',
+        255: 'NFL'
+    }
+
     for league in leagues_to_analyze:
         print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
         league_table_data = []
@@ -373,6 +542,11 @@ def calculate_incentives_and_update_scores():
                         print(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                         continue
 
+                    if pwmd.get_closing_odds_for_predicted_outcome() == 0:
+                        print(f"Closing odds were found to be 0 for matchId {pwmd.prediction.matchId}. homeTeamOdds: {pwmd.homeTeamOdds}, awayTeamOdds: {pwmd.awayTeamOdds}, drawOdds: {pwmd.drawOdds}")
+                        print(f"Skipping calculation of this prediction.")
+                        continue
+
                     # if predictionDate within 10 minutes of matchDate, calculate roi payout
                     if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10 and pwmd.prediction.predictionDate >= dt.datetime(2024, 12, 3, 0, 0, 0):
                         league_roi_counts[league][index] += 1
@@ -441,14 +615,8 @@ def calculate_incentives_and_update_scores():
                     if log_prediction:
                         print(f"      • Gaussian filter: {gfilter:.4f}")
                     
-                    # Zero out all lay predictions, that is if the prediction probability is less than MIN_PROBABILITY
-                    #if (pwmd.prediction.league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.probability <= MIN_PROB_FOR_DRAWS) or pwmd.prediction.probability <= MIN_PROBABILITY:
-                        #gfilter = 0
                     # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                    #elif pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner() and round(gfilter, 4) > 0 and gfilter < 1 and sigma < 0:
-                    
-                    # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                    if  (
+                    if  ((
                             (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
                             or 
                             (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
@@ -457,8 +625,8 @@ def calculate_incentives_and_update_scores():
                             (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
                             or
                             (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        ) \
-                        and round(gfilter, 4) > 0 and gfilter < 1 \
+                        )) \
+                        and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 \
                         and sigma < 0:
                         
                         gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
@@ -524,20 +692,6 @@ def calculate_incentives_and_update_scores():
         final_copycat_penalties.update(penalties)
         final_exact_matches.update(exact_matches)
 
-    # Update all_scores with weighted sum of league scores for each miner
-    print("************ Applying leagues scoring percentages to scores ************")
-    for league, percentage in LEAGUE_SCORING_PERCENTAGES.items():
-        print(f"  • {league}: {percentage*100}%")
-    print("*************************************************************")
-    all_scores = [0.0] * len(all_uids)
-    for i in range(len(all_uids)):
-        all_scores[i] = sum(league_scores[league][i] * LEAGUE_SCORING_PERCENTAGES[league] for league in ACTIVE_LEAGUES)
-
-    # Check and penalize miners that are not committed to any active leagues
-    #all_scores = check_and_apply_league_commitment_penalties(vali, all_scores, all_uids)
-    # Apply penalties for miners that have not responded to prediction requests
-    #all_scores = apply_no_prediction_response_penalties(vali, all_scores, all_uids)
-
     # Log final copycat results
     print(f"********************* Copycat Controller Findings  *********************")
     # Get a unique list of coldkeys from metagraph
@@ -566,9 +720,95 @@ def calculate_incentives_and_update_scores():
         print(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_penalties))}")
     print(f"************************************************************************")
 
-    for uid in final_copycat_penalties:
-        # Apply the penalty to the score
-        all_scores[uid] = COPYCAT_PENALTY_SCORE
+    # Update all_scores with weighted sum of league scores for each miner
+    print("************ Normalizing and applying penalties and leagues scoring percentages to scores ************")
+    for league, percentage in LEAGUE_SCORING_PERCENTAGES.items():
+        print(f"  • {league}: {percentage*100}%")
+    print("*************************************************************")
+
+    # Apply penalties for copycat miners and no prediction responses
+    for league in ACTIVE_LEAGUES:
+        # Check and penalize miners that are not committed to any active leagues -- before normalization
+        #league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
+        # Apply penalties for miners that have not responded to prediction requests -- before normalization
+        #league_scores[league] = apply_no_prediction_response_penalties(vali, league_scores[league], all_uids)
+
+        # Apply the copycat penalty to the score -- before normalization
+        for uid in final_copycat_penalties:
+            league_scores[league][uid] = COPYCAT_PENALTY_SCORE
+    
+    all_scores = [0.0] * len(all_uids)
+    
+    # Normalize and scale the scores for each league
+    for league in ACTIVE_LEAGUES:
+        # Get the max score for normalization (avoid division by zero)
+        max_score = max(league_scores[league]) if league_scores[league] else 0
+
+        # Skip normalization if no miners in the league (max_score == 0)
+        if max_score == 0:
+            continue
+        
+        # Normalize the scores for this league
+        normalized_scores = [score / max_score for score in league_scores[league]]
+
+        # Scale normalized scores by the league's scoring percentage
+        scaled_scores = [score * LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
+
+        # Add the scaled scores for this league to the final all_scores
+        for i in range(len(all_uids)):
+            all_scores[i] += scaled_scores[i]
+
+    ### Verify emissions allocation percentages per league ###
+    # Initialize emissions per league
+    league_emissions = {league: 0.0 for league in ACTIVE_LEAGUES}
+    total_emissions = 0.0
+
+    # Step 1: Calculate scaled scores for each league and add them to all_scores
+    for league in ACTIVE_LEAGUES:
+        # Get the max score for normalization (avoid division by zero)
+        max_score = max(league_scores[league]) if league_scores[league] else 0
+
+        # Skip this league if no miners or all scores are <= 0
+        if max_score <= 0:
+            continue
+
+        # Normalize scores within the league (consider only positive scores)
+        normalized_scores = [(score / max_score) if score > 0 else 0 for score in league_scores[league]]
+
+        # Scale normalized scores by the league's allocation percentage
+        scaled_scores = [score * LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
+
+        # Add scaled scores to the league's total emissions (consider only positive contributions)
+        league_emissions[league] = sum(score for score in scaled_scores if score > 0)
+
+        # Add scaled scores to the global total emissions
+        total_emissions += league_emissions[league]
+
+    # Step 2: Rescale league emissions to ensure proper percentage allocations
+    rescaled_emissions = {league: 0.0 for league in ACTIVE_LEAGUES}
+    for league in ACTIVE_LEAGUES:
+        expected_total = total_emissions * LEAGUE_SCORING_PERCENTAGES[league]  # Expected emissions for this league
+        if league_emissions[league] > 0:
+            scaling_factor = expected_total / league_emissions[league]
+            rescaled_emissions[league] = league_emissions[league] * scaling_factor
+        else:
+            rescaled_emissions[league] = 0.0  # No emissions for this league if it had no contributions
+
+    # Step 3: Verify league emissions percentages
+    total_rescaled_emissions = sum(rescaled_emissions.values())
+    for league, emissions in rescaled_emissions.items():
+        percentage = (emissions / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
+        print(f"League: {league.name}, Rescaled Emissions: {emissions:.4f}, Percentage: {percentage:.2f}%")
+
+    # Cross-check to ensure the percentages match the expected allocations
+    for league in ACTIVE_LEAGUES:
+        actual_percentage = (rescaled_emissions[league] / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
+        expected_percentage = LEAGUE_SCORING_PERCENTAGES[league] * 100
+        if not abs(actual_percentage - expected_percentage) < 0.01:  # Allow a small tolerance
+            print(f"Warning: League {league.name} allocation mismatch!")
+            print(f"  Expected: {expected_percentage:.2f}%, Actual: {actual_percentage:.2f}%")
+    print()
+    ### End Verify emissions allocation percentages per league ###
     
     # Apply Pareto to all scores
     print(f"Applying Pareto distribution (mu: {PARETO_MU}, alpha: {PARETO_ALPHA}) to scores...")
@@ -599,7 +839,7 @@ def calculate_incentives_and_update_scores():
         if top_uids[i] in uids_to_last_leagues and len(uids_to_last_leagues[top_uids[i]]) > 0:
             miner_league = uids_to_last_leagues[top_uids[i]][0].name
         is_cabal = ""
-        if metagraph.coldkeys[top_uids[i]] in ["5CB89UjzLgWxZQNqV69AvTSS8AA5DP5QD6kudbDPDLxYcMvD", "5EUVRikyyXG1TbGMt8NpwVyzkKbdnDvVS2sRDDPAikEzAmbv", "5CQNGGzd1k6EP98X9Z4UAMVY1LwA38ipR5VhedyeBGrW3WpA", "5Enevga9siU68f1fpwreDzPFjXH4sH3Bv7hiHq4KjYMSHW4G"]:
+        if metagraph.coldkeys[top_uids[i]] in []:
             is_cabal = "✔"
         top_scores_table.append([top_uids[i], top_scores[i], miner_league, is_cabal, metagraph.coldkeys[top_uids[i]][:8]])
     print("\nTop 75 Miner Scores:")
