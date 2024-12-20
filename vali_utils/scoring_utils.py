@@ -230,6 +230,10 @@ def check_and_apply_league_commitment_penalties(vali, all_scores: List[float], a
             if uid not in vali.accumulated_league_commitment_penalties:
                 vali.accumulated_league_commitment_penalties[uid] = 0.0
 
+            # Skip miners with zero or negative scores
+            if all_scores[i] <= 0.0:
+                continue
+            
             if uid not in vali.uids_to_leagues:
                 vali.accumulated_league_commitment_penalties[uid] += NO_LEAGUE_COMMITMENT_PENALTY
                 no_commitment_miner_uids.append(uid)
@@ -273,6 +277,9 @@ def apply_no_prediction_response_penalties(vali, all_scores: List[float], all_ui
             if uid not in vali.accumulated_no_response_penalties:
                 vali.accumulated_no_response_penalties[uid] = 0.0
             elif vali.accumulated_no_response_penalties[uid] < 0.0:
+                # Skip miners with score of zero or negative
+                if all_scores[i] <= 0.0:
+                    continue
                 # Apply the penalty to the score
                 all_scores[i] += vali.accumulated_no_response_penalties[uid]
                 no_response_miner_uids.append(uid)
@@ -375,6 +382,12 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                         continue
 
+                    # Check if there is an odds anomaly and skip if so.
+                    if pwmd.get_closing_odds_for_predicted_outcome() == 0:
+                        bt.logging.debug(f"Closing odds were found to be 0 for matchId {pwmd.prediction.matchId}. homeTeamOdds: {pwmd.homeTeamOdds}, awayTeamOdds: {pwmd.awayTeamOdds}, drawOdds: {pwmd.drawOdds}")
+                        bt.logging.debug(f"Skipping calculation of this prediction.")
+                        continue
+
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
                         match_date = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
@@ -430,7 +443,7 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
                     
                     # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                    if  (
+                    if  ((
                             (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
                             or 
                             (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
@@ -439,8 +452,8 @@ def calculate_incentives_and_update_scores(vali):
                             (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
                             or
                             (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        ) \
-                        and round(gfilter, 4) > 0 and gfilter < 1 \
+                        )) \
+                        and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 \
                         and sigma < 0:
                         
                         gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
@@ -465,6 +478,15 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Rho'], tablefmt='grid'))
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
+
+        # Create top 10 scores table
+        top_scores_table = []
+        # Sort the final scores in descending order. We need to sort the uids as well so they match
+        top_scores, top_uids = zip(*sorted(zip(league_scores[league], all_uids), reverse=True))
+        for i in range(10):
+            top_scores_table.append([top_uids[i], top_scores[i]])
+        bt.logging.info(f"\nTop 10 Scores for {league.name}:")
+        bt.logging.info("\n" + tabulate(top_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
 
         if len(matches_without_odds) > 0:
             print(f"\n==============================================================================")
@@ -496,38 +518,95 @@ def calculate_incentives_and_update_scores(vali):
         final_copycat_penalties.update(penalties)
         final_exact_matches.update(exact_matches)
 
+
     # Update all_scores with weighted sum of league scores for each miner
-    bt.logging.info("************ Applying leagues scoring percentages to scores ************")
+    bt.logging.info("************ Normalizing and applying penalties and leagues scoring percentages to scores ************")
     for league, percentage in vali.LEAGUE_SCORING_PERCENTAGES.items():
         bt.logging.info(f"  • {league}: {percentage*100}%")
     bt.logging.info("*************************************************************")
+
+    # Apply penalties for copycat miners and no prediction responses
+    for league in vali.ACTIVE_LEAGUES:
+        # Check and penalize miners that are not committed to any active leagues -- before normalization
+        league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
+        # Apply penalties for miners that have not responded to prediction requests -- before normalization
+        league_scores[league] = apply_no_prediction_response_penalties(vali, league_scores[league], all_uids)
+
+        # Apply the copycat penalty to the score -- before normalization
+        for uid in final_copycat_penalties:
+            league_scores[league][uid] = COPYCAT_PENALTY_SCORE
+    
     all_scores = [0.0] * len(all_uids)
-    for i in range(len(all_uids)):
-        all_scores[i] = sum(league_scores[league][i] * vali.LEAGUE_SCORING_PERCENTAGES[league] for league in vali.ACTIVE_LEAGUES)
 
-    # Check and penalize miners that are not committed to any active leagues
-    all_scores = check_and_apply_league_commitment_penalties(vali, all_scores, all_uids)
-    # Apply penalties for miners that have not responded to prediction requests
-    all_scores = apply_no_prediction_response_penalties(vali, all_scores, all_uids)
+    # Normalize and scale the scores for each league
+    for league in vali.ACTIVE_LEAGUES:
+        # Get the max score for normalization (avoid division by zero)
+        max_score = max(league_scores[league]) if league_scores[league] else 0
 
-    # Log final copycat results
-    bt.logging.info(f"********************* Copycat Controller Findings  *********************")
-    bt.logging.info(f"Total suspicious miners across all leagues: {len(final_suspicious_miners)}")
-    if len(final_suspicious_miners) > 0:
-        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")
+        # Skip normalization if no miners in the league (max_score == 0)
+        if max_score == 0:
+            continue
+        
+        # Normalize the scores for this league
+        normalized_scores = [score / max_score for score in league_scores[league]]
 
-    bt.logging.info(f"Total miners with exact matches across all leagues: {len(final_exact_matches)}")
-    if len(final_exact_matches) > 0:
-        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_exact_matches))}")
+        # Scale normalized scores by the league's scoring percentage
+        scaled_scores = [score * vali.LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
 
-    bt.logging.info(f"Total miners to penalize across all leagues: {len(final_copycat_penalties)}")
-    if len(final_copycat_penalties) > 0:
-        bt.logging.info(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_penalties))}")
-    bt.logging.info(f"************************************************************************")
+        # Add the scaled scores for this league to the final all_scores
+        for i in range(len(all_uids)):
+            all_scores[i] += scaled_scores[i]
 
-    for uid in final_copycat_penalties:
-        # Apply the penalty to the score
-        all_scores[uid] = COPYCAT_PENALTY_SCORE
+    ### Verify emissions allocation percentages per league ###
+    # Initialize emissions per league
+    league_emissions = {league: 0.0 for league in vali.ACTIVE_LEAGUES}
+    total_emissions = 0.0
+
+    # Step 1: Calculate scaled scores for each league and add them to all_scores
+    for league in vali.ACTIVE_LEAGUES:
+        # Get the max score for normalization (avoid division by zero)
+        max_score = max(league_scores[league]) if league_scores[league] else 0
+
+        # Skip this league if no miners or all scores are <= 0
+        if max_score <= 0:
+            continue
+
+        # Normalize scores within the league (consider only positive scores)
+        normalized_scores = [(score / max_score) if score > 0 else 0 for score in league_scores[league]]
+
+        # Scale normalized scores by the league's allocation percentage
+        scaled_scores = [score * vali.LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
+
+        # Add scaled scores to the league's total emissions (consider only positive contributions)
+        league_emissions[league] = sum(score for score in scaled_scores if score > 0)
+
+        # Add scaled scores to the global total emissions
+        total_emissions += league_emissions[league]
+
+    # Step 2: Rescale league emissions to ensure proper percentage allocations
+    rescaled_emissions = {league: 0.0 for league in vali.ACTIVE_LEAGUES}
+    for league in vali.ACTIVE_LEAGUES:
+        expected_total = total_emissions * vali.LEAGUE_SCORING_PERCENTAGES[league]  # Expected emissions for this league
+        if league_emissions[league] > 0:
+            scaling_factor = expected_total / league_emissions[league]
+            rescaled_emissions[league] = league_emissions[league] * scaling_factor
+        else:
+            rescaled_emissions[league] = 0.0  # No emissions for this league if it had no contributions
+
+    # Step 3: Verify league emissions percentages
+    total_rescaled_emissions = sum(rescaled_emissions.values())
+    for league, emissions in rescaled_emissions.items():
+        percentage = (emissions / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
+        bt.logging.debug(f"League: {league.name}, Rescaled Emissions: {emissions:.4f}, Percentage: {percentage:.2f}%")
+
+    # Cross-check to ensure the percentages match the expected allocations
+    for league in vali.ACTIVE_LEAGUES:
+        actual_percentage = (rescaled_emissions[league] / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
+        expected_percentage = vali.LEAGUE_SCORING_PERCENTAGES[league] * 100
+        if not abs(actual_percentage - expected_percentage) < 0.01:  # Allow a small tolerance
+            bt.logging.debug(f"Warning: League {league.name} allocation mismatch!")
+            bt.logging.debug(f"  Expected: {expected_percentage:.2f}%, Actual: {actual_percentage:.2f}%")
+    ### End Verify emissions allocation percentages per league ###
     
     # Apply Pareto to all scores
     bt.logging.info(f"Applying Pareto distribution (mu: {vali.PARETO_MU}, alpha: {vali.PARETO_ALPHA}) to scores...")
