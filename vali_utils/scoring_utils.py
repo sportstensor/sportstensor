@@ -479,6 +479,15 @@ def calculate_incentives_and_update_scores(vali):
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
+        # Create top 10 scores table
+        top_scores_table = []
+        # Sort the final scores in descending order. We need to sort the uids as well so they match
+        top_scores, top_uids = zip(*sorted(zip(league_scores[league], all_uids), reverse=True))
+        for i in range(10):
+            top_scores_table.append([top_uids[i], top_scores[i]])
+        bt.logging.info(f"\nTop 10 Scores for {league.name}:")
+        bt.logging.info("\n" + tabulate(top_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
+
         if len(matches_without_odds) > 0:
             print(f"\n==============================================================================")
             print(f"Odds were not found for the following matches within {league.name}:")
