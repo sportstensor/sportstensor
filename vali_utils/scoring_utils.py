@@ -536,77 +536,44 @@ def calculate_incentives_and_update_scores(vali):
         for uid in final_copycat_penalties:
             league_scores[league][uid] = COPYCAT_PENALTY_SCORE
     
+    # Initialize total scores array
     all_scores = [0.0] * len(all_uids)
 
-    # Normalize and scale the scores for each league
+    # Step 1: Calculate total positive scores for each league
+    league_totals = {league: 0.0 for league in vali.ACTIVE_LEAGUES}
     for league in vali.ACTIVE_LEAGUES:
-        # Get the max score for normalization (avoid division by zero)
-        max_score = max(league_scores[league]) if league_scores[league] else 0
+        league_totals[league] = sum(score for score in league_scores[league] if score > 0)
 
-        # Skip normalization if no miners in the league (max_score == 0)
-        if max_score == 0:
-            continue
-        
-        # Normalize the scores for this league
-        normalized_scores = [score / max_score for score in league_scores[league]]
-
-        # Scale normalized scores by the league's scoring percentage
-        scaled_scores = [score * vali.LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
-
-        # Add the scaled scores for this league to the final all_scores
-        for i in range(len(all_uids)):
-            all_scores[i] += scaled_scores[i]
-
-    ### Verify emissions allocation percentages per league ###
-    # Initialize emissions per league
-    league_emissions = {league: 0.0 for league in vali.ACTIVE_LEAGUES}
-    total_emissions = 0.0
-
-    # Step 1: Calculate scaled scores for each league and add them to all_scores
+    # Step 2: Scale scores within each league to match allocation percentage
+    scaled_scores_per_league = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     for league in vali.ACTIVE_LEAGUES:
-        # Get the max score for normalization (avoid division by zero)
-        max_score = max(league_scores[league]) if league_scores[league] else 0
+        total_league_score = league_totals[league]
+        allocation = vali.LEAGUE_SCORING_PERCENTAGES[league] * 100  # Convert to percentage
 
-        # Skip this league if no miners or all scores are <= 0
-        if max_score <= 0:
-            continue
+        if total_league_score > 0:
+            scaling_factor = allocation / total_league_score  # Factor to scale league scores
+            scaled_scores_per_league[league] = [
+                (score * scaling_factor if score > 0 else 0) for score in league_scores[league]
+            ]
 
-        # Normalize scores within the league (consider only positive scores)
-        normalized_scores = [(score / max_score) if score > 0 else 0 for score in league_scores[league]]
+    # Step 3: Aggregate scaled scores across all leagues
+    for i in range(len(all_uids)):
+        all_scores[i] = sum(scaled_scores_per_league[league][i] for league in vali.ACTIVE_LEAGUES)
 
-        # Scale normalized scores by the league's allocation percentage
-        scaled_scores = [score * vali.LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
+    # Step 4: Verify emissions allocation percentages
+    league_emissions = {league: sum(scaled_scores_per_league[league]) for league in vali.ACTIVE_LEAGUES}
+    total_emissions = sum(league_emissions.values())
 
-        # Add scaled scores to the league's total emissions (consider only positive contributions)
-        league_emissions[league] = sum(score for score in scaled_scores if score > 0)
+    # Print league emissions and verify percentages
+    bt.logging.debug("\nLeague Emissions and Allocations:")
+    for league, emissions in league_emissions.items():
+        percentage = (emissions / total_emissions) * 100 if total_emissions > 0 else 0
+        bt.logging.debug(f"League: {league.name}, Total Emissions: {emissions:.4f}, Percentage: {percentage:.2f}%")
 
-        # Add scaled scores to the global total emissions
-        total_emissions += league_emissions[league]
-
-    # Step 2: Rescale league emissions to ensure proper percentage allocations
-    rescaled_emissions = {league: 0.0 for league in vali.ACTIVE_LEAGUES}
-    for league in vali.ACTIVE_LEAGUES:
-        expected_total = total_emissions * vali.LEAGUE_SCORING_PERCENTAGES[league]  # Expected emissions for this league
-        if league_emissions[league] > 0:
-            scaling_factor = expected_total / league_emissions[league]
-            rescaled_emissions[league] = league_emissions[league] * scaling_factor
-        else:
-            rescaled_emissions[league] = 0.0  # No emissions for this league if it had no contributions
-
-    # Step 3: Verify league emissions percentages
-    total_rescaled_emissions = sum(rescaled_emissions.values())
-    for league, emissions in rescaled_emissions.items():
-        percentage = (emissions / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
-        bt.logging.debug(f"League: {league.name}, Rescaled Emissions: {emissions:.4f}, Percentage: {percentage:.2f}%")
-
-    # Cross-check to ensure the percentages match the expected allocations
-    for league in vali.ACTIVE_LEAGUES:
-        actual_percentage = (rescaled_emissions[league] / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
+        # Cross-check to ensure percentages match expected allocations
         expected_percentage = vali.LEAGUE_SCORING_PERCENTAGES[league] * 100
-        if not abs(actual_percentage - expected_percentage) < 0.01:  # Allow a small tolerance
-            bt.logging.debug(f"Warning: League {league.name} allocation mismatch!")
-            bt.logging.debug(f"  Expected: {expected_percentage:.2f}%, Actual: {actual_percentage:.2f}%")
-    ### End Verify emissions allocation percentages per league ###
+        if not abs(percentage - expected_percentage) < 0.01:  # Allow a small tolerance
+            bt.logging.debug(f"  Warning: Allocation mismatch for {league.name}! Expected: {expected_percentage:.2f}%, Actual: {percentage:.2f}%")
     
     # Apply Pareto to all scores
     bt.logging.info(f"Applying Pareto distribution (mu: {vali.PARETO_MU}, alpha: {vali.PARETO_ALPHA}) to scores...")
