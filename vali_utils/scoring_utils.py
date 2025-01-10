@@ -488,6 +488,7 @@ def calculate_incentives_and_update_scores(vali):
             league_pred_counts[league][index] = len(predictions_with_match_data)
             # Calculate final ROI score
             roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * 100) if league_roi_counts[league][index] > 0 else 0.0
+            raw_roi = roi
             if roi < MIN_ROI_THRESHOLD:
                 roi = 0.0
             final_roi_score = round(rho * ((roi if roi>0 else 0)*100), 2)
@@ -495,7 +496,7 @@ def calculate_incentives_and_update_scores(vali):
 
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
-                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(roi*100, 2)) + "%", len(predictions_with_match_data), rho])
+                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", len(predictions_with_match_data), rho])
 
         # Log league scores
         if league_table_data:
