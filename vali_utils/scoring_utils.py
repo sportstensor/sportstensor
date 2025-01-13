@@ -19,9 +19,11 @@ from common.constants import (
     COPYCAT_PENALTY_SCORE,
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
+    MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
-    MIN_PROBABILITY,
-    MIN_PROB_FOR_DRAWS,
+    ROI_BET_AMOUNT,
+    MIN_ROI_THRESHOLD,
+    ROI_SCORING_WEIGHT
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -67,11 +69,12 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
     closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
 
-    t = 0.3 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
-    t2 = 0.15 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
+    t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    t2 = 0.05 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
     a = 0.25 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
     c = 0.25 # Minimum plateau width/boundary
+    pwr = 1.1 # Power to raise the difference between odds and 1/prob to in the exponential term
 
     # Plateau width calculation
     w = c - a * np.exp(-b * (closing_odds - 1))
@@ -82,7 +85,7 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
         t = t2
 
     # Plateaud curve with with uniform decay
-    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / t * (closing_odds-1))
+    exp_component = 1.0 if diff <= w else np.exp(-(diff - w) / (t * np.power((closing_odds-1),pwr)))
     
     return exp_component
 
@@ -321,6 +324,10 @@ def calculate_incentives_and_update_scores(vali):
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    # Use this to get payouts to calculate ROI
+    league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name} (Rolling Pred Threshold: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
@@ -388,6 +395,13 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"Skipping calculation of this prediction.")
                         continue
 
+                    # Calculate ROI for the prediction
+                    league_roi_counts[league][index] += 1
+                    if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
+                        league_roi_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    else:
+                        league_roi_payouts[league][index] -= ROI_BET_AMOUNT
+
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
                         match_date = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
@@ -442,20 +456,15 @@ def calculate_incentives_and_update_scores(vali):
                     if log_prediction:
                         bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
                     
+                    # Set minimum value for Gaussian filter if the prediction was for the underdog
+                    if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS) and pwmd.get_closing_odds_for_predicted_outcome() > (1 / pwmd.prediction.probability):
+                        prev_gfilter = gfilter
+                        gfilter =  max(MIN_GFILTER_FOR_UNDERDOG_PREDICTION, gfilter)
+                        if log_prediction:
+                            bt.logging.debug(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
+                    
                     # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                    if  ((
-                            (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
-                            or 
-                            (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        ) or \
-                        (
-                            (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
-                            or
-                            (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        )) \
-                        and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 \
-                        and sigma < 0:
-                        
+                    elif pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner() and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 and sigma < 0:
                         gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                         if log_prediction:
                             bt.logging.debug(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
@@ -467,26 +476,52 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                         bt.logging.debug("-" * 50)
 
-            final_score = rho * total_score
-            league_scores[league][index] = final_score
+            # Calculate final edge score
+            final_edge_score = rho * total_score
+            league_scores[league][index] = final_edge_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
-            league_table_data.append([uid, final_score, len(predictions_with_match_data), rho])
+            # Calculate final ROI score
+            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
+            raw_roi = roi
+            if roi < MIN_ROI_THRESHOLD:
+                roi = 0.0
+            final_roi_score = round(rho * ((roi if roi>0 else 0)*100), 2)
+            league_roi_scores[league][index] = final_roi_score
+
+            # Only log scores for miners committed to the league
+            if uid in league_miner_uids:
+                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", len(predictions_with_match_data), rho])
 
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Rho'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', '# Predictions', 'Rho'], tablefmt='grid'))
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
+
+        # Normalize league scores and weight for Edge and ROI scores
+        # Normalize edge scores
+        min_edge, max_edge = min(league_scores[league]), max(league_scores[league])
+        normalized_edge = [(score - min_edge) / (max_edge - min_edge) if score > 0 else 0 for score in league_scores[league]]
+        # Normalize ROI scores
+        min_roi, max_roi = min(league_roi_scores[league]), max(league_roi_scores[league])
+        normalized_roi = [(score - min_roi) / (max_roi - min_roi) if (max_roi - min_roi) > 0 else 0 for score in league_roi_scores[league]]
+
+        # Apply weights and combine and set to final league scores
+        league_scores[league] = [
+            (1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r
+            if r > 0 else 0
+            for e, r in zip(normalized_edge, normalized_roi)
+        ]
 
         # Create top 10 scores table
         top_scores_table = []
         # Sort the final scores in descending order. We need to sort the uids as well so they match
         top_scores, top_uids = zip(*sorted(zip(league_scores[league], all_uids), reverse=True))
         for i in range(10):
-            top_scores_table.append([top_uids[i], top_scores[i]])
+            top_scores_table.append([i+1, top_uids[i], top_scores[i]])
         bt.logging.info(f"\nTop 10 Scores for {league.name}:")
-        bt.logging.info("\n" + tabulate(top_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
+        bt.logging.info("\n" + tabulate(top_scores_table, headers=['#', 'UID', 'Final Score'], tablefmt='grid'))
 
         if len(matches_without_odds) > 0:
             print(f"\n==============================================================================")
@@ -606,13 +641,15 @@ def calculate_incentives_and_update_scores(vali):
     top_scores_table = []
     # Sort the final scores in descending order. We need to sort the uids as well so they match
     top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
-    for i in range(25):
+    for i in range(200):
+        if i not in top_scores or top_scores[i] is None or top_scores[i] <= 0:
+            continue
         miner_league = ""
         if top_uids[i] in vali.uids_to_last_leagues and len(vali.uids_to_last_leagues[top_uids[i]]) > 0:
             miner_league = vali.uids_to_last_leagues[top_uids[i]][0].name
-        top_scores_table.append([top_uids[i], top_scores[i], miner_league])
-    bt.logging.info("\nTop 25 Miner Scores:")
-    bt.logging.info("\n" + tabulate(top_scores_table, headers=['UID', 'Final Score', 'League'], tablefmt='grid'))
+        top_scores_table.append([i+1, top_uids[i], top_scores[i], miner_league])
+    bt.logging.info("\nTop Miner Scores:")
+    bt.logging.info("\n" + tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'League'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in vali.scores if score > 0]

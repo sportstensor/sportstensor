@@ -22,8 +22,6 @@ from common.constants import (
     VALIDATOR_TIMEOUT,
     SCORING_CUTOFF_IN_DAYS,
     LEAGUES_ALLOWING_DRAWS,
-    MIN_PROBABILITY,
-    MIN_PROB_FOR_DRAWS
 )
 
 from neurons.validator import Validator

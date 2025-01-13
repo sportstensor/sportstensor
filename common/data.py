@@ -1,14 +1,8 @@
-import dataclasses
-import time
-
-# from common import constants
-# from . import utils
 import datetime as dt
 from enum import IntEnum, Enum
-from typing import Any, Dict, List, Type, Optional
+from typing import Optional
 from pydantic import (
     BaseModel,
-    ConfigDict,
     Field,
     PositiveInt,
     NonNegativeInt,
@@ -316,3 +310,22 @@ class MatchPredictionWithMatchData(BaseModel):
         elif self.actualHomeTeamScore < self.actualAwayTeamScore:
             return self.homeTeamOdds
         return self.drawOdds
+
+    def is_prediction_for_underdog(self, LEAGUES_ALLOWING_DRAWS: list) -> bool:
+        """
+        Check if the prediction supports the underdog.
+        
+        :param LEAGUES_ALLOWING_DRAWS: List of leagues where draws are common.
+        :return: True if the prediction is for the underdog, False otherwise.
+        """
+        # Compare odds to determine underdog status
+        predicted_odds = self.get_closing_odds_for_predicted_outcome()
+        if predicted_odds is None:
+            return False
+
+        # Determine if the prediction aligns with the underdog
+        favorite_odds = min([self.homeTeamOdds, self.awayTeamOdds])
+        if self.prediction.league in LEAGUES_ALLOWING_DRAWS and self.drawOdds > 0:
+            favorite_odds = min([self.homeTeamOdds, self.awayTeamOdds, self.drawOdds])
+        return predicted_odds > favorite_odds
+    

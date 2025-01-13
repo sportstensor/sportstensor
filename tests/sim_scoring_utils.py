@@ -19,8 +19,10 @@ from common.constants import (
     LEAGUE_SENSITIVITY_ALPHAS,
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
-    MIN_PROBABILITY,
-    MIN_PROB_FOR_DRAWS,
+    MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
+    ROI_BET_AMOUNT,
+    MIN_ROI_THRESHOLD,
+    ROI_SCORING_WEIGHT,
     LEAGUES_ALLOWING_DRAWS,
     SENSITIVITY_ALPHA,
     GAMMA,
@@ -83,6 +85,7 @@ def calculate_incentives_and_update_scores():
     # Use this to get payouts to calculate ROI
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
 
     leagues_to_analyze = ACTIVE_LEAGUES
     #leagues_to_analyze = [League.NBA]
@@ -90,377 +93,55 @@ def calculate_incentives_and_update_scores():
     uids_to_last_leagues = {}
     uids_to_leagues_last_updated = {}
 
-    uid_to_best_league = {
-        0: 'NBA',      # NBA: 0.00549531, EPL: -0.000862287, NFL: 0.00021872
-        4: 'NBA',      # NBA: 1.39478, EPL: -0.5678, NFL: 0.483975
-        6: 'EPL',      # NBA: -0.00354889, EPL: 0.00244482, NFL: -1.98545e-05
-        7: 'NBA',      # NBA: 0.00489986, EPL: -0.00155182, NFL: 0.000497882
-        8: 'NBA',      # NBA: 0.0651583, EPL: -0.00991251, NFL: -0.000736007
-        9: 'NBA',      # NBA: 0.0609043, EPL: 0.00220152, NFL: -4.7169e-05
-        10: 'NBA',     # NBA: -0.00199353, EPL: -0.00124317, NFL: 0.000517759
-        12: 'NFL',     # NBA: -1.44031, EPL: -0.957016, NFL: -1.04315
-        14: 'EPL',     # NBA: -0.0320488, EPL: -0.00622819
-        15: 'EPL',     # NBA: -14.0798, EPL: 3.15163e-09
-        16: 'NBA',     # NBA: 0.0134838, EPL: -0.00895769
-        17: 'EPL',     # NBA: -2.00295, EPL: -0.842251, NFL: -1.88506
-        18: 'NBA',     # NBA: 0.0628245, EPL: -0.00563762, NFL: -0.000667659
-        19: 'EPL',     # NBA: -0.0160819, EPL: -0.00403653
-        20: 'EPL',     # NBA: -2.78309, EPL: -0.498345, NFL: -2.4467
-        21: 'NFL',     # NBA: 0.51433, EPL: -2.18173, NFL: 10.693
-        22: 'EPL',     # NBA: -0.017392, EPL: -0.00212223
-        23: 'NFL',     # NBA: -27.3268, EPL: -4.03054, NFL: 1.03913
-        24: 'NBA',     # NBA: 0.0101252, EPL: -0.0197205, NFL: -0.00175025
-        25: 'NBA',     # NBA: 0.0606919, EPL: -0.0122528, NFL: -0.00183062
-        26: 'EPL',     # NBA: -5.35848, EPL: -1.05867, NFL: -1.77626
-        29: 'NBA',     # NBA: 1.43969, EPL: -0.299053, NFL: 0.469992
-        30: 'EPL',     # EPL: -0.00328628
-        31: 'EPL',     # NBA: -0.576609, EPL: 0.152137, NFL: -3.03276
-        32: 'EPL',     # NBA: -0.00140011, EPL: -0.00170567
-        33: 'NBA',     # NBA: 0.00761529, EPL: 0.000397166, NFL: 0.000317264
-        34: 'EPL',     # NBA: -0.95135, EPL: -1.02697, NFL: -2.22173
-        35: 'NBA',     # NBA: -2.56843, EPL: -0.314112, NFL: -1.12526
-        36: 'NBA',     # NBA: 0.0554796, EPL: -0.0089094, NFL: -0.00183599
-        37: 'NBA',     # NBA: 0.0100823, EPL: -0.00284436, NFL: 0.000111423
-        38: 'EPL',     # NBA: -2.1585, EPL: 0.541175
-        41: 'NBA',     # NBA: 1.62597, EPL: -0.540154, NFL: 0.412724
-        42: 'EPL',     # NBA: -4.25973, EPL: -0.464677, NFL: -0.590194
-        43: 'EPL',     # NBA: -0.0012138, EPL: -0.00453559, NFL: 8.87072e-05
-        44: 'EPL',     # NBA: -6.18743, EPL: -3.76418, NFL: -0.430153
-        45: 'EPL',     # EPL: -0.00119587
-        46: 'EPL',     # NBA: -0.00451565, EPL: 8.37977e-07, NFL: -4.10008e-05
-        47: 'NFL',     # NBA: -5.20914, EPL: -0.765292, NFL: 1.22808
-        48: 'NFL',     # NBA: -0.108784, EPL: -0.0102622, NFL: 0.00248338
-        49: 'EPL',     # NBA: -0.00381958, EPL: -0.00112558, NFL: -0.000124026
-        51: 'NBA',     # NBA: 3.06211, EPL: 0.398022, NFL: 2.05531
-        52: 'NBA',     # NBA: 0.0655432, EPL: -0.00526663, NFL: -0.00183571
-        53: 'NBA',     # NBA: 0.00191485, EPL: 0.000818648, NFL: -1.67742e-05
-        54: 'EPL',     # NBA: -1.47925, EPL: 0.0410756, NFL: -2.62303
-        57: 'NFL',     # NBA: -0.0888912, NFL: 7.11162e-06
-        58: 'NBA',     # NBA: 0.0680194, EPL: -0.00210125, NFL: -0.000730763
-        59: 'NBA',     # NBA: 0.0466925, EPL: -0.0230185, NFL: -0.00183544
-        60: 'NBA',     # NBA: 0.0836556, EPL: -0.000835455, NFL: -6.55415e-05
-        61: 'NBA',     # NBA: 0.0561207, EPL: -0.0105183, NFL: -0.00183492
-        62: 'NBA',     # NBA: 0.0691787, EPL: 0.00359952, NFL: -1.1449e-05
-        64: 'EPL',     # NBA: -0.012283, EPL: -0.00286962
-        66: 'EPL',     # NBA: -3.17573, EPL: -1.45463, NFL: -2.01198
-        67: 'NFL',     # NBA: -0.0769223, EPL: -2.1949, NFL: 10.5947
-        68: 'EPL',     # NBA: -0.0114733, EPL: -0.0019125
-        69: 'NBA',     # NBA: 0.0644989, EPL: -0.0109959, NFL: -0.00183585
-        70: 'NBA',     # NBA: 0.0404441, EPL: -0.00535964, NFL: -0.00183493
-        71: 'NFL',     # NBA: 1.4152, EPL: -0.760337, NFL: 1.74726
-        72: 'EPL',     # NBA: -0.00139814, EPL: -0.000471776, NFL: -0.00013663
-        73: 'NBA',     # NBA: 0.00133798, EPL: -0.00368824
-        74: 'NBA',     # NBA: 0.00177158, EPL: -0.00528752
-        75: 'NBA',     # NBA: 0.0110365, EPL: -0.0193257
-        76: 'NFL',     # NBA: -0.00740535, EPL: -0.00592235, NFL: 0.000575382
-        78: 'NBA',     # NBA: 6.44141, EPL: -0.857837, NFL: 0.399258
-        79: 'EPL',     # NBA: -0.00169266, EPL: 0.00491857
-        80: 'EPL',     # NBA: -1.34398, EPL: -0.095412
-        81: 'NBA',     # NBA: 0.0502373, EPL: -0.00772791, NFL: -0.00183485
-        82: 'NBA',     # NBA: 0.00325992, EPL: -0.00094375, NFL: 0.000197089
-        83: 'NBA',     # NBA: 0.0590018, EPL: -0.0081072, NFL: -0.00183318
-        84: 'NBA',     # NBA: 1.30737, EPL: -0.485886, NFL: 0.467725
-        86: 'NBA',     # NBA: 0.00751199, EPL: -0.00559624, NFL: 0.000607101
-        87: 'NBA',     # NBA: 0.00944507, EPL: -0.00125586, NFL: -0.000447663
-        88: 'NBA',     # NBA: 0.00116602, EPL: -0.0091584, NFL: 0.000532489
-        90: 'EPL',     # NBA: -2.48621, EPL: -0.303108, NFL: -2.60368
-        91: 'EPL',     # NBA: -4.21748, EPL: -1.15689, NFL: -0.263983
-        92: 'NFL',     # NBA: -2.85562, EPL: -0.688206, NFL: -2.06567
-        93: 'NBA',     # NBA: 0.00677752, EPL: -0.00967879
-        95: 'NBA',     # NBA: 0.0630967, EPL: -0.0276388, NFL: -8.70028e-05
-        97: 'NBA',     # NBA: 0.0108071, EPL: -0.0162234
-        98: 'NBA',     # NBA: 0.00131656, EPL: -0.00378768, NFL: -0.000266354
-        99: 'NBA',     # NBA: 0.0757327, EPL: 0.00362265, NFL: -6.61011e-05
-        100: 'NBA',    # NBA: 1.4847, EPL: -0.392039, NFL: 0.469005
-        101: 'EPL',    # NBA: -1.36457, EPL: -0.938313, NFL: -2.61521
-        102: 'NFL',    # NBA: 0.958472, EPL: -0.0846324, NFL: 1.1339
-        104: 'NFL',    # NBA: -0.116212, EPL: -0.0273425, NFL: 0.00254156
-        105: 'EPL',    # EPL: 1.35832e-05
-        106: 'NFL',    # NBA: -0.00233833, EPL: -0.00416307, NFL: 0.000135698
-        107: 'NBA',    # NBA: 0.000546167, EPL: 0.000285085, NFL: 0.000480232
-        108: 'NFL',    # NBA: -0.00547655, EPL: -0.0024336, NFL: 0.000114651
-        109: 'EPL',    # EPL: -0.0093971
-        110: 'EPL',    # NBA: -0.00129921, EPL: -0.00617534
-        111: 'NFL',    # NBA: -0.145606, EPL: -0.0157812, NFL: 0.00231793
-        112: 'NBA',    # NBA: 7.07387, EPL: 0.475188, NFL: -0.303994
-        113: 'EPL',    # NBA: -1.20353, EPL: -0.754569, NFL: -1.69617
-        114: 'NBA',    # NBA: 0.00146815, EPL: -0.0113652
-        115: 'NBA',    # NBA: 0.0455808, EPL: -0.00411722, NFL: -0.00183554
-        116: 'NBA',    # NBA: 0.00402246, EPL: -0.0106408, NFL: 0.000192879
-        117: 'EPL',    # NBA: -1.76052, EPL: 0.135151, NFL: -3.13276
-        118: 'NBA',    # NBA: 0.0542371, EPL: -0.00748668, NFL: -0.00183586
-        119: 'EPL',    # EPL: -0.00300641
-        120: 'NBA',    # NBA: 0.0497496, EPL: -0.00720801, NFL: -0.00183594
-        121: 'NBA',    # NBA: 0.0699909, EPL: -0.00509823, NFL: -0.000114014
-        123: 'EPL',    # NBA: -2.86581, EPL: -0.442533, NFL: -3.31823
-        124: 'NBA',    # NBA: 0.00257092, EPL: -0.00426434
-        126: 'NBA',    # NBA: 3.60816, EPL: -0.277219, NFL: -0.858553
-        127: 'NBA',    # NBA: 0.00446108, EPL: 0.00761244, NFL: -5.47913e-05
-        128: 'NBA',    # NBA: 0.0608795, EPL: 0.000347714, NFL: -0.00183598
-        129: 'NBA',    # NBA: 0.0129139, EPL: -0.0143942
-        130: 'EPL',    # NBA: -0.00821843, EPL: 0.00745341, NFL: 0.000295534
-        131: 'NBA',    # NBA: 0.00330906, EPL: -0.00824692
-        132: 'NBA',    # NBA: 0.00172342, EPL: -0.00658816
-        133: 'EPL',    # EPL: 1.13233e-05
-        134: 'EPL',    # NBA: -0.196475, EPL: -0.315017, NFL: -2.44037
-        136: 'NFL',    # NBA: -5.94737, EPL: -0.649522, NFL: 1.98784
-        137: 'NBA',    # NBA: 3.25088, EPL: -1.42787, NFL: -1.99108
-        138: 'NBA',    # NBA: 6.81623, EPL: 0.149003, NFL: -0.316528
-        140: 'EPL',    # NBA: -0.0442832, EPL: -0.00147859
-        141: 'NFL',    # NBA: -2.319, EPL: -0.57382, NFL: 0.0038594
-        143: 'EPL',    # NBA: 0.00394266, EPL: 0.0053887, NFL: 0.000721167
-        144: 'NFL',    # NBA: 0.20831, EPL: 0.173064, NFL: 1.35287
-        145: 'NBA',    # NBA: -0.00259412, EPL: 0.00530704, NFL: 0.000170917
-        146: 'EPL',    # NBA: -8.89797, EPL: -4.44068, NFL: -2.55026
-        147: 'NBA',    # NBA: -0.000846921, EPL: -0.00610042, NFL: 0.000631325
-        148: 'NBA',    # NBA: 0.00364044, EPL: 0.00198855
-        149: 'NBA',    # NBA: 0.00702232, EPL: -4.33612e-05, NFL: 0.000135642
-        150: 'NBA',    # NBA: 0.0520572, EPL: -0.00634325, NFL: -0.00183595
-        151: 'NBA',    # NBA: 0.00372613, EPL: -0.0022979, NFL: 0.000259929
-        152: 'NBA',    # NBA: 0.00788707, EPL: -0.00640902
-        153: 'EPL',    # NBA: -2.24458, EPL: 0.116087, NFL: -1.69738
-        154: 'EPL',    # NBA: -0.000358148, EPL: 0.00330378
-        155: 'NBA',    # NBA: 0.00645906, EPL: -0.00707944
-        156: 'EPL',    # NBA: -2.55718, EPL: 0.126685, NFL: -2.61517
-        157: 'NBA',    # NBA: 0.0053556, EPL: -0.0167484
-        158: 'NBA',    # NBA: 0.0559163, EPL: -0.00494299, NFL: -0.00183596
-        159: 'NFL',    # NBA: -25.1885, EPL: -3.93117, NFL: 0.565918
-        160: 'EPL',    # NBA: -1.05652, EPL: -0.618558, NFL: -2.47087
-        162: 'NBA',    # NBA: 0.00974715, EPL: 0.00472273, NFL: -0.000299714
-        163: 'NBA',    # NBA: 0.0774234, EPL: -0.000207802, NFL: -6.97179e-05
-        164: 'NFL',    # NBA: -3.41864, EPL: -0.122055, NFL: 0.832228
-        165: 'NBA',    # NBA: 0.0026242, EPL: -0.0192809, NFL: -0.00058774
-        167: 'NBA',    # NBA: 0.00945336, EPL: 0.00103349, NFL: 0.000135958
-        168: 'NBA',    # NBA: 1.50736, EPL: -0.414925, NFL: 0.485616
-        169: 'NFL',    # NBA: -0.82635, EPL: -0.585383, NFL: -0.192169
-        170: 'NBA',    # NBA: 0.0593174, EPL: -0.00122672, NFL: -0.00011532
-        171: 'NBA',    # NBA: 0.054277, EPL: -0.00769591, NFL: -0.00183568
-        172: 'NBA',    # NBA: -0.00738182, EPL: 0.00126581, NFL: 0.000531876
-        173: 'NBA',    # NBA: 0.0581027, EPL: -0.0121944, NFL: -0.00183483
-        175: 'NBA',    # NBA: 0.0504422, EPL: -0.0127049, NFL: -0.00183309
-        177: 'NBA',    # NBA: 0.00104637, EPL: -0.00336229, NFL: -0.000191538
-        178: 'NBA',    # NBA: 0.054363, EPL: -0.00242708, NFL: -0.0018357
-        179: 'NBA',    # NBA: 0.0015858, EPL: 0.000702935
-        181: 'NBA',    # NBA: 0.0701791, EPL: -0.000711832, NFL: -0.000123168
-        187: 'NBA',    # NBA: 0.23674, EPL: -0.0465601, NFL: 0.0158337
-        189: 'EPL',    # EPL: -0.00406252
-        191: 'EPL',    # NBA: -3.92285, EPL: 0.617871, NFL: -2.48809
-        192: 'NBA',    # NBA: 0.043373, EPL: -0.00683138, NFL: -0.0018359
-        193: 'EPL',    # NBA: -25.782, EPL: -3.60521, NFL: -5.64857
-        194: 'EPL',    # EPL: -0.000816973
-        196: 'NBA',    # NBA: 0.00159681, EPL: 0.000559424
-        197: 'EPL',    # NBA: -1.39436, EPL: -0.438678, NFL: -1.40288
-        201: 'NBA',    # NBA: -0.0108703, EPL: 0.00567548, NFL: 0.000688346
-        202: 'NBA',    # NBA: 0.00279876, EPL: -0.00536884, NFL: 0.00010553
-        204: 'NFL',    # NBA: -0.0582234, EPL: -0.00546268, NFL: 0.00273393
-        205: 'NFL',    # NBA: 1.71136, EPL: 0.182421, NFL: 1.59435
-        206: 'NBA',    # NBA: 0.0668281, EPL: -0.00736011, NFL: -4.75822e-05
-        207: 'NBA',    # NBA: 0.0527657, EPL: -0.00628494, NFL: -0.000756083
-        208: 'NBA',    # NBA: 0.0329942, EPL: -0.00910205, NFL: -0.000348921
-        209: 'NBA',    # NBA: -0.00736627, EPL: 0.000301095, NFL: 0.000647093
-        210: 'NBA',    # NBA: 1.60345, EPL: -0.293229, NFL: 0.467796
-        211: 'NBA',    # NBA: 1.41409, EPL: -0.664063, NFL: 0.422437
-        213: 'NBA',    # NBA: 0.0409417, EPL: -0.0193769, NFL: -0.00106812
-        215: 'EPL',    # NBA: -0.00153733, EPL: 0.00627947
-        216: 'NFL',    # NBA: -0.0632884, EPL: -0.00194304, NFL: 0.00266722
-        217: 'NBA',    # NBA: 0.00317017, EPL: 0.00324113, NFL: -5.171e-05
-        219: 'NFL',    # NBA: -0.9618, EPL: -0.0940649, NFL: 1.32615
-        220: 'EPL',    # NBA: -4.00546, EPL: 0.160441, NFL: -1.55814
-        221: 'NBA',    # NBA: 0.0085603, EPL: 0.00449205, NFL: -0.000101153
-        222: 'EPL',    # EPL: -0.00192885
-        223: 'EPL',    # NBA: -5.08371, EPL: 0.709119, NFL: -1.66794
-        224: 'NFL',    # NBA: 0.415878, EPL: -1.70702, NFL: 10.8193
-        225: 'EPL',    # NBA: -2.10695, EPL: -0.679679, NFL: -2.0811
-        226: 'NBA',    # NBA: -0.00735229, EPL: -0.010633, NFL: -0.000178607
-        230: 'NBA',    # NBA: 0.329733, EPL: -0.69332, NFL: 0.168542
-        231: 'EPL',    # NBA: -1.86121, EPL: -0.337417, NFL: -3.38152
-        232: 'NBA',    # NBA: 6.88975, EPL: -0.229296, NFL: 0.412949
-        234: 'NBA',    # NBA: 0.00136211, EPL: 0.0143301, NFL: 0.000361869
-        235: 'NBA',    # NBA: 0.00089815, EPL: -0.000859684
-        236: 'NBA',    # NBA: 0.00882884, EPL: -0.00160914, NFL: 0.000421872
-        237: 'NBA',    # NBA: 0.0571384, EPL: -0.00626461, NFL: -0.00183036
-        238: 'EPL',    # NBA: -11.6765, EPL: -4.18825, NFL: -2.62263
-        241: 'NBA',    # NBA: 1.35027, EPL: -0.418818, NFL: 0.468425
-        242: 'NBA',    # NBA: -0.00107452, EPL: 0.00322214, NFL: -1.08686e-05
-        243: 'NBA',    # NBA: -0.00652929, EPL: -0.000979794, NFL: 0.00049079
-        244: 'NBA',    # NBA: -0.00053507, EPL: 0.00248046, NFL: -7.14271e-05
-        245: 'NFL',    # NBA: -31.0071, EPL: -2.48581, NFL: -0.715581
-        246: 'NFL',    # NBA: -10.8554, EPL: -3.8437, NFL: -0.254066
-        249: 'NFL',    # NBA: 0.366677, EPL: -0.440426, NFL: 0.741298
-        250: 'NBA',    # NBA: 0.0585908, EPL: -0.00704407, NFL: -0.00183294
-        252: 'EPL',    # EPL: -0.00240596
-        253: 'NBA',    # NBA: 0.0578772, EPL: -0.0137094, NFL: -0.00183294
-        254: 'EPL',    # NBA: -0.9618, EPL: -0.929817, NFL: -1.33151
-        255: 'NBA'     # NBA: 0.0698644, EPL: -0.00341698, NFL: -0.000143775
-    }
+    # Recreating the dictionary with UID to League mapping from the provided data
 
     uid_to_best_league = {
-        0: 'NBA',
-        4: 'NBA',
-        5: 'NBA',
-        6: 'NBA',
-        7: 'NBA',
-        8: 'NBA',
-        9: 'NBA',
-        10: 'NBA',
-        11: 'NFL',
-        12: 'NBA',
-        13: 'NFL',
-        14: 'NFL',
-        15: 'NBA',
-        16: 'NFL',
-        17: 'NBA',
-        18: 'NBA',
-        19: 'NBA',
-        20: 'NFL',
-        21: 'NFL',
-        22: 'NBA',
-        23: 'NBA',
-        24: 'NFL',
-        25: 'NBA',
-        26: 'NBA',
-        27: 'NBA',
-        28: 'NBA',
-        29: 'NBA',
-        30: 'NFL',
-        31: 'NFL',
-        32: 'NBA',
-        33: 'NBA',
-        34: 'NFL',
-        35: 'NBA',
-        36: 'NBA',
-        37: 'NBA',
-        38: 'NFL',
-        40: 'NBA',
-        41: 'NBA',
-        42: 'NBA',
-        43: 'NBA',
-        44: 'NBA',
-        45: 'NBA',
-        46: 'NBA',
-        47: 'NBA',
-        48: 'NFL',
-        49: 'NBA',
-        50: 'NBA',
-        51: 'NBA',
-        52: 'NBA',
-        53: 'NBA',
-        54: 'NFL',
-        56: 'NBA',
-        57: 'NFL',
-        58: 'NBA',
-        59: 'NBA',
-        60: 'NBA',
-        61: 'NBA',
-        62: 'NBA',
-        63: 'NBA',
-        64: 'NFL',
-        65: 'NBA',
-        66: 'NBA',
-        67: 'NFL',
-        68: 'NFL',
-        69: 'NBA',
-        71: 'NBA',
-        73: 'NFL',
-        74: 'NBA',
-        75: 'NFL',
-        78: 'NFL',
-        80: 'NFL',
-        81: 'NBA',
-        83: 'NBA',
-        84: 'NBA',
-        86: 'NBA',
-        88: 'NBA',
-        90: 'NFL',
-        92: 'NBA',
-        93: 'NFL',
-        97: 'NFL',
-        99: 'NFL',
-        100: 'NFL',
-        102: 'NFL',
-        104: 'NFL',
-        106: 'NBA',
-        107: 'NBA',
-        109: 'NBA',
-        110: 'NBA',
-        111: 'NBA',
-        113: 'NFL',
-        114: 'NFL',
-        115: 'NFL',
-        116: 'NBA',
-        118: 'NFL',
-        119: 'NFL',
-        120: 'NFL',
-        121: 'NFL',
-        122: 'NBA',
-        123: 'NFL',
-        124: 'NBA',
-        125: 'NBA',
-        126: 'NFL',
-        127: 'NBA',
-        128: 'NFL',
-        129: 'NFL',
-        130: 'NBA',
-        131: 'NFL',
-        132: 'NBA',
-        133: 'NFL',
-        134: 'NFL',
-        135: 'NBA',
-        136: 'NBA',
-        137: 'NFL',
-        138: 'NFL',
-        139: 'NBA',
-        141: 'NBA',
-        143: 'NBA',
-        145: 'NBA',
-        146: 'NBA',
-        147: 'NBA',
-        148: 'NBA',
-        150: 'NFL',
-        152: 'NFL',
-        153: 'NFL',
-        155: 'NFL',
-        157: 'NFL',
-        158: 'NFL',
-        159: 'NBA',
-        160: 'NBA',
-        163: 'NFL',
-        167: 'NBA',
-        168: 'NFL',
-        170: 'NFL',
-        171: 'NFL',
-        173: 'NFL',
-        175: 'NFL',
-        178: 'NFL',
-        181: 'NFL',
-        187: 'NFL',
-        191: 'NFL',
-        192: 'NFL',
-        194: 'NFL',
-        195: 'NFL',
-        197: 'NFL',
-        199: 'NBA',
-        201: 'NBA',
-        202: 'NBA',
-        204: 'NFL',
-        206: 'NFL',
-        207: 'NFL',
-        210: 'NFL',
-        211: 'NFL',
-        213: 'NFL',
-        216: 'NFL',
-        220: 'NFL',
-        222: 'NFL',
-        223: 'NFL',
-        224: 'NFL',
-        226: 'NBA',
-        230: 'EPL',
-        234: 'NBA',
-        237: 'NFL',
-        240: 'NFL',
-        249: 'NFL',
-        252: 'NFL',
-        255: 'NFL'
+        0: 'NBA', 4: 'NBA', 5: 'NBA', 6: 'NBA', 7: 'NBA',
+        8: 'NBA', 9: 'NBA', 10: 'NBA', 11: 'NFL', 12: 'NFL',
+        13: 'NFL', 14: 'NBA', 15: 'NBA', 16: 'NFL', 17: 'NFL',
+        18: 'NBA', 19: 'NBA', 20: 'NFL', 21: 'NFL', 22: 'NBA',
+        23: 'NFL', 24: 'NBA', 25: 'NBA', 26: 'NFL', 27: 'NBA',
+        28: 'NBA', 29: 'NBA', 30: 'NFL', 31: 'NFL', 32: 'NBA',
+        33: 'NBA', 34: 'NFL', 35: 'NBA', 36: 'NFL', 37: 'NBA',
+        38: 'NFL', 40: 'NBA', 41: 'NBA', 42: 'NFL', 43: 'NBA',
+        44: 'NBA', 45: 'NBA', 46: 'NBA', 47: 'NFL', 48: 'NBA',
+        49: 'NBA', 50: 'NBA', 51: 'NFL', 52: 'NBA', 53: 'NBA',
+        54: 'NFL', 56: 'NBA', 57: 'EPL', 58: 'NBA', 59: 'NBA',
+        60: 'NBA', 61: 'NFL', 62: 'NFL', 63: 'NBA', 64: 'NFL',
+        65: 'NBA', 66: 'NBA', 67: 'NFL', 68: 'NFL', 69: 'NBA',
+        70: 'NBA', 71: 'NBA', 72: 'NBA', 73: 'NFL', 74: 'NBA',
+        75: 'NFL', 76: 'NBA', 77: 'NBA', 78: 'NBA', 79: 'NBA',
+        80: 'NFL', 81: 'NBA', 82: 'NBA', 83: 'NBA', 84: 'NBA',
+        85: 'NBA', 86: 'NBA', 87: 'NBA', 88: 'NBA', 89: 'NBA',
+        90: 'NFL', 91: 'NFL', 92: 'NBA', 93: 'NFL', 94: 'NBA',
+        95: 'NBA', 97: 'NFL', 98: 'NBA', 99: 'NFL', 100: 'NFL',
+        101: 'NFL', 102: 'NFL', 103: 'NFL', 104: 'NFL', 105: 'NBA',
+        107: 'NBA', 108: 'NFL', 109: 'NBA', 110: 'NFL', 111: 'NFL',
+        112: 'NFL', 113: 'NFL', 114: 'NFL', 115: 'NFL', 116: 'NBA',
+        117: 'NFL', 118: 'NFL', 119: 'NFL', 120: 'NFL', 121: 'NFL',
+        122: 'NBA', 123: 'NFL', 124: 'NBA', 125: 'NBA', 126: 'NFL',
+        127: 'NBA', 128: 'NFL', 129: 'NFL', 130: 'NFL', 131: 'NFL',
+        132: 'NBA', 133: 'NFL', 134: 'NFL', 135: 'NBA', 136: 'NBA',
+        137: 'NFL', 138: 'NFL', 139: 'NBA', 140: 'NBA', 141: 'NBA',
+        143: 'NBA', 144: 'NFL', 145: 'NBA', 146: 'NBA', 147: 'NBA',
+        148: 'NBA', 149: 'NFL', 150: 'NFL', 151: 'NBA', 152: 'NFL',
+        153: 'NFL', 154: 'NBA', 155: 'NFL', 156: 'NFL', 157: 'NFL',
+        158: 'NFL', 159: 'NFL', 160: 'NFL', 161: 'NBA', 162: 'NBA',
+        163: 'NFL', 164: 'NFL', 165: 'NFL', 166: 'NBA', 167: 'NBA',
+        168: 'NFL', 169: 'NBA', 170: 'NFL', 171: 'NFL', 172: 'NBA',
+        173: 'NFL', 174: 'NBA', 175: 'NFL', 176: 'NBA', 177: 'NBA',
+        178: 'NFL', 179: 'NBA', 181: 'NFL', 183: 'NBA', 184: 'NBA',
+        186: 'NBA', 187: 'NBA', 188: 'NBA', 189: 'NBA', 191: 'NFL',
+        192: 'NFL', 193: 'NFL', 194: 'NFL', 195: 'NFL', 196: 'NBA',
+        197: 'NFL', 198: 'NBA', 199: 'NBA', 202: 'NBA', 204: 'NBA',
+        205: 'NFL', 206: 'NFL', 207: 'NFL', 208: 'NBA', 210: 'NFL',
+        211: 'NFL', 213: 'NFL', 214: 'NBA', 215: 'NFL', 216: 'NBA',
+        218: 'NFL', 219: 'NBA', 220: 'NFL', 222: 'NFL', 224: 'NFL',
+        225: 'NFL', 227: 'NBA', 229: 'NFL', 230: 'NBA', 232: 'NFL',
+        234: 'NBA', 235: 'NBA', 236: 'NBA', 237: 'NFL', 238: 'NBA',
+        240: 'NFL', 241: 'NFL', 243: 'NBA', 245: 'NBA', 247: 'NBA',
+        249: 'NBA', 250: 'NFL', 251: 'NBA', 252: 'NFL', 253: 'NFL',
+        254: 'NBA', 255: 'NFL'
     }
 
     for league in leagues_to_analyze:
@@ -478,22 +159,6 @@ def calculate_incentives_and_update_scores():
                 league_miner_uids.append(uid)
                 uids_to_last_leagues[uid] = [league]
                 uids_to_leagues_last_updated[uid] = dt.datetime.now()
-
-            # Randomly select a subset of miners to commit to the league. UIDs 0-90 goto NBA. UIDs 91-180 goto NFL. UIDs 181-240 goto EPL.
-            """
-            if league == League.NBA and uid < 90:
-                league_miner_uids.append(uid)
-                uids_to_last_leagues[uid] = [league]
-                uids_to_leagues_last_updated[uid] = dt.datetime.now()
-            elif league == League.NFL and 90 <= uid < 180:
-                league_miner_uids.append(uid)
-                uids_to_last_leagues[uid] = [league]
-                uids_to_leagues_last_updated[uid] = dt.datetime.now()
-            elif league == League.EPL and 180 <= uid < 256:
-                league_miner_uids.append(uid)
-                uids_to_last_leagues[uid] = [league]
-                uids_to_leagues_last_updated[uid] = dt.datetime.now()
-            """
 
         for index, uid in enumerate(all_uids):
             total_score, rho = 0, 0
@@ -528,7 +193,7 @@ def calculate_incentives_and_update_scores():
                 for pwmd in predictions_with_match_data:
                     log_prediction = random.random() < 0.1
                     log_prediction = False
-                    #if pwmd.prediction.probability <= MIN_PROBABILITY:
+                    #if pwmd.prediction.minerId == 254 and (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
                         #log_prediction = True
                     if log_prediction:
                         print(f"Randomly logged prediction for miner {uid} in league {league.name}:")
@@ -547,13 +212,12 @@ def calculate_incentives_and_update_scores():
                         print(f"Skipping calculation of this prediction.")
                         continue
 
-                    # if predictionDate within 10 minutes of matchDate, calculate roi payout
-                    if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10 and pwmd.prediction.predictionDate >= dt.datetime(2024, 12, 3, 0, 0, 0):
-                        league_roi_counts[league][index] += 1
-                        if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
-                            league_roi_payouts[league][index] += 100 * (pwmd.get_actual_winner_odds()-1)
-                        else:
-                            league_roi_payouts[league][index] -= 100
+                    # Calculate ROI for the prediction
+                    league_roi_counts[league][index] += 1
+                    if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
+                        league_roi_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    else:
+                        league_roi_payouts[league][index] -= ROI_BET_AMOUNT
 
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
@@ -608,6 +272,13 @@ def calculate_incentives_and_update_scores():
                     #    closing_odds=pwmd.get_closing_odds_for_predicted_outcome(),
                     #)
                     if log_prediction:
+                        print(f"      • MatchId: {pwmd.prediction.matchId}")
+                        print(f"      • {pwmd.prediction.awayTeamName} ({pwmd.awayTeamOdds:.4f}) at {pwmd.prediction.homeTeamName} ({pwmd.homeTeamOdds:.4f})")
+                        print(f"      • Prediction:  {pwmd.prediction.get_predicted_team()} ({pwmd.prediction.probability:.4f} | {1/pwmd.prediction.probability:.4f})")
+                        print(f"      • Actual Winner: {pwmd.get_actual_winner()}")
+                        if round(pwmd.get_closing_odds_for_predicted_outcome(),4) < round((1 / pwmd.prediction.probability), 4):
+                            print(f"      • Lay Prediction")
+                        print(f"      • Closing Odds: {pwmd.get_closing_odds_for_predicted_outcome():.4f}")
                         print(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
                     
                     # Calculate the Gaussian filter
@@ -615,20 +286,30 @@ def calculate_incentives_and_update_scores():
                     if log_prediction:
                         print(f"      • Gaussian filter: {gfilter:.4f}")
                     
-                    # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                    if  ((
-                            (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
-                            or 
-                            (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        ) or \
-                        (
-                            (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
-                            or
-                            (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        )) \
-                        and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 \
-                        and sigma < 0:
+                    # Set minimum value for Gaussian filter if the prediction was for the underdog
+                    if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS) and pwmd.get_closing_odds_for_predicted_outcome() > (1 / pwmd.prediction.probability):
                         
+                        prev_gfilter = gfilter
+                        gfilter =  max(MIN_GFILTER_FOR_UNDERDOG_PREDICTION, gfilter)
+
+                        # Only log the T-10m interval
+                        """
+                        if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                            print(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
+                            print(f"      -- Prediction: {pwmd.prediction.get_predicted_team()} ({pwmd.prediction.probability:.4f} | {1/pwmd.prediction.probability:.4f})")
+                            print(f"      -- Actual Winner: {pwmd.get_actual_winner()}")
+                            print(f"      -- Odds: {pwmd.prediction.homeTeamName} ({pwmd.homeTeamOdds:.4f}) vs {pwmd.prediction.awayTeamName} ({pwmd.awayTeamOdds:.4f})")
+                            if pwmd.drawOdds > 0:
+                                print(f"      -- Draw Odds: {pwmd.drawOdds:.4f}")
+                            print(f"      -- Closing Odds: {pwmd.get_closing_odds_for_predicted_outcome():.4f}")
+                            print(f"      -- Raw Edge: {sigma:.4f}")
+                        """
+                            
+                        if log_prediction:
+                            print(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
+                    
+                    # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
+                    elif pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner() and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 and sigma < 0:
                         gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                         if log_prediction:
                             print(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
@@ -640,35 +321,59 @@ def calculate_incentives_and_update_scores():
                         print(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                         print("-" * 50)
 
-            final_score = rho * total_score
-            league_scores[league][index] = final_score
+            final_edge_score = rho * total_score
+            league_scores[league][index] = final_edge_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
             total_lay_preds = len([
-                pwmd for pwmd in predictions_with_match_data if pwmd.get_closing_odds_for_predicted_outcome() < 1 / pwmd.prediction.probability
+                pwmd for pwmd in predictions_with_match_data if round(pwmd.get_closing_odds_for_predicted_outcome(),2) < round((1 / pwmd.prediction.probability), 2)
             ])
-            avg_pred_score = final_score / len(predictions_with_match_data) if len(predictions_with_match_data) > 0 else 0.0
-            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * 100) if league_roi_counts[league][index] > 0 else 0.0
+            total_underdog_preds = len([
+                pwmd for pwmd in predictions_with_match_data if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS)
+            ])
+            avg_pred_score = final_edge_score / len(predictions_with_match_data) if len(predictions_with_match_data) > 0 else 0.0
+            raw_edge = 0
+            for pwmd in predictions_with_match_data:
+                raw_edge += pwmd.prediction.closingEdge
+            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
+            raw_roi = roi
+            if roi < MIN_ROI_THRESHOLD:
+                roi = 0.0
+            final_roi_score = round(rho * ((roi if roi>0 else 0)*100), 2)
+            league_roi_scores[league][index] = final_roi_score
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
-                league_table_data.append([uid, round(final_score, 2), len(predictions_with_match_data), round(avg_pred_score, 4), round(rho, 2), str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), str(round(roi*100, 2)) + "%"])
-                #league_table_data.append([uid, final_score, len(predictions_with_match_data), rho, total_wrong_pred_pos_edge_penalty_preds])
+                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", len(predictions_with_match_data), round(avg_pred_score, 4), round(rho, 2), str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), total_underdog_preds, round(raw_edge, 4)])
 
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print(tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Avg Pred Score', 'Rho', '# Lay Predictions', 'ROI'], tablefmt='grid'))
-            #print(tabulate(league_table_data, headers=['UID', 'Score', '# Predictions', 'Rho', '# Wrong Pred Pos Edge'], tablefmt='grid'))
+            print(tabulate(league_table_data, headers=['UID', 'Score', 'ROI Score', 'ROI', '# Predictions', 'Avg Pred Score', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
         else:
             print(f"No non-zero scores for {league.name}")
+
+        # Normalize league scores and weight for Edge and ROI scores
+        # Normalize edge scores
+        min_edge, max_edge = min(league_scores[league]), max(league_scores[league])
+        normalized_edge = [(score - min_edge) / (max_edge - min_edge) if score > 0 else 0 for score in league_scores[league]]
+        # Normalize ROI scores
+        min_roi, max_roi = min(league_roi_scores[league]), max(league_roi_scores[league])
+        normalized_roi = [(score - min_roi) / (max_roi - min_roi) if (max_roi - min_roi) > 0 else 0 for score in league_roi_scores[league]]
+        
+        # Apply weights and combine and set to final league scores
+        league_scores[league] = [
+            (1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r
+            if r > 0 else 0
+            for e, r in zip(normalized_edge, normalized_roi)
+        ]
 
         # Create top 10 scores table
         top_scores_table = []
         # Sort the final scores in descending order. We need to sort the uids as well so they match
         top_scores, top_uids = zip(*sorted(zip(league_scores[league], all_uids), reverse=True))
         for i in range(10):
-            top_scores_table.append([top_uids[i], top_scores[i]])
+            top_scores_table.append([i+1, top_uids[i], top_scores[i]])
         print(f"\nTop 10 Scores for {league.name}:")
-        print(tabulate(top_scores_table, headers=['UID', 'Final Score'], tablefmt='grid'))
+        print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score'], tablefmt='grid'))
 
         if len(matches_without_odds) > 0:
             print(f"\n==============================================================================")
@@ -746,78 +451,44 @@ def calculate_incentives_and_update_scores():
         for uid in final_copycat_penalties:
             league_scores[league][uid] = COPYCAT_PENALTY_SCORE
     
+    # Initialize total scores array
     all_scores = [0.0] * len(all_uids)
-    
-    # Normalize and scale the scores for each league
+
+    # Step 1: Calculate total positive scores for each league
+    league_totals = {league: 0.0 for league in ACTIVE_LEAGUES}
     for league in ACTIVE_LEAGUES:
-        # Get the max score for normalization (avoid division by zero)
-        max_score = max(league_scores[league]) if league_scores[league] else 0
+        league_totals[league] = sum(score for score in league_scores[league] if score > 0)
 
-        # Skip normalization if no miners in the league (max_score == 0)
-        if max_score == 0:
-            continue
-        
-        # Normalize the scores for this league
-        normalized_scores = [score / max_score for score in league_scores[league]]
-
-        # Scale normalized scores by the league's scoring percentage
-        scaled_scores = [score * LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
-
-        # Add the scaled scores for this league to the final all_scores
-        for i in range(len(all_uids)):
-            all_scores[i] += scaled_scores[i]
-
-    ### Verify emissions allocation percentages per league ###
-    # Initialize emissions per league
-    league_emissions = {league: 0.0 for league in ACTIVE_LEAGUES}
-    total_emissions = 0.0
-
-    # Step 1: Calculate scaled scores for each league and add them to all_scores
+    # Step 2: Scale scores within each league to match allocation percentage
+    scaled_scores_per_league = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     for league in ACTIVE_LEAGUES:
-        # Get the max score for normalization (avoid division by zero)
-        max_score = max(league_scores[league]) if league_scores[league] else 0
+        total_league_score = league_totals[league]
+        allocation = LEAGUE_SCORING_PERCENTAGES[league] * 100  # Convert to percentage
 
-        # Skip this league if no miners or all scores are <= 0
-        if max_score <= 0:
-            continue
+        if total_league_score > 0:
+            scaling_factor = allocation / total_league_score  # Factor to scale league scores
+            scaled_scores_per_league[league] = [
+                (score * scaling_factor if score > 0 else 0) for score in league_scores[league]
+            ]
 
-        # Normalize scores within the league (consider only positive scores)
-        normalized_scores = [(score / max_score) if score > 0 else 0 for score in league_scores[league]]
+    # Step 3: Aggregate scaled scores across all leagues
+    for i in range(len(all_uids)):
+        all_scores[i] = sum(scaled_scores_per_league[league][i] for league in ACTIVE_LEAGUES)
 
-        # Scale normalized scores by the league's allocation percentage
-        scaled_scores = [score * LEAGUE_SCORING_PERCENTAGES[league] for score in normalized_scores]
+    # Step 4: Verify emissions allocation percentages
+    league_emissions = {league: sum(scaled_scores_per_league[league]) for league in ACTIVE_LEAGUES}
+    total_emissions = sum(league_emissions.values())
 
-        # Add scaled scores to the league's total emissions (consider only positive contributions)
-        league_emissions[league] = sum(score for score in scaled_scores if score > 0)
+    # Print league emissions and verify percentages
+    print("\nLeague Emissions and Allocations:")
+    for league, emissions in league_emissions.items():
+        percentage = (emissions / total_emissions) * 100 if total_emissions > 0 else 0
+        print(f"League: {league.name}, Total Emissions: {emissions:.4f}, Percentage: {percentage:.2f}%")
 
-        # Add scaled scores to the global total emissions
-        total_emissions += league_emissions[league]
-
-    # Step 2: Rescale league emissions to ensure proper percentage allocations
-    rescaled_emissions = {league: 0.0 for league in ACTIVE_LEAGUES}
-    for league in ACTIVE_LEAGUES:
-        expected_total = total_emissions * LEAGUE_SCORING_PERCENTAGES[league]  # Expected emissions for this league
-        if league_emissions[league] > 0:
-            scaling_factor = expected_total / league_emissions[league]
-            rescaled_emissions[league] = league_emissions[league] * scaling_factor
-        else:
-            rescaled_emissions[league] = 0.0  # No emissions for this league if it had no contributions
-
-    # Step 3: Verify league emissions percentages
-    total_rescaled_emissions = sum(rescaled_emissions.values())
-    for league, emissions in rescaled_emissions.items():
-        percentage = (emissions / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
-        print(f"League: {league.name}, Rescaled Emissions: {emissions:.4f}, Percentage: {percentage:.2f}%")
-
-    # Cross-check to ensure the percentages match the expected allocations
-    for league in ACTIVE_LEAGUES:
-        actual_percentage = (rescaled_emissions[league] / total_rescaled_emissions) * 100 if total_rescaled_emissions > 0 else 0
+        # Cross-check to ensure percentages match expected allocations
         expected_percentage = LEAGUE_SCORING_PERCENTAGES[league] * 100
-        if not abs(actual_percentage - expected_percentage) < 0.01:  # Allow a small tolerance
-            print(f"Warning: League {league.name} allocation mismatch!")
-            print(f"  Expected: {expected_percentage:.2f}%, Actual: {actual_percentage:.2f}%")
-    print()
-    ### End Verify emissions allocation percentages per league ###
+        if not abs(percentage - expected_percentage) < 0.01:  # Allow a small tolerance
+            print(f"  Warning: Allocation mismatch for {league.name}! Expected: {expected_percentage:.2f}%, Actual: {percentage:.2f}%")
     
     # Apply Pareto to all scores
     print(f"Applying Pareto distribution (mu: {PARETO_MU}, alpha: {PARETO_ALPHA}) to scores...")
@@ -843,16 +514,16 @@ def calculate_incentives_and_update_scores():
     top_scores_table = []
     # Sort the final scores in descending order. We need to sort the uids as well so they match
     top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
-    for i in range(75):
+    for i in range(200):
         miner_league = ""
         if top_uids[i] in uids_to_last_leagues and len(uids_to_last_leagues[top_uids[i]]) > 0:
             miner_league = uids_to_last_leagues[top_uids[i]][0].name
         is_cabal = ""
         if metagraph.coldkeys[top_uids[i]] in []:
             is_cabal = "✔"
-        top_scores_table.append([top_uids[i], top_scores[i], miner_league, is_cabal, metagraph.coldkeys[top_uids[i]][:8]])
-    print("\nTop 75 Miner Scores:")
-    print(tabulate(top_scores_table, headers=['UID', 'Final Score', 'League', 'Cabal?', 'Coldkey'], tablefmt='grid'))
+        top_scores_table.append([i+1, top_uids[i], top_scores[i], miner_league, is_cabal, metagraph.coldkeys[top_uids[i]][:8]])
+    print("\nTop Miner Scores:")
+    print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'League', 'Cabal?', 'Coldkey'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in final_scores if score > 0]
