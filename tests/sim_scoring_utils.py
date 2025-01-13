@@ -515,13 +515,14 @@ def calculate_incentives_and_update_scores():
     # Sort the final scores in descending order. We need to sort the uids as well so they match
     top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
     for i in range(200):
-        miner_league = ""
-        if top_uids[i] in uids_to_last_leagues and len(uids_to_last_leagues[top_uids[i]]) > 0:
-            miner_league = uids_to_last_leagues[top_uids[i]][0].name
-        is_cabal = ""
-        if metagraph.coldkeys[top_uids[i]] in []:
-            is_cabal = "✔"
-        top_scores_table.append([i+1, top_uids[i], top_scores[i], miner_league, is_cabal, metagraph.coldkeys[top_uids[i]][:8]])
+        if top_scores[i] is not None and top_scores[i] > 0:
+            miner_league = ""
+            if top_uids[i] in uids_to_last_leagues and len(uids_to_last_leagues[top_uids[i]]) > 0:
+                miner_league = uids_to_last_leagues[top_uids[i]][0].name
+            is_cabal = ""
+            if metagraph.coldkeys[top_uids[i]] in []:
+                is_cabal = "✔"
+            top_scores_table.append([i+1, top_uids[i], top_scores[i], miner_league, is_cabal, metagraph.coldkeys[top_uids[i]][:8]])
     print("\nTop Miner Scores:")
     print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'League', 'Cabal?', 'Coldkey'], tablefmt='grid'))
 
