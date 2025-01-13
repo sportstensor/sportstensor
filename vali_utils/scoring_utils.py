@@ -460,13 +460,13 @@ def calculate_incentives_and_update_scores(vali):
                         prev_gfilter = gfilter
                         gfilter =  max(MIN_GFILTER_FOR_UNDERDOG_PREDICTION, gfilter)
                         if log_prediction:
-                            print(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
+                            bt.logging.debug(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
                     
                     # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
                     elif pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner() and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 and sigma < 0:
                         gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                         if log_prediction:
-                            print(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
+                            bt.logging.debug(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
                     # Apply sigma and G (gaussian filter) to v
                     total_score += v * sigma * gfilter
