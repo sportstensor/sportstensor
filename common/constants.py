@@ -48,7 +48,7 @@ SCORING_INTERVAL_IN_MINUTES = 1
 MAX_TEAM_NAME_LENGTH = 32
 
 ########## SCORING CONSTANTS ##############
-# min probability for a prediction to determine lay prediction.
+# min probability for a prediction to determine opposite lay prediction.
 MIN_PROBABILITY = 0.5
 MIN_PROB_FOR_DRAWS = 0.3340
 
@@ -91,8 +91,8 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
     League.MLB: 0.0,
-    League.NBA: 0.55,
-    League.EPL: 0.05,
+    League.NBA: 0.59,
+    League.EPL: 0.01,
     League.MLS: 0.0,
     League.NFL: 0.40
 }

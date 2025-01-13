@@ -19,9 +19,8 @@ from common.constants import (
     COPYCAT_PENALTY_SCORE,
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
+    MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
-    MIN_PROBABILITY,
-    MIN_PROB_FOR_DRAWS,
     MIN_ROI_THRESHOLD,
     ROI_SCORING_WEIGHT
 )
@@ -456,23 +455,18 @@ def calculate_incentives_and_update_scores(vali):
                     if log_prediction:
                         bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
                     
+                    # Set minimum value for Gaussian filter if the prediction was for the underdog
+                    if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS) and pwmd.get_closing_odds_for_predicted_outcome() > (1 / pwmd.prediction.probability):
+                        prev_gfilter = gfilter
+                        gfilter =  max(MIN_GFILTER_FOR_UNDERDOG_PREDICTION, gfilter)
+                        if log_prediction:
+                            print(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
+                    
                     # Apply a penalty if the prediction was incorrect and the Gaussian filter is less than 1 and greater than 0
-                    if  ((
-                            (pwmd.prediction.probability > MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
-                            or 
-                            (pwmd.prediction.probability < MIN_PROBABILITY and league not in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        ) or \
-                        (
-                            (pwmd.prediction.probability > MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner())
-                            or
-                            (pwmd.prediction.probability < MIN_PROB_FOR_DRAWS and league in LEAGUES_ALLOWING_DRAWS and pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner())
-                        )) \
-                        and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 \
-                        and sigma < 0:
-                        
+                    elif pwmd.prediction.get_predicted_team() != pwmd.get_actual_winner() and round(gfilter, 4) > 0 and round(gfilter, 4) < 1 and sigma < 0:
                         gfilter = max(MAX_GFILTER_FOR_WRONG_PREDICTION, gfilter)
                         if log_prediction:
-                            bt.logging.debug(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
+                            print(f"      • Penalty applied for wrong prediction. gfilter: {gfilter:.4f}")
 
                     # Apply sigma and G (gaussian filter) to v
                     total_score += v * sigma * gfilter
