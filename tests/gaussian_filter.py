@@ -157,7 +157,8 @@ def apply_gaussian_filter(odds, prob):
     :return: float, the calculated Gaussian filter
     """
     t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
-    t2 = 0.0001 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
+    t2 = 0.05 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
+    #t2 = 0.0001 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
     a = 0.25 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
     c = 0.25 # Minimum plateau width/boundary

@@ -20,10 +20,9 @@ from common.constants import (
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
+    ROI_BET_AMOUNT,
     MIN_ROI_THRESHOLD,
     ROI_SCORING_WEIGHT,
-    MIN_PROBABILITY,
-    MIN_PROB_FOR_DRAWS,
     LEAGUES_ALLOWING_DRAWS,
     SENSITIVITY_ALPHA,
     GAMMA,
@@ -111,7 +110,7 @@ def calculate_incentives_and_update_scores():
         60: 'NBA', 61: 'NFL', 62: 'NFL', 63: 'NBA', 64: 'NFL',
         65: 'NBA', 66: 'NBA', 67: 'NFL', 68: 'NFL', 69: 'NBA',
         70: 'NBA', 71: 'NBA', 72: 'NBA', 73: 'NFL', 74: 'NBA',
-        75: 'NFL', 76: 'NBA', 77: 'NBA', 78: 'NFL', 79: 'NBA',
+        75: 'NFL', 76: 'NBA', 77: 'NBA', 78: 'NBA', 79: 'NBA',
         80: 'NFL', 81: 'NBA', 82: 'NBA', 83: 'NBA', 84: 'NBA',
         85: 'NBA', 86: 'NBA', 87: 'NBA', 88: 'NBA', 89: 'NBA',
         90: 'NFL', 91: 'NFL', 92: 'NBA', 93: 'NFL', 94: 'NBA',
@@ -194,8 +193,8 @@ def calculate_incentives_and_update_scores():
                 for pwmd in predictions_with_match_data:
                     log_prediction = random.random() < 0.1
                     log_prediction = False
-                    if pwmd.prediction.minerId == 254 and (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
-                        log_prediction = True
+                    #if pwmd.prediction.minerId == 254 and (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                        #log_prediction = True
                     if log_prediction:
                         print(f"Randomly logged prediction for miner {uid} in league {league.name}:")
                         print(f"  • Number of predictions: {len(predictions_with_match_data)}")
@@ -216,9 +215,9 @@ def calculate_incentives_and_update_scores():
                     # Calculate ROI for the prediction
                     league_roi_counts[league][index] += 1
                     if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
-                        league_roi_payouts[league][index] += 100 * (pwmd.get_actual_winner_odds()-1)
+                        league_roi_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
                     else:
-                        league_roi_payouts[league][index] -= 100
+                        league_roi_payouts[league][index] -= ROI_BET_AMOUNT
 
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
@@ -294,6 +293,7 @@ def calculate_incentives_and_update_scores():
                         gfilter =  max(MIN_GFILTER_FOR_UNDERDOG_PREDICTION, gfilter)
 
                         # Only log the T-10m interval
+                        """
                         if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
                             print(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
                             print(f"      -- Prediction: {pwmd.prediction.get_predicted_team()} ({pwmd.prediction.probability:.4f} | {1/pwmd.prediction.probability:.4f})")
@@ -303,6 +303,7 @@ def calculate_incentives_and_update_scores():
                                 print(f"      -- Draw Odds: {pwmd.drawOdds:.4f}")
                             print(f"      -- Closing Odds: {pwmd.get_closing_odds_for_predicted_outcome():.4f}")
                             print(f"      -- Raw Edge: {sigma:.4f}")
+                        """
                             
                         if log_prediction:
                             print(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
@@ -333,14 +334,15 @@ def calculate_incentives_and_update_scores():
             raw_edge = 0
             for pwmd in predictions_with_match_data:
                 raw_edge += pwmd.prediction.closingEdge
-            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * 100) if league_roi_counts[league][index] > 0 else 0.0
+            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
+            raw_roi = roi
             if roi < MIN_ROI_THRESHOLD:
                 roi = 0.0
             final_roi_score = round(rho * ((roi if roi>0 else 0)*100), 2)
             league_roi_scores[league][index] = final_roi_score
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
-                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(roi*100, 2)) + "%", len(predictions_with_match_data), round(avg_pred_score, 4), round(rho, 2), str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), total_underdog_preds, round(raw_edge, 4)])
+                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", len(predictions_with_match_data), round(avg_pred_score, 4), round(rho, 2), str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), total_underdog_preds, round(raw_edge, 4)])
 
         # Log league scores
         if league_table_data:

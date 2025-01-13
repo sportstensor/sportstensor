@@ -21,6 +21,7 @@ from common.constants import (
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
+    ROI_BET_AMOUNT,
     MIN_ROI_THRESHOLD,
     ROI_SCORING_WEIGHT
 )
@@ -397,9 +398,9 @@ def calculate_incentives_and_update_scores(vali):
                     # Calculate ROI for the prediction
                     league_roi_counts[league][index] += 1
                     if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
-                        league_roi_payouts[league][index] += 100 * (pwmd.get_actual_winner_odds()-1)
+                        league_roi_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
                     else:
-                        league_roi_payouts[league][index] -= 100
+                        league_roi_payouts[league][index] -= ROI_BET_AMOUNT
 
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
@@ -480,7 +481,7 @@ def calculate_incentives_and_update_scores(vali):
             league_scores[league][index] = final_edge_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
             # Calculate final ROI score
-            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * 100) if league_roi_counts[league][index] > 0 else 0.0
+            roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             raw_roi = roi
             if roi < MIN_ROI_THRESHOLD:
                 roi = 0.0
