@@ -86,6 +86,8 @@ def calculate_incentives_and_update_scores():
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    # Initialize league_rhos dictionary
+    league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
 
     leagues_to_analyze = ACTIVE_LEAGUES
     #leagues_to_analyze = [League.NBA]
@@ -133,7 +135,7 @@ def calculate_incentives_and_update_scores():
         178: 'NFL', 179: 'NBA', 181: 'NFL', 183: 'NBA', 184: 'NBA',
         186: 'NBA', 187: 'NBA', 188: 'NBA', 189: 'NBA', 191: 'NFL',
         192: 'NFL', 193: 'NFL', 194: 'NFL', 195: 'NFL', 196: 'NBA',
-        197: 'NFL', 198: 'NBA', 199: 'NBA', 202: 'NBA', 204: 'NBA',
+        197: 'NFL', 198: 'NBA', 199: 'NBA', 200: 'NBA', 202: 'NBA', 204: 'NBA',
         205: 'NFL', 206: 'NFL', 207: 'NFL', 208: 'NBA', 210: 'NFL',
         211: 'NFL', 213: 'NFL', 214: 'NBA', 215: 'NFL', 216: 'NBA',
         218: 'NFL', 219: 'NBA', 220: 'NFL', 222: 'NFL', 224: 'NFL',
@@ -321,6 +323,7 @@ def calculate_incentives_and_update_scores():
                         print(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                         print("-" * 50)
 
+            league_rhos[league][index] = rho
             final_edge_score = rho * total_score
             league_scores[league][index] = final_edge_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
@@ -361,9 +364,9 @@ def calculate_incentives_and_update_scores():
         
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
-            (1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r
+            ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
             if r > 0 else 0
-            for e, r in zip(normalized_edge, normalized_roi)
+            for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
         # Create top 10 scores table
