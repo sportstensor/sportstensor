@@ -645,7 +645,7 @@ def calculate_incentives_and_update_scores(vali):
     top_scores_table = []
     # Sort the final scores in descending order. We need to sort the uids as well so they match
     top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
-    for i in range(200):
+    for i in range(200 if len(top_scores) > 200 else len(top_scores)):
         if top_scores[i] is not None and top_scores[i] > 0:
             miner_league = ""
             if top_uids[i] in vali.uids_to_last_leagues and len(vali.uids_to_last_leagues[top_uids[i]]) > 0:
