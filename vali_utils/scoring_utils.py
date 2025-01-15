@@ -328,6 +328,8 @@ def calculate_incentives_and_update_scores(vali):
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    # Initialize league_rhos dictionary
+    league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name} (Rolling Pred Threshold: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
@@ -476,6 +478,8 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"      • Total prediction score: {(v * sigma * gfilter):.4f}")
                         bt.logging.debug("-" * 50)
 
+            # Store rho for this miner
+            league_rhos[league][index] = rho
             # Calculate final edge score
             final_edge_score = rho * total_score
             league_scores[league][index] = final_edge_score
@@ -509,9 +513,9 @@ def calculate_incentives_and_update_scores(vali):
 
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
-            (1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r
+            ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
             if r > 0 else 0
-            for e, r in zip(normalized_edge, normalized_roi)
+            for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
         # Create top 10 scores table
@@ -641,7 +645,7 @@ def calculate_incentives_and_update_scores(vali):
     top_scores_table = []
     # Sort the final scores in descending order. We need to sort the uids as well so they match
     top_scores, top_uids = zip(*sorted(zip(final_scores, all_uids), reverse=True))
-    for i in range(200):
+    for i in range(200 if len(top_scores) > 200 else len(top_scores)):
         if top_scores[i] is not None and top_scores[i] > 0:
             miner_league = ""
             if top_uids[i] in vali.uids_to_last_leagues and len(vali.uids_to_last_leagues[top_uids[i]]) > 0:
