@@ -329,7 +329,7 @@ def calculate_incentives_and_update_scores(vali):
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     # Initialize league_rhos dictionary
-    league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
 
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name} (Rolling Pred Threshold: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
