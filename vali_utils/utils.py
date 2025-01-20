@@ -89,7 +89,7 @@ async def sync_match_data(match_data_endpoint) -> bool:
 def fetch_match_odds(match_odds_data_endpoint: str, match_id: str) -> Dict:
     url = f"{match_odds_data_endpoint}?matchId={match_id}"
     # TODO: add in authentication?
-    response = requests.get(url, timeout=5)
+    response = requests.get(url, timeout=10)
     response.raise_for_status()
     return response.json()
 
