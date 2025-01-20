@@ -190,7 +190,7 @@ def add_validator_args(cls, parser):
         "--neuron.batch_size",
         type=int,
         help="The max number of miners to query per batch.",
-        default=120,
+        default=50,
     )
 
     parser.add_argument(

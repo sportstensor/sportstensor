@@ -345,6 +345,7 @@ async def send_league_commitments_to_miners(
 
         for i in range(0, len(miner_uids), vali.config.neuron.batch_size):
             batch = miner_uids[i:i+vali.config.neuron.batch_size]
+            bt.logging.info(f"Sending league commitment requests to miners batch {batch}")
             finished_responses, working_miner_uids, uid_league_updates = await process_batch(batch)
             
             all_finished_responses.extend(finished_responses)
@@ -525,10 +526,14 @@ async def send_predictions_to_miners(
 
         for i in range(0, len(miner_uids), vali.config.neuron.batch_size):
             batch = miner_uids[i:i+vali.config.neuron.batch_size]
+            bt.logging.info(f"Sending prediction requests to miners batch {batch}")
             finished_responses, working_miner_uids = await process_batch(batch)
             
             all_finished_responses.extend(finished_responses)
             all_working_miner_uids.extend(working_miner_uids)
+
+            # add a random delay between batches to spread out the requests
+            await asyncio.sleep(random.uniform(1.0, 30.0)) # 1-30 seconds
 
         if len(all_working_miner_uids) == 0:
             bt.logging.info("No miner responses available.")
