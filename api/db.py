@@ -970,7 +970,7 @@ def get_prediction_stats_by_league(vali_hotkey, miner_hotkey=None, cutoff = None
                 mpe.nfl_score
             FROM {prediction_edges_table_name} mpe
             LEFT JOIN {miners_table_name} m ON mpe.miner_hotkey = m.miner_hotkey AND mpe.miner_uid = m.miner_uid
-            WHERE (miner_hotkey, vali_hotkey, lastUpdated) IN (
+            WHERE (mpe.miner_hotkey, mpe.vali_hotkey, mpe.lastUpdated) IN (
                 SELECT miner_hotkey, vali_hotkey, MAX(lastUpdated)
                 FROM {prediction_edges_table_name}
                 GROUP BY miner_hotkey, vali_hotkey
