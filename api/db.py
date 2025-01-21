@@ -1008,7 +1008,7 @@ def get_prediction_stats_by_league(vali_hotkey, miner_hotkey=None, cutoff = None
         mpe.epl_score,
         mpe.mlb_score;"""
 
-        logging.info(f"query============>{query}")
+        #logging.info(f"query============>{query}")
 
         if params:
             c.execute(query, params)
