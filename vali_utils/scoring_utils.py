@@ -327,6 +327,7 @@ def calculate_incentives_and_update_scores(vali):
     # Use this to get payouts to calculate ROI
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_roi_market_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     # Initialize league_rhos dictionary
     league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -403,6 +404,16 @@ def calculate_incentives_and_update_scores(vali):
                         league_roi_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
                     else:
                         league_roi_payouts[league][index] -= ROI_BET_AMOUNT
+
+                    # Calculate the market ROI for the prediction
+                    if pwmd.actualHomeTeamScore > pwmd.actualAwayTeamScore and pwmd.homeTeamOdds < pwmd.awayTeamOdds:
+                        league_roi_market_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    elif pwmd.actualAwayTeamScore > pwmd.actualHomeTeamScore and pwmd.awayTeamOdds < pwmd.homeTeamOdds:
+                        league_roi_market_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    elif pwmd.actualHomeTeamScore == pwmd.actualAwayTeamScore and pwmd.drawOdds < pwmd.homeTeamOdds and pwmd.drawOdds < pwmd.awayTeamOdds:
+                        league_roi_market_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    else:
+                        league_roi_market_payouts[league][index] -= ROI_BET_AMOUNT
 
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
@@ -484,22 +495,29 @@ def calculate_incentives_and_update_scores(vali):
             final_edge_score = rho * total_score
             league_scores[league][index] = final_edge_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
+            # Calculate market ROI
+            market_roi = league_roi_market_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             # Calculate final ROI score
             roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             raw_roi = roi
-            if roi < MIN_ROI_THRESHOLD:
+            if roi < MIN_ROI_THRESHOLD and market_roi > MIN_ROI_THRESHOLD:
                 roi = 0.0
             final_roi_score = round(rho * ((roi if roi>0 else 0)*100), 2)
+            # Boost or penalize the final ROI score based how far from the market ROI it is.
+            roi_diff = roi - market_roi
+            roi_capped_diff = max(min(roi_diff, 1.0), -1.0) # Cap the difference to 1.0 or -1.0, or 100% or -100%
+            final_roi_score += final_roi_score * roi_capped_diff
+            final_roi_score = max(0, final_roi_score)
             league_roi_scores[league][index] = final_roi_score
 
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
-                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", len(predictions_with_match_data), rho])
+                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", str(round(market_roi*100, 2)) + "%", round(final_roi_score*roi_capped_diff, 2), len(predictions_with_match_data), rho])
 
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', '# Predictions', 'Rho'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'MKTROI', 'ROI Adj.', '# Predictions', 'Rho'], tablefmt='grid'))
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
