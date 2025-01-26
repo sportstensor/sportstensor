@@ -22,7 +22,8 @@ from common.constants import (
     MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
     ROI_BET_AMOUNT,
-    MIN_ROI_THRESHOLD,
+    ROI_INCR_PRED_COUNT_PERCENTAGE,
+    MAX_INCR_ROI_DIFF_PERCENTAGE,
     ROI_SCORING_WEIGHT
 )
 
@@ -324,10 +325,14 @@ def calculate_incentives_and_update_scores(vali):
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
-    # Use this to get payouts to calculate ROI
+    # Initialize overall ROI dictionaries
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_market_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    # Initialize incremental ROI dictionaries
+    league_roi_incr_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_roi_incr_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_roi_incr_market_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     # Initialize league_rhos dictionary
     league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -415,6 +420,12 @@ def calculate_incentives_and_update_scores(vali):
                     else:
                         league_roi_market_payouts[league][index] -= ROI_BET_AMOUNT
 
+                    # Store the ROI incremental counts and payouts. Incremental ROI is a subset of the most recent prediction ROI
+                    if league_roi_counts[league][index] == round(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0):
+                        league_roi_incr_counts[league][index] = league_roi_counts[league][index]
+                        league_roi_incr_payouts[league][index] = league_roi_payouts[league][index]
+                        league_roi_incr_market_payouts[league][index] = league_roi_market_payouts[league][index]
+
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
                         match_date = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
@@ -499,25 +510,56 @@ def calculate_incentives_and_update_scores(vali):
             market_roi = league_roi_market_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             # Calculate final ROI score
             roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
-            raw_roi = roi
-            if roi < MIN_ROI_THRESHOLD and market_roi > MIN_ROI_THRESHOLD:
-                roi = 0.0
-            final_roi_score = round(rho * ((roi if roi>0 else 0)*100), 2)
-            # Boost or penalize the final ROI score based how far from the market ROI it is.
+            # Calculate the difference between the miner's ROI and the market ROI
             roi_diff = roi - market_roi
-            roi_capped_diff = max(min(roi_diff, 1.0), -1.0) # Cap the difference to 1.0 or -1.0, or 100% or -100%
-            final_roi_score += final_roi_score * roi_capped_diff
-            final_roi_score = max(0, final_roi_score)
+            # Base ROI score requires the miner is beating the market
+            final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
+
+            # If ROI is less than 0, but greater than market ROI, penalize the ROI score by distance from 0
+            if roi < 0 and roi_diff > 0:
+                bt.logging.info(f"Penalizing ROI score for miner {uid} in league {league.name} by {roi:.4f} ({final_roi_score * roi:.4f}): {final_roi_score:.4f} -> {final_roi_score + (final_roi_score * roi):.4f}")
+                final_roi_score = final_roi_score + (final_roi_score * roi)
+            
+            roi_incr = roi
+            market_roi_incr = market_roi
+            # Calculate incremental ROI score for miner and market. Penalize if too similar.
+            if league_roi_incr_counts[league][index] == round(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0) and final_roi_score > 0:
+                market_roi_incr = league_roi_incr_market_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
+                roi_incr = league_roi_incr_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
+                roi_incr_diff = roi_incr - market_roi_incr
+                # if incremental ROI is the same as market ROI, give a score of 0
+                if roi_incr_diff == 0:
+                    bt.logging.info(f"Incremental ROI score penalty for miner {uid} in league {league.name}: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}): {final_roi_score:.4f} -> 0")
+                    final_roi_score = 0
+                elif abs(roi_incr_diff) <= MAX_INCR_ROI_DIFF_PERCENTAGE:
+                    # Exponential decay scaling
+                    k = 30  # Decay constant; increase for steeper decay
+                    penalty_factor = np.exp(-k * abs(roi_incr_diff))
+                    adjustment_factor = 1 - penalty_factor
+                    bt.logging.info(f"Incremental ROI score penalty for miner {uid} in league {league.name}: {roi_incr:.4f} vs {market_roi_incr} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_roi_score:.4f} -> {final_roi_score * adjustment_factor:.4f}")
+                    final_roi_score *= adjustment_factor
+
             league_roi_scores[league][index] = final_roi_score
 
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
-                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", str(round(market_roi*100, 2)) + "%", round(final_roi_score*roi_capped_diff, 2), len(predictions_with_match_data), rho])
+                league_table_data.append([
+                    uid,
+                    round(final_edge_score, 2),
+                    round(final_roi_score, 2),
+                    str(round(roi*100, 2)) + "%",
+                    str(round(market_roi*100, 2)) + "%",
+                    str(round(roi_diff*100, 2)) + "%", 
+                    str(round(roi_incr*100, 2)) + "%", 
+                    str(round(market_roi_incr*100, 2)) + "%",
+                    len(predictions_with_match_data),
+                    round(rho, 2)
+                ])
 
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'MKTROI', 'ROI Adj.', '# Predictions', 'Rho'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', '# Predictions', 'Rho'], tablefmt='grid'))
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
