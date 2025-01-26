@@ -527,14 +527,12 @@ def calculate_incentives_and_update_scores(vali):
                 market_roi_incr = league_roi_incr_market_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
                 roi_incr = league_roi_incr_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
                 roi_incr_diff = roi_incr - market_roi_incr
-                # if incremental ROI is the same as market ROI, give a score of 0
-                if roi_incr_diff == 0:
-                    bt.logging.info(f"Incremental ROI score penalty for miner {uid} in league {league.name}: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}): {final_roi_score:.4f} -> 0")
-                    final_roi_score = 0
-                elif abs(roi_incr_diff) <= MAX_INCR_ROI_DIFF_PERCENTAGE:
+                # if incremental ROI and incremental market ROI is within the difference threshold, calculate penalty
+                if abs(roi_incr_diff) <= MAX_INCR_ROI_DIFF_PERCENTAGE:
                     # Exponential decay scaling
                     k = 30  # Decay constant; increase for steeper decay
-                    penalty_factor = np.exp(-k * abs(roi_incr_diff))
+                    # Scale the penalty factor to max at 0.99
+                    penalty_factor = 0.99 * np.exp(-k * abs(roi_incr_diff))
                     adjustment_factor = 1 - penalty_factor
                     bt.logging.info(f"Incremental ROI score penalty for miner {uid} in league {league.name}: {roi_incr:.4f} vs {market_roi_incr} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_roi_score:.4f} -> {final_roi_score * adjustment_factor:.4f}")
                     final_roi_score *= adjustment_factor
@@ -574,7 +572,7 @@ def calculate_incentives_and_update_scores(vali):
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
             ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if r > 0 else 0
+            if r > 0 else 0 # if roi score is <= 0, set to 0. beat the market first
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
