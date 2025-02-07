@@ -133,7 +133,7 @@ def fetch_and_store_events():
             is_complete = (
                 0
                 if status in ("Not Started", "NS")
-                else 1 if status in ("Match Finished", "FT") else 0
+                else 1 if status in ("Match Finished", "FT", "After Over Time", "AOT") else 0
             )
             sport_type = sport_mapping.get(
                 event.get("strSport").upper(), 0

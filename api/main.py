@@ -246,9 +246,12 @@ async def main():
         vali_hotkey: str,
         miner_hotkey: Optional[str] = None,
         miner_id: Optional[int] = None,
+        league: Optional[str] = None,
+        date: Optional[str] = None,
+        count: Optional[int] = None,
     ):
         try:
-            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey, miner_id)
+            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey, miner_id, league, date, count)
 
             if results:
                 return {"results": results}

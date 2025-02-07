@@ -743,7 +743,7 @@ def upload_prediction_edge_results(prediction_results):
         conn.close()
 
 
-def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None):
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, league=None, date=None, count=10):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -767,9 +767,29 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None):
             query += " AND miner_uid = %s"
             params.append(miner_id)
 
+        if league:
+            query += f" AND {league.lower()}_pred_count > 0 AND {league.lower()}_score > 0"
+        
+        if date:
+            query += " AND DATE(lastUpdated) >= %s"
+            date = dt.datetime.strptime(date, "%Y-%m-%d")
+            params.append(date)
+            if not count:
+                count = 1
+
         query += """
-            ORDER BY lastUpdated DESC;
+            ORDER BY lastUpdated DESC
         """
+
+        if league:
+            query += f"""
+                , {league.lower()}_score DESC
+            """
+
+        if count:
+            query += " LIMIT %s"
+            params.append(count)
+
         if params:
             c.execute(query, params)
         else:
