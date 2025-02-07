@@ -665,14 +665,34 @@ def upload_prediction_edge_results(prediction_results):
                     "total_score": 5.5,
                     "total_pred_count": 100,
                     "mlb_score": 1.1,
+                    "mlb_edge_score": 0.5,
+                    "mlb_roi_score": 0.2,
+                    "mlb_roi": 0.1,
+                    "mlb_market_roi": 0.05,
                     "mlb_pred_count": 35,
                     "nfl_score": 3.12,
+                    "nfl_edge_score": 0.7,
+                    "nfl_roi_score": 0.3,
+                    "nfl_roi": 0.15,
+                    "nfl_market_roi": 0.1,
                     "nfl_pred_count": 20,
                     "nba_score": 0.5,
+                    "nba_edge_score": 0.2,
+                    "nba_roi_score": 0.1,
+                    "nba_roi": 0.05,
+                    "nba_market_roi": 0.02,
                     "nba_pred_count": 45,
                     "mls_score": 0,
+                    "mls_edge_score": 0.1,
+                    "mls_roi_score": 0.05,
+                    "mls_roi": 0.02,
+                    "mls_market_roi": 0.01,
                     "mls_pred_count": 0,
                     "epl_score": 0,
+                    "epl_edge_score": 0.1,
+                    "epl_roi_score": 0.05,
+                    "epl_roi": 0.02,
+                    "epl_market_roi": 0.01,
                     "epl_pred_count": 0,
                     "lastUpdated": '2024-10-28 00:00:00'
                 }
@@ -690,14 +710,34 @@ def upload_prediction_edge_results(prediction_results):
                 score_data["total_score"],
                 score_data["total_pred_count"],
                 score_data["mlb_score"],
+                score_data["mlb_edge_score"],
+                score_data["mlb_roi_score"],
+                score_data["mlb_roi"],
+                score_data["mlb_market_roi"],
                 score_data["mlb_pred_count"],
                 score_data["nfl_score"],
+                score_data["nfl_edge_score"],
+                score_data["nfl_roi_score"],
+                score_data["nfl_roi"],
+                score_data["nfl_market_roi"],
                 score_data["nfl_pred_count"],
                 score_data["nba_score"],
+                score_data["nba_edge_score"],
+                score_data["nba_roi_score"],
+                score_data["nba_roi"],
+                score_data["nba_market_roi"],
                 score_data["nba_pred_count"],
                 score_data["mls_score"],
+                score_data["mls_edge_score"],
+                score_data["mls_roi_score"],
+                score_data["mls_roi"],
+                score_data["mls_market_roi"],
                 score_data["mls_pred_count"],
                 score_data["epl_score"],
+                score_data["epl_edge_score"],
+                score_data["epl_roi_score"],
+                score_data["epl_roi"],
+                score_data["epl_market_roi"],
                 score_data["epl_pred_count"]
             )
             values_list.append(values_tuple)
@@ -714,18 +754,38 @@ def upload_prediction_edge_results(prediction_results):
                 total_score,
                 total_pred_count,
                 mlb_score,
+                mlb_edge_score,
+                mlb_roi_score,
+                mlb_roi,
+                mlb_market_roi,
                 mlb_pred_count,
                 nfl_score,
+                nfl_edge_score,
+                nfl_roi_score,
+                nfl_roi,
+                nfl_market_roi,
                 nfl_pred_count,
                 nba_score,
+                nba_edge_score,
+                nba_roi_score,
+                nba_roi,
+                nba_market_roi,
                 nba_pred_count,
                 mls_score,
+                mls_edge_score,
+                mls_roi_score,
+                mls_roi,
+                mls_market_roi,
                 mls_pred_count,
                 epl_score,
+                epl_edge_score,
+                epl_roi_score,
+                epl_roi,
+                epl_market_roi,
                 epl_pred_count,
                 lastUpdated
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
             )
             """,
             values_list,
@@ -966,85 +1026,6 @@ def insert_or_update_miner_coldkeys_and_ages(data_to_update):
         conn.close()
 
 
-def get_prediction_stats_by_league(vali_hotkey, miner_hotkey=None, cutoff = None, include_deregged = None):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor(dictionary=True)
-        
-        params = [vali_hotkey]
-        miners_table_name = "Miners"
-        prediction_edges_table_name = "MatchPredictionEdgeResults"
-        if not IS_PROD:
-            miners_table_name += "_test"
-            prediction_edges_table_name += "_test"
-
-        query = f"""
-            SELECT
-                mpe.miner_uid,
-                mpe.miner_hotkey,
-                mpe.total_score,
-                mpe.mlb_score,
-                mpe.nba_score,
-                mpe.mls_score,
-                mpe.epl_score,
-                mpe.nfl_score
-            FROM {prediction_edges_table_name} mpe
-            LEFT JOIN {miners_table_name} m ON mpe.miner_hotkey = m.miner_hotkey AND mpe.miner_uid = m.miner_uid
-            WHERE (mpe.miner_hotkey, mpe.vali_hotkey, mpe.lastUpdated) IN (
-                SELECT miner_hotkey, vali_hotkey, MAX(lastUpdated)
-                FROM {prediction_edges_table_name}
-                GROUP BY miner_hotkey, vali_hotkey
-            )
-            AND mpe.vali_hotkey = %s
-        """
-
-        if cutoff:
-            # Calculate the current timestamp
-            current_timestamp = int(time.time())
-            # Calculate cutoff date timestamp
-            match_cutoff_timestamp = current_timestamp - (
-                cutoff * 24 * 3600
-            )
-            # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
-            match_cutoff_str = dt.datetime.utcfromtimestamp(
-                match_cutoff_timestamp
-            ).strftime("%Y-%m-%d %H:%M:%S")
-            query += " AND mpe.lastUpdated > %s"
-            params.append(match_cutoff_str)
-
-        if miner_hotkey:
-            query += " AND mpe.miner_hotkey = %s"
-            params.append(miner_hotkey)
-        if include_deregged is None or include_deregged == 0:
-            query += " AND m.miner_is_registered = 1"
-        
-        query += """ GROUP BY 
-        mpe.miner_uid, 
-        mpe.miner_hotkey,
-        mpe.total_score,
-        mpe.nfl_score,
-        mpe.nba_score,
-        mpe.mls_score,
-        mpe.epl_score,
-        mpe.mlb_score;"""
-
-        #logging.info(f"query============>{query}")
-
-        if params:
-            c.execute(query, params)
-        else:
-            c.execute(query)
-        return c.fetchall()
-
-    except Exception as e:
-        logging.error(
-            "Failed to query league prediction stats from MySQL database", exc_info=True
-        )
-        return False
-    finally:
-        c.close()
-        conn.close()
-
 def get_prediction_results_by_league(vali_hotkey, league=None, miner_hotkey=None):
     try:
         conn = get_db_conn()
@@ -1206,14 +1187,34 @@ def create_tables():
             total_score FLOAT NOT NULL,
             total_pred_count INTEGER NOT NULL,
             mlb_score FLOAT NOT NULL,
+            mlb_edge_score FLOAT NOT NULL,
+            mlb_roi_score FLOAT NOT NULL,
+            mlb_roi FLOAT NOT NULL,
+            mlb_market_roi FLOAT NOT NULL,
             mlb_pred_count INTEGER NOT NULL,
             nfl_score FLOAT NOT NULL,
+            nfl_edge_score FLOAT NOT NULL,
+            nfl_roi_score FLOAT NOT NULL,
+            nfl_roi FLOAT NOT NULL,
+            nfl_market_roi FLOAT NOT NULL,
             nfl_pred_count INTEGER NOT NULL,
             nba_score FLOAT NOT NULL,
+            nba_edge_score FLOAT NOT NULL,
+            nba_roi_score FLOAT NOT NULL,
+            nba_roi FLOAT NOT NULL,
+            nba_market_roi FLOAT NOT NULL,
             nba_pred_count INTEGER NOT NULL,
             mls_score FLOAT NOT NULL,
+            mls_edge_score FLOAT NOT NULL,
+            mls_roi_score FLOAT NOT NULL,
+            mls_roi FLOAT NOT NULL,
+            mls_market_roi FLOAT NOT NULL,
             mls_pred_count INTEGER NOT NULL,
             epl_score FLOAT NOT NULL,
+            epl_edge_score FLOAT NOT NULL,
+            epl_roi_score FLOAT NOT NULL,
+            epl_roi FLOAT NOT NULL,
+            epl_market_roi FLOAT NOT NULL,
             epl_pred_count INTEGER NOT NULL,
             lastUpdated TIMESTAMP NOT NULL
         )"""
@@ -1228,14 +1229,34 @@ def create_tables():
             total_score FLOAT NOT NULL,
             total_pred_count INTEGER NOT NULL,
             mlb_score FLOAT NOT NULL,
+            mlb_edge_score FLOAT NOT NULL,
+            mlb_roi_score FLOAT NOT NULL,
+            mlb_roi FLOAT NOT NULL,
+            mlb_market_roi FLOAT NOT NULL,
             mlb_pred_count INTEGER NOT NULL,
             nfl_score FLOAT NOT NULL,
+            nfl_edge_score FLOAT NOT NULL,
+            nfl_roi_score FLOAT NOT NULL,
+            nfl_roi FLOAT NOT NULL,
+            nfl_market_roi FLOAT NOT NULL,
             nfl_pred_count INTEGER NOT NULL,
             nba_score FLOAT NOT NULL,
+            nba_edge_score FLOAT NOT NULL,
+            nba_roi_score FLOAT NOT NULL,
+            nba_roi FLOAT NOT NULL,
+            nba_market_roi FLOAT NOT NULL,
             nba_pred_count INTEGER NOT NULL,
             mls_score FLOAT NOT NULL,
+            mls_edge_score FLOAT NOT NULL,
+            mls_roi_score FLOAT NOT NULL,
+            mls_roi FLOAT NOT NULL,
+            mls_market_roi FLOAT NOT NULL,
             mls_pred_count INTEGER NOT NULL,
             epl_score FLOAT NOT NULL,
+            epl_edge_score FLOAT NOT NULL,
+            epl_roi_score FLOAT NOT NULL,
+            epl_roi FLOAT NOT NULL,
+            epl_market_roi FLOAT NOT NULL,
             epl_pred_count INTEGER NOT NULL,
             lastUpdated TIMESTAMP NOT NULL
         )"""

@@ -308,25 +308,6 @@ async def main():
             logging.error(f"Error retrieving predictionResultsPerMiner: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
 
-    @app.get("/predictionResultsPerMiner")
-    async def get_prediction_results_per_miner(
-        vali_hotkey: str,
-        miner_hotkey: Optional[str] = None,
-        league: Optional[str] = None,
-        cutoff: Optional[int] = None,
-        include_deregged: Optional[conint(ge=0, le=1)] = None
-    ):
-        try:
-            results = db.get_prediction_stats_by_league(vali_hotkey, miner_hotkey, cutoff, include_deregged)
-
-            if results:
-                return {"results": results}
-            else:
-                return {"results": []}
-        except Exception as e:
-            logging.error(f"Error retrieving predictionResults: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error.")
-
     def serialize_datetime(value):
         """Serialize datetime to JSON-compatible format, if necessary."""
         if isinstance(value, datetime):
