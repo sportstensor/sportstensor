@@ -182,7 +182,16 @@ class Validator(BaseValidatorNeuron):
 
                 try:
                     bt.logging.debug("Calculating incentives.")
-                    league_scores, league_pred_counts, all_scores = scoring_utils.calculate_incentives_and_update_scores(self)
+                    (
+                        league_scores,
+                        league_edge_scores,
+                        league_roi_scores,
+                        league_roi_counts,
+                        league_roi_payouts,
+                        league_roi_market_payouts,
+                        league_pred_counts,
+                        all_scores,
+                    ) = scoring_utils.calculate_incentives_and_update_scores(self)
                     bt.logging.debug("Finished calculating incentives.")
                 except Exception as e:
                     bt.logging.error(f"Error calculating incentives: {str(e)}")
@@ -207,8 +216,19 @@ class Validator(BaseValidatorNeuron):
                             (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 500_000))
                         ):
                             bt.logging.info("Posting league scores to API.")
-                            post_result = utils.post_prediction_edge_results(self, self.prediction_edge_results_endpoint, league_scores, league_pred_counts, all_scores)
-                        
+                            post_result = utils.post_prediction_edge_results(
+                                self, 
+                                self.prediction_edge_results_endpoint, 
+                                league_scores,
+                                league_edge_scores,
+                                league_roi_scores, 
+                                league_roi_counts, 
+                                league_roi_payouts, 
+                                league_roi_market_payouts, 
+                                league_pred_counts, 
+                                all_scores
+                            )
+
                 except Exception as e:
                     bt.logging.error(f"Error posting league scores to API: {str(e)}")
 

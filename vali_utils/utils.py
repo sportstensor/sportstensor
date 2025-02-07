@@ -22,6 +22,7 @@ from common.constants import (
     VALIDATOR_TIMEOUT,
     SCORING_CUTOFF_IN_DAYS,
     LEAGUES_ALLOWING_DRAWS,
+    ROI_BET_AMOUNT,
 )
 
 from neurons.validator import Validator
@@ -706,6 +707,11 @@ def post_prediction_edge_results(
     vali,
     prediction_edge_results_endpoint: str,
     league_scores: Dict[League, List[float]],
+    league_edge_scores: Dict[League, List[float]],
+    league_roi_scores: Dict[League, List[float]],
+    league_roi_counts: Dict[League, List[int]],
+    league_roi_payouts: Dict[League, List[float]],
+    league_roi_market_payouts: Dict[League, List[float]],
     league_pred_counts: Dict[League, List[int]],
     all_scores: Dict[str, List[float]],
 ):
@@ -742,6 +748,18 @@ def post_prediction_edge_results(
             league_pred_counts[League.EPL][uid]
         )
 
+        mlb_roi, mlb_market_roi = 0.0, 0.0
+        nfl_roi, nfl_market_roi = 0.0, 0.0
+        nba_roi, nba_market_roi = 0.0, 0.0
+        mls_roi, mls_market_roi = 0.0, 0.0
+        epl_roi, epl_market_roi = 0.0, 0.0
+
+        for league in League:
+            if league_roi_counts[league][uid] > 0:
+                # Calculate ROI for each league
+                locals()[f"{league.name.lower()}_roi"] = league_roi_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+                locals()[f"{league.name.lower()}_market_roi"] = league_roi_market_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+
         miner_scores[uid] = {
             "uid": uid,
             "hotkey": vali.metagraph.axons[uid].hotkey,
@@ -749,14 +767,34 @@ def post_prediction_edge_results(
             "total_score": all_scores[uid],
             "total_pred_count": total_pred_count,
             "mlb_score": league_scores[League.MLB][uid],
+            "mlb_edge_score": league_edge_scores[League.MLB][uid],
+            "mlb_roi_score": league_roi_scores[League.MLB][uid],
+            "mlb_roi": mlb_roi,
+            "mlb_market_roi": mlb_market_roi,
             "mlb_pred_count": league_pred_counts[League.MLB][uid],
             "nfl_score": league_scores[League.NFL][uid],
+            "nfl_edge_score": league_edge_scores[League.NFL][uid],
+            "nfl_roi_score": league_roi_scores[League.NFL][uid],
+            "nfl_roi": nfl_roi,
+            "nfl_market_roi": nfl_market_roi,
             "nfl_pred_count": league_pred_counts[League.NFL][uid],
             "nba_score": league_scores[League.NBA][uid],
+            "nba_edge_score": league_edge_scores[League.NBA][uid],
+            "nba_roi_score": league_roi_scores[League.NBA][uid],
+            "nba_roi": nba_roi,
+            "nba_market_roi": nba_market_roi,
             "nba_pred_count": league_pred_counts[League.NBA][uid],
             "mls_score": league_scores[League.MLS][uid],
+            "mls_edge_score": league_edge_scores[League.MLS][uid],
+            "mls_roi_score": league_roi_scores[League.MLS][uid],
+            "mls_roi": mls_roi,
+            "mls_market_roi": mls_market_roi,
             "mls_pred_count": league_pred_counts[League.MLS][uid],
             "epl_score": league_scores[League.EPL][uid],
+            "epl_edge_score": league_edge_scores[League.EPL][uid],
+            "epl_roi_score": league_roi_scores[League.EPL][uid],
+            "epl_roi": epl_roi,
+            "epl_market_roi": epl_market_roi,
             "epl_pred_count": league_pred_counts[League.EPL][uid],
             "lastUpdated": current_time
         }
