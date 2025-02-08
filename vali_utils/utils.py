@@ -766,7 +766,6 @@ def post_prediction_edge_results(
             if league not in league_roi_counts:
                 continue
             if league_roi_counts[league][uid] > 0:
-                print(f"uid: {uid}, league: {league}, roi counts: {league_roi_counts[league][uid]}, roi payouts: {league_roi_payouts[league][uid]}, market payouts: {league_roi_market_payouts[league][uid]}")
                 roi_values[league]["roi"] = (
                     league_roi_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
                 )
