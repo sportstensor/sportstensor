@@ -208,12 +208,12 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
                 try:
-                    # Check if we're at a 12-hour 0-minute mark. Only run this at midnight and noon UTC.
-                    if hour % 12 == 0 and minutes == 0:
+                    # Check if we're at a 0-hour 0-minute mark. Only run this at midnight UTC.
+                    if hour == 0 and minutes == 0:
                         if (
                             league_scores and len(league_scores) > 0 and
                             ((self.config.subtensor.network == "test") or 
-                            (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 500_000))
+                            (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 200_000))
                         ):
                             bt.logging.info("Posting league scores to API.")
                             post_result = utils.post_prediction_edge_results(
