@@ -752,61 +752,48 @@ def post_prediction_edge_results(
             league_pred_counts[League.EPL][uid]
         )
 
-        mlb_roi, mlb_market_roi = 0.0, 0.0
-        nfl_roi, nfl_market_roi = 0.0, 0.0
-        nba_roi, nba_market_roi = 0.0, 0.0
-        mls_roi, mls_market_roi = 0.0, 0.0
-        epl_roi, epl_market_roi = 0.0, 0.0
+        # Initialize ROI values for each league
+        roi_values = {
+            League.MLB: {"roi": 0.0, "market_roi": 0.0},
+            League.NFL: {"roi": 0.0, "market_roi": 0.0},
+            League.NBA: {"roi": 0.0, "market_roi": 0.0},
+            League.MLS: {"roi": 0.0, "market_roi": 0.0},
+            League.EPL: {"roi": 0.0, "market_roi": 0.0},
+        }
 
-        for league in League:
-            # only include the leagues we are using in our subnet
-            if league.name not in (League.MLB.name, League.NFL.name, League.NBA.name, League.MLS.name, League.EPL.name):
-                continue
+        # Calculate ROI values
+        for league in roi_values:
             if league not in league_roi_counts or uid not in league_roi_counts[league]:
                 continue
             if league_roi_counts[league][uid] > 0:
-                # Calculate ROI for each league
-                locals()[f"{league.name.lower()}_roi"] = league_roi_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
-                locals()[f"{league.name.lower()}_market_roi"] = league_roi_market_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+                roi_values[league]["roi"] = (
+                    league_roi_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+                )
+                roi_values[league]["market_roi"] = (
+                    league_roi_market_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+                )
 
+        # Construct miner scores dictionary
         miner_scores[uid] = {
             "uid": uid,
             "hotkey": vali.metagraph.axons[uid].hotkey,
             "vali_hotkey": vali.wallet.hotkey.ss58_address,
             "total_score": all_scores[uid],
             "total_pred_count": total_pred_count,
-            "mlb_score": league_scores[League.MLB][uid],
-            "mlb_edge_score": league_edge_scores[League.MLB][uid],
-            "mlb_roi_score": league_roi_scores[League.MLB][uid],
-            "mlb_roi": mlb_roi,
-            "mlb_market_roi": mlb_market_roi,
-            "mlb_pred_count": league_pred_counts[League.MLB][uid],
-            "nfl_score": league_scores[League.NFL][uid],
-            "nfl_edge_score": league_edge_scores[League.NFL][uid],
-            "nfl_roi_score": league_roi_scores[League.NFL][uid],
-            "nfl_roi": nfl_roi,
-            "nfl_market_roi": nfl_market_roi,
-            "nfl_pred_count": league_pred_counts[League.NFL][uid],
-            "nba_score": league_scores[League.NBA][uid],
-            "nba_edge_score": league_edge_scores[League.NBA][uid],
-            "nba_roi_score": league_roi_scores[League.NBA][uid],
-            "nba_roi": nba_roi,
-            "nba_market_roi": nba_market_roi,
-            "nba_pred_count": league_pred_counts[League.NBA][uid],
-            "mls_score": league_scores[League.MLS][uid],
-            "mls_edge_score": league_edge_scores[League.MLS][uid],
-            "mls_roi_score": league_roi_scores[League.MLS][uid],
-            "mls_roi": mls_roi,
-            "mls_market_roi": mls_market_roi,
-            "mls_pred_count": league_pred_counts[League.MLS][uid],
-            "epl_score": league_scores[League.EPL][uid],
-            "epl_edge_score": league_edge_scores[League.EPL][uid],
-            "epl_roi_score": league_roi_scores[League.EPL][uid],
-            "epl_roi": epl_roi,
-            "epl_market_roi": epl_market_roi,
-            "epl_pred_count": league_pred_counts[League.EPL][uid],
-            "lastUpdated": current_time
+            "lastUpdated": current_time,
         }
+
+        # Dynamically update miner_scores with league-specific data
+        for league in roi_values:
+            league_name = league.name.lower()  # Convert to lowercase for consistency
+            miner_scores[uid].update({
+                f"{league_name}_score": league_scores[league][uid],
+                f"{league_name}_edge_score": league_edge_scores[league][uid],
+                f"{league_name}_roi_score": league_roi_scores[league][uid],
+                f"{league_name}_roi": roi_values[league]["roi"],
+                f"{league_name}_market_roi": roi_values[league]["market_roi"],
+                f"{league_name}_pred_count": league_pred_counts[league][uid],
+            })
 
     for attempt in range(max_retries):
         try:
