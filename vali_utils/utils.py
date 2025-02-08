@@ -737,6 +737,10 @@ def post_prediction_edge_results(
             league_pred_counts[league] = [0] * len(all_uids)
         if league not in league_scores:
             league_scores[league] = [0] * len(all_uids)
+        if league not in league_edge_scores:
+            league_edge_scores[league] = [0] * len(all_uids)
+        if league not in league_roi_scores:
+            league_roi_scores[league] = [0] * len(all_uids)
     
     # Build complete score data for each UID
     for uid in all_uids:
@@ -755,6 +759,11 @@ def post_prediction_edge_results(
         epl_roi, epl_market_roi = 0.0, 0.0
 
         for league in League:
+            # only include the leagues we are using in our subnet
+            if league.name not in (League.MLB.name, League.NFL.name, League.NBA.name, League.MLS.name, League.EPL.name):
+                continue
+            if league not in league_roi_counts or uid not in league_roi_counts[league]:
+                continue
             if league_roi_counts[league][uid] > 0:
                 # Calculate ROI for each league
                 locals()[f"{league.name.lower()}_roi"] = league_roi_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
