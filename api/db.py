@@ -665,14 +665,34 @@ def upload_prediction_edge_results(prediction_results):
                     "total_score": 5.5,
                     "total_pred_count": 100,
                     "mlb_score": 1.1,
+                    "mlb_edge_score": 0.5,
+                    "mlb_roi_score": 0.2,
+                    "mlb_roi": 0.1,
+                    "mlb_market_roi": 0.05,
                     "mlb_pred_count": 35,
                     "nfl_score": 3.12,
+                    "nfl_edge_score": 0.7,
+                    "nfl_roi_score": 0.3,
+                    "nfl_roi": 0.15,
+                    "nfl_market_roi": 0.1,
                     "nfl_pred_count": 20,
                     "nba_score": 0.5,
+                    "nba_edge_score": 0.2,
+                    "nba_roi_score": 0.1,
+                    "nba_roi": 0.05,
+                    "nba_market_roi": 0.02,
                     "nba_pred_count": 45,
                     "mls_score": 0,
+                    "mls_edge_score": 0.1,
+                    "mls_roi_score": 0.05,
+                    "mls_roi": 0.02,
+                    "mls_market_roi": 0.01,
                     "mls_pred_count": 0,
                     "epl_score": 0,
+                    "epl_edge_score": 0.1,
+                    "epl_roi_score": 0.05,
+                    "epl_roi": 0.02,
+                    "epl_market_roi": 0.01,
                     "epl_pred_count": 0,
                     "lastUpdated": '2024-10-28 00:00:00'
                 }
@@ -684,21 +704,41 @@ def upload_prediction_edge_results(prediction_results):
         values_list = []
         for uid, score_data in prediction_results["miner_scores"].items():
             values_tuple = (
-                score_data["uid"],
-                score_data["hotkey"],
-                score_data["vali_hotkey"],
-                score_data["total_score"],
-                score_data["total_pred_count"],
-                score_data["mlb_score"],
-                score_data["mlb_pred_count"],
-                score_data["nfl_score"],
-                score_data["nfl_pred_count"],
-                score_data["nba_score"],
-                score_data["nba_pred_count"],
-                score_data["mls_score"],
-                score_data["mls_pred_count"],
-                score_data["epl_score"],
-                score_data["epl_pred_count"]
+                score_data.get("uid"),
+                score_data.get("hotkey"),
+                score_data.get("vali_hotkey"),
+                score_data.get("total_score", 0.0),
+                score_data.get("total_pred_count", 0),
+                score_data.get("mlb_score", 0.0),
+                score_data.get("mlb_edge_score", 0.0),
+                score_data.get("mlb_roi_score", 0.0),
+                score_data.get("mlb_roi", 0.0),
+                score_data.get("mlb_market_roi", 0.0),
+                score_data.get("mlb_pred_count", 0),
+                score_data.get("nfl_score", 0.0),
+                score_data.get("nfl_edge_score", 0.0),
+                score_data.get("nfl_roi_score", 0.0),
+                score_data.get("nfl_roi", 0.0),
+                score_data.get("nfl_market_roi", 0.0),
+                score_data.get("nfl_pred_count", 0),
+                score_data.get("nba_score", 0.0),
+                score_data.get("nba_edge_score", 0.0),
+                score_data.get("nba_roi_score", 0.0),
+                score_data.get("nba_roi", 0.0),
+                score_data.get("nba_market_roi", 0.0),
+                score_data.get("nba_pred_count", 0),
+                score_data.get("mls_score", 0.0),
+                score_data.get("mls_edge_score", 0.0),
+                score_data.get("mls_roi_score", 0.0),
+                score_data.get("mls_roi", 0.0),
+                score_data.get("mls_market_roi", 0.0),
+                score_data.get("mls_pred_count", 0),
+                score_data.get("epl_score", 0.0),
+                score_data.get("epl_edge_score", 0.0),
+                score_data.get("epl_roi_score", 0.0),
+                score_data.get("epl_roi", 0.0),
+                score_data.get("epl_market_roi", 0.0),
+                score_data.get("epl_pred_count", 0),
             )
             values_list.append(values_tuple)
 
@@ -714,18 +754,38 @@ def upload_prediction_edge_results(prediction_results):
                 total_score,
                 total_pred_count,
                 mlb_score,
+                mlb_edge_score,
+                mlb_roi_score,
+                mlb_roi,
+                mlb_market_roi,
                 mlb_pred_count,
                 nfl_score,
+                nfl_edge_score,
+                nfl_roi_score,
+                nfl_roi,
+                nfl_market_roi,
                 nfl_pred_count,
                 nba_score,
+                nba_edge_score,
+                nba_roi_score,
+                nba_roi,
+                nba_market_roi,
                 nba_pred_count,
                 mls_score,
+                mls_edge_score,
+                mls_roi_score,
+                mls_roi,
+                mls_market_roi,
                 mls_pred_count,
                 epl_score,
+                epl_edge_score,
+                epl_roi_score,
+                epl_roi,
+                epl_market_roi,
                 epl_pred_count,
                 lastUpdated
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
             )
             """,
             values_list,
@@ -966,128 +1026,6 @@ def insert_or_update_miner_coldkeys_and_ages(data_to_update):
         conn.close()
 
 
-def get_prediction_stats_by_league(vali_hotkey, league=None, miner_hotkey=None, cutoff = None, include_deregged = None):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor(dictionary=True)
-
-        prediction_scores_table_name = "MatchPredictionsScored"
-        params = [vali_hotkey]
-        miners_table_name = "Miners"
-        prediction_edges_table_name = "MatchPredictionEdgeResults"
-        if not IS_PROD:
-            prediction_scores_table_name += "_test"
-            miners_table_name += "_test"
-            prediction_edges_table_name += "_test"
-
-        query = f"""
-            SELECT
-                mps.miner_id,
-                mps.miner_hotkey,
-                sorted_mpe.total_score,
-                sorted_mpe.mlb_score,
-                sorted_mpe.nba_score,
-                sorted_mpe.mls_score,
-                sorted_mpe.epl_score,
-                sorted_mpe.nfl_score,
-                JSON_ARRAYAGG(
-                    JSON_OBJECT(
-                        'vali_hotkey', mps.vali_hotkey,
-                        'matchId', mps.matchId,
-                        'matchDate', mps.matchDate,
-                        'sport', mps.sport,
-                        'league', mps.league,
-                        'homeTeamName', mps.homeTeamName,
-                        'awayTeamName', mps.awayTeamName,
-                        'probabilityChoice', mps.probabilityChoice,
-                        'probability', mps.probability,
-                        'predictionDate', mps.predictionDate,
-                        'closingEdge', mps.closingEdge,
-                        'isScored', mps.isScored,
-                        'scoredDate', mps.scoredDate,
-                        'lastUpdated', mps.lastUpdated,
-                        'homeTeamScore', matches.homeTeamScore,
-                        'awayTeamScore', matches.awayTeamScore,
-                        'closing_homeTeamOdds', closing_odds.homeTeamOdds,
-                        'closing_awayTeamOdds', closing_odds.awayTeamOdds,
-                        'closing_drawOdds', closing_odds.drawOdds
-                    )
-                ) AS data
-            FROM {prediction_scores_table_name} mps
-            LEFT JOIN {miners_table_name} m ON mps.miner_hotkey = m.miner_hotkey AND mps.miner_id = m.miner_uid
-            LEFT JOIN (
-                SELECT mpe.*
-                FROM {prediction_edges_table_name} mpe
-                WHERE (miner_hotkey, vali_hotkey, lastUpdated) IN (
-                    SELECT miner_hotkey, vali_hotkey, MAX(lastUpdated)
-                    FROM {prediction_edges_table_name}
-                    GROUP BY miner_hotkey, vali_hotkey
-                )
-            ) sorted_mpe ON mps.miner_hotkey = sorted_mpe.miner_hotkey AND mps.miner_id = sorted_mpe.miner_uid AND mps.vali_hotkey = sorted_mpe.vali_hotkey
-            LEFT JOIN matches ON matches.matchId = mps.matchId
-            LEFT JOIN matches_lookup ml ON (ml.matchId = mps.matchId)
-            LEFT JOIN (
-                SELECT 
-                    mo.oddsapiMatchId,
-                    mo.homeTeamOdds,
-                    mo.awayTeamOdds,
-                    mo.drawOdds,
-                    ROW_NUMBER() OVER (PARTITION BY mo.oddsapiMatchId ORDER BY mo.lastUpdated DESC) as rn
-                FROM 
-                    match_odds mo
-            ) closing_odds ON closing_odds.oddsapiMatchId = ml.oddsapiMatchId AND closing_odds.rn = 1
-            WHERE mps.vali_hotkey = %s
-        """
-
-        if cutoff:
-            # Calculate the current timestamp
-            current_timestamp = int(time.time())
-            # Calculate cutoff date timestamp
-            match_cutoff_timestamp = current_timestamp - (
-                cutoff * 24 * 3600
-            )
-            # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
-            match_cutoff_str = dt.datetime.utcfromtimestamp(
-                match_cutoff_timestamp
-            ).strftime("%Y-%m-%d %H:%M:%S")
-            query += " AND mps.scoredDate > %s"
-            params.append(match_cutoff_str)
-
-        if league:
-            query += " AND league = %s"
-            params.append(league)
-
-        if miner_hotkey:
-            query += " AND mps.miner_hotkey = %s"
-            params.append(miner_hotkey)
-        if include_deregged is None or include_deregged == 0:
-            query += " AND m.miner_is_registered = 1"
-        
-        query += """ GROUP BY 
-        mps.miner_id, 
-        mps.miner_hotkey,
-        sorted_mpe.total_score,
-        sorted_mpe.nfl_score,
-        sorted_mpe.nba_score,
-        sorted_mpe.mls_score,
-        sorted_mpe.epl_score,
-        sorted_mpe.mlb_score;"""
-
-        if params:
-            c.execute(query, params)
-        else:
-            c.execute(query)
-        return c.fetchall()
-
-    except Exception as e:
-        logging.error(
-            "Failed to query league prediction stats from MySQL database", exc_info=True
-        )
-        return False
-    finally:
-        c.close()
-        conn.close()
-
 def get_prediction_results_by_league(vali_hotkey, league=None, miner_hotkey=None):
     try:
         conn = get_db_conn()
@@ -1133,442 +1071,6 @@ def get_prediction_results_by_league(vali_hotkey, league=None, miner_hotkey=None
     finally:
         c.close()
         conn.close()
-
-
-def get_prediction_stats_by_sport(sport, miner_hotkey=None, group_by_miner=False):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor(dictionary=True)
-
-        prediction_scores_table_name = "MatchPredictionResults"
-        if not IS_PROD:
-            prediction_scores_table_name += "_test"
-
-        query = f"""
-            SELECT
-                sport,
-                AVG(avg_score) AS avg_score,
-                SUM(total_predictions) AS total_predictions,
-                SUM(winner_predictions) AS winner_predictions
-        """
-
-        if group_by_miner:
-            query += ", miner_hotkey, miner_coldkey, miner_uid, miner_age"
-
-        query += f"""
-            FROM {prediction_scores_table_name}
-            WHERE sport = %s
-        """
-
-        params = [sport]
-
-        if miner_hotkey:
-            query += " AND miner_hotkey = %s"
-            params.append(miner_hotkey)
-        else:
-            query += " AND miner_is_registered = 1"
-
-        if group_by_miner:
-            query += " GROUP BY sport, miner_hotkey, miner_coldkey, miner_uid, miner_age"
-        else:
-            query += " GROUP BY sport"
-
-        c.execute(query, params)
-        return c.fetchall()
-
-    except Exception as e:
-        logging.error(
-            "Failed to query sport prediction stats from MySQL database", exc_info=True
-        )
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-
-def get_prediction_stats_total(miner_hotkey=None, group_by_miner=False):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor(dictionary=True)
-
-        prediction_scores_table_name = "MatchPredictionResults"
-        if not IS_PROD:
-            prediction_scores_table_name += "_test"
-
-        query = f"""
-            SELECT
-                AVG(avg_score) AS avg_score,
-                SUM(total_predictions) AS total_predictions,
-                SUM(winner_predictions) AS winner_predictions
-        """
-
-        if group_by_miner:
-            query += ", miner_hotkey, miner_coldkey, miner_age"
-
-        query += f"""
-            FROM {prediction_scores_table_name}
-            WHERE 1=1
-        """
-
-        params = []
-
-        if miner_hotkey:
-            query += " AND miner_hotkey = %s"
-            params.append(miner_hotkey)
-        else:
-            query += " AND miner_is_registered = 1"
-
-        if group_by_miner:
-            query += " GROUP BY miner_hotkey, miner_coldkey, miner_uid, miner_age"
-
-        c.execute(query, params)
-        return c.fetchall()
-
-    except Exception as e:
-        logging.error(
-            "Failed to query total prediction stats from MySQL database", exc_info=True
-        )
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-
-def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor(dictionary=True)
-
-        query = f"""
-            SELECT *
-            FROM MPRSnapshots
-            WHERE 1=1
-        """
-
-        params = []
-        if sport:
-            query += " AND sport = %s"
-            params.append(sport)
-
-        if league:
-            query += " AND league = %s"
-            params.append(league)
-
-        if miner_hotkey:
-            query += " AND miner_hotkey = %s"
-            params.append(miner_hotkey)
-        else:
-            query += " AND miner_is_registered = 1"
-
-        query += " ORDER BY snapshot_date ASC"
-        
-        c.execute(query, params)
-        return c.fetchall()
-
-    except Exception as e:
-        logging.error(
-            "Failed to query match prediction snapshots from MySQL database", exc_info=True
-        )
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-
-def get_prediction_stat_snapshots(sport=None, league=None, miner_hotkey=None):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor(dictionary=True)
-
-        query = f"""
-            SELECT *
-            FROM MPRSnapshots
-            WHERE 1=1
-        """
-
-        params = []
-        if sport:
-            query += " AND sport = %s"
-            params.append(sport)
-
-        if league:
-            query += " AND league = %s"
-            params.append(league)
-
-        if miner_hotkey:
-            query += " AND miner_hotkey = %s"
-            params.append(miner_hotkey)
-        else:
-            query += " AND miner_is_registered = 1"
-
-        query += " ORDER BY snapshot_date ASC"
-        
-        c.execute(query, params)
-        return c.fetchall()
-
-    except Exception as e:
-        logging.error(
-            "Failed to query match prediction snapshots from MySQL database", exc_info=True
-        )
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-
-def upsert_app_match_prediction(prediction, vali_hotkey):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-
-        current_utc_time = dt.datetime.now(timezone.utc)
-        current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
-
-        c.execute(
-            """
-            INSERT INTO AppMatchPredictions (app_request_id, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, isComplete, lastUpdated, miner_hotkey, vali_hotkey) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                matchId=VALUES(matchId), 
-                matchDate=VALUES(matchDate), 
-                sport=VALUES(sport),
-                league=VALUES(league),
-                homeTeamName=VALUES(homeTeamName), 
-                awayTeamName=VALUES(awayTeamName),
-                homeTeamScore=VALUES(homeTeamScore), 
-                awayTeamScore=VALUES(awayTeamScore),
-                isComplete=VALUES(isComplete), 
-                lastUpdated=VALUES(lastUpdated),
-                miner_hotkey=VALUES(miner_hotkey),
-                vali_hotkey=VALUES(vali_hotkey)
-            """,
-            (
-                prediction["app_request_id"],
-                prediction["matchId"],
-                prediction["matchDate"],
-                prediction["sport"],
-                prediction["league"],
-                prediction["homeTeamName"],
-                prediction["awayTeamName"],
-                prediction.get("homeTeamScore"),  # These can be None, hence using get
-                prediction.get("awayTeamScore"),
-                prediction.get("isComplete", 0),  # Default to 0 if not provided
-                current_utc_time,
-                prediction.get("miner_hotkey"),  # This can be None
-                vali_hotkey,  # This can be None
-            ),
-        )
-
-        conn.commit()
-        logging.info("Data inserted or updated in database")
-        return True
-
-    except Exception as e:
-        logging.error("Failed to insert app match prediction in MySQL database", exc_info=True)
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-def update_app_match_predictions(predictions):
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-
-        current_utc_time = dt.datetime.now(timezone.utc)
-        current_utc_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S")
-
-        predictions_to_update = []
-        predictions_with_issues = []
-        for prediction in predictions:
-            if "minerHasIssue" in prediction and (prediction["minerHasIssue"] == 1 or prediction["minerHasIssue"] == True):
-                predictions_with_issues.append(
-                    (
-                        current_utc_time,
-                        1,
-                        prediction["minerIssueMessage"],
-                        prediction["app_request_id"],
-                    )
-                )
-                continue
-
-            if "homeTeamScore" not in prediction or "awayTeamScore" not in prediction:
-                logging.error("Missing homeTeamScore or awayTeamScore for prediction in update_app_match_predictions")
-                continue
-            
-            predictions_to_update.append(
-                (
-                    prediction["homeTeamScore"],
-                    prediction["awayTeamScore"],
-                    1,
-                    current_utc_time,
-                    prediction["app_request_id"],
-                )
-            )
-
-        if predictions_to_update:
-            c.executemany(
-                """
-                UPDATE AppMatchPredictions
-                SET homeTeamScore = %s, awayTeamScore = %s, isComplete = %s, lastUpdated = %s
-                WHERE app_request_id = %s
-                """,
-                predictions_to_update
-            )
-        if predictions_with_issues:
-            c.executemany(
-                """
-                UPDATE AppMatchPredictions
-                SET valiLastUpdated = %s, minerHasIssue = %s, minerIssueMessage = %s
-                WHERE app_request_id = %s
-                """,
-                predictions_with_issues
-            )
-
-        conn.commit()
-        logging.info("Data inserted or updated in database")
-        return True
-
-    except Exception as e:
-        logging.error("Failed to insert match in MySQL database", exc_info=True)
-        return False
-    finally:
-        c.close()
-        conn.close()
-
-
-def get_app_match_predictions_by_ids(prediction_ids, batch_size=-1):
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor(dictionary=True)
-
-        query = """SELECT m.*, apm.app_request_id, apm.isComplete AS predictionIsComplete, apm.homeTeamScore AS predictedHomeTeamScore, apm.awayTeamScore AS predictedAwayTeamScore, apm.lastUpdated AS predictionLastUpdated,
-                       apm.miner_hotkey, apm.vali_hotkey, apm.valiLastUpdated, apm.minerHasIssue, apm.minerIssueMessage
-            FROM AppMatchPredictions apm 
-            LEFT JOIN matches m ON (m.matchId = apm.matchId) 
-            WHERE 1=1 """
-        
-        params = []
-        if prediction_ids is not None and len(prediction_ids) > 0:
-            placeholders = ', '.join(['%s'] * len(prediction_ids))
-            query += f" AND app_request_id IN ({placeholders})"
-            params.extend(prediction_ids)
-        if batch_size > 0:
-            query += " LIMIT %s"
-            params.append(batch_size)
-            
-        cursor.execute(query, params)
-        requests_list = cursor.fetchall()
-
-        return requests_list
-
-    except Exception as e:
-        logging.error(
-            "Failed to retrieve app match predictions by ids from the MySQL database",
-            exc_info=True,
-        )
-        return False
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def get_app_match_predictions(vali_hotkey=None, batch_size=-1):
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor(dictionary=True)
-
-        query = "SELECT * FROM AppMatchPredictions WHERE isComplete = 0"
-        
-        params = []
-        if vali_hotkey is not None:
-            query += " AND vali_hotkey = %s"
-            params.append(vali_hotkey)
-        if batch_size > 0:
-            query += " LIMIT %s"
-            params.append(batch_size)
-            
-        cursor.execute(query, params)
-        match_list = cursor.fetchall()
-
-        # if results, we need to update the valiLastUpdated field
-        if match_list and vali_hotkey is not None:
-            cursor.execute(
-                "UPDATE AppMatchPredictions SET valiLastUpdated = NOW() WHERE app_request_id IN (%s)"
-                % ",".join(["%s"] * len(match_list)),
-                [match["app_request_id"] for match in match_list],
-            )
-            conn.commit()
-
-        return match_list
-
-    except Exception as e:
-        logging.error(
-            "Failed to retrieve app match predictions from the MySQL database",
-            exc_info=True,
-        )
-        return False
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def get_app_match_predictions_unfulfilled(unfulfilled_threshold=5):
-    try:
-        conn = get_db_conn()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(
-            f"SELECT * FROM AppMatchPredictions WHERE isComplete = 0 AND valiLastUpdated IS NULL AND lastUpdated < NOW() - INTERVAL {unfulfilled_threshold} MINUTE"
-        )
-        match_list = cursor.fetchall()
-
-        return match_list
-
-    except Exception as e:
-        logging.error(
-            "Failed to retrieve unfulfilled app match predictions from the MySQL database",
-            exc_info=True,
-        )
-        return False
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def get_prediction_by_id(app_id):
-    try:
-        # Log the received app_id
-        logging.info(f"Fetching prediction for app_request_id: {app_id}")
-
-        # Ensure app_id is a string
-        if not isinstance(app_id, str):
-            app_id = str(app_id)
-
-        conn = get_db_conn()
-        cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("""
-            SELECT m.*, apm.app_request_id, apm.isComplete AS predictionIsComplete, apm.homeTeamScore AS predictedHomeTeamScore, apm.awayTeamScore AS predictedAwayTeamScore, apm.lastUpdated AS predictionLastUpdated,
-                       apm.miner_hotkey, apm.vali_hotkey, apm.valiLastUpdated, apm.minerHasIssue, apm.minerIssueMessage
-            FROM AppMatchPredictions apm 
-            LEFT JOIN matches m ON (m.matchId = apm.matchId) 
-            WHERE app_request_id = %s
-        """, (app_id,)
-        )
-        prediction = cursor.fetchone()
-
-        return prediction
-    except Exception as e:
-        logging.error(
-            "Failed to retrieve prediction from the MySQL database", exc_info=True
-        )
-        return None
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if conn is not None:
-            conn.close()
 
 
 def create_tables():
@@ -1650,7 +1152,6 @@ def create_tables():
             PRIMARY KEY (miner_hotkey, vali_hotkey, matchId)
         )"""
         )
-
         c.execute(
             """
         CREATE TABLE IF NOT EXISTS MatchPredictionsScored_test (
@@ -1686,14 +1187,34 @@ def create_tables():
             total_score FLOAT NOT NULL,
             total_pred_count INTEGER NOT NULL,
             mlb_score FLOAT NOT NULL,
+            mlb_edge_score FLOAT NOT NULL,
+            mlb_roi_score FLOAT NOT NULL,
+            mlb_roi FLOAT NOT NULL,
+            mlb_market_roi FLOAT NOT NULL,
             mlb_pred_count INTEGER NOT NULL,
             nfl_score FLOAT NOT NULL,
+            nfl_edge_score FLOAT NOT NULL,
+            nfl_roi_score FLOAT NOT NULL,
+            nfl_roi FLOAT NOT NULL,
+            nfl_market_roi FLOAT NOT NULL,
             nfl_pred_count INTEGER NOT NULL,
             nba_score FLOAT NOT NULL,
+            nba_edge_score FLOAT NOT NULL,
+            nba_roi_score FLOAT NOT NULL,
+            nba_roi FLOAT NOT NULL,
+            nba_market_roi FLOAT NOT NULL,
             nba_pred_count INTEGER NOT NULL,
             mls_score FLOAT NOT NULL,
+            mls_edge_score FLOAT NOT NULL,
+            mls_roi_score FLOAT NOT NULL,
+            mls_roi FLOAT NOT NULL,
+            mls_market_roi FLOAT NOT NULL,
             mls_pred_count INTEGER NOT NULL,
             epl_score FLOAT NOT NULL,
+            epl_edge_score FLOAT NOT NULL,
+            epl_roi_score FLOAT NOT NULL,
+            epl_roi FLOAT NOT NULL,
+            epl_market_roi FLOAT NOT NULL,
             epl_pred_count INTEGER NOT NULL,
             lastUpdated TIMESTAMP NOT NULL
         )"""
@@ -1708,14 +1229,34 @@ def create_tables():
             total_score FLOAT NOT NULL,
             total_pred_count INTEGER NOT NULL,
             mlb_score FLOAT NOT NULL,
+            mlb_edge_score FLOAT NOT NULL,
+            mlb_roi_score FLOAT NOT NULL,
+            mlb_roi FLOAT NOT NULL,
+            mlb_market_roi FLOAT NOT NULL,
             mlb_pred_count INTEGER NOT NULL,
             nfl_score FLOAT NOT NULL,
+            nfl_edge_score FLOAT NOT NULL,
+            nfl_roi_score FLOAT NOT NULL,
+            nfl_roi FLOAT NOT NULL,
+            nfl_market_roi FLOAT NOT NULL,
             nfl_pred_count INTEGER NOT NULL,
             nba_score FLOAT NOT NULL,
+            nba_edge_score FLOAT NOT NULL,
+            nba_roi_score FLOAT NOT NULL,
+            nba_roi FLOAT NOT NULL,
+            nba_market_roi FLOAT NOT NULL,
             nba_pred_count INTEGER NOT NULL,
             mls_score FLOAT NOT NULL,
+            mls_edge_score FLOAT NOT NULL,
+            mls_roi_score FLOAT NOT NULL,
+            mls_roi FLOAT NOT NULL,
+            mls_market_roi FLOAT NOT NULL,
             mls_pred_count INTEGER NOT NULL,
             epl_score FLOAT NOT NULL,
+            epl_edge_score FLOAT NOT NULL,
+            epl_roi_score FLOAT NOT NULL,
+            epl_roi FLOAT NOT NULL,
+            epl_market_roi FLOAT NOT NULL,
             epl_pred_count INTEGER NOT NULL,
             lastUpdated TIMESTAMP NOT NULL
         )"""
@@ -1747,99 +1288,6 @@ def create_tables():
             UNIQUE (miner_hotkey, miner_uid)
         )"""
         )
-
-        c.execute(
-            """
-        CREATE TABLE IF NOT EXISTS MatchPredictionResults (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            miner_hotkey VARCHAR(64) NOT NULL,
-            miner_coldkey VARCHAR(64) NOT NULL,
-            miner_uid INTEGER NOT NULL,
-            miner_is_registered TINYINT(1) DEFAULT 1,
-            miner_age INTEGER NOT NULL DEFAULT 0,
-            league VARCHAR(50) NOT NULL,
-            sport INTEGER NOT NULL,
-            total_predictions INTEGER NOT NULL,
-            winner_predictions INTEGER NOT NULL,
-            avg_score FLOAT NOT NULL,
-            last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, miner_uid, league)
-        )"""
-        )
-        c.execute(
-            """
-        CREATE TABLE IF NOT EXISTS MatchPredictionResults_test (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            miner_hotkey VARCHAR(64) NOT NULL,
-            miner_coldkey VARCHAR(64) NOT NULL,
-            miner_uid INTEGER NOT NULL,
-            miner_is_registered TINYINT(1) DEFAULT 1,
-            miner_age INTEGER NOT NULL DEFAULT 0,
-            league VARCHAR(50) NOT NULL,
-            sport INTEGER NOT NULL,
-            total_predictions INTEGER NOT NULL,
-            winner_predictions INTEGER NOT NULL,
-            avg_score FLOAT NOT NULL,
-            last_updated TIMESTAMP NOT NULL,
-            UNIQUE (miner_hotkey, miner_uid, league)
-        )"""
-        )
-        c.execute(
-            """
-        CREATE TABLE IF NOT EXISTS MPRSnapshots (
-            snapshot_id INT AUTO_INCREMENT PRIMARY KEY,
-            snapshot_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            id INT,
-            miner_hotkey VARCHAR(64),
-            miner_coldkey VARCHAR(64),
-            miner_uid INTEGER,
-            miner_is_registered TINYINT(1),
-            miner_age INTEGER NOT NULL DEFAULT 0,
-            league VARCHAR(50),
-            sport INTEGER,
-            total_predictions INTEGER,
-            winner_predictions INTEGER,
-            avg_score FLOAT,
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )"""
-        )
-        conn.commit()
-    except Exception as e:
-        logging.error("Failed to create matches table in MySQL database", exc_info=True)
-    finally:
-        if c is not None:
-            c.close()
-        if conn is not None:
-            conn.close()
-
-
-def create_app_tables():
-    c = None
-    conn = None
-    try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute(
-            """
-        CREATE TABLE IF NOT EXISTS AppMatchPredictions (
-            app_request_id VARCHAR(50) PRIMARY KEY,
-            matchId VARCHAR(50) NOT NULL,
-            matchDate TIMESTAMP NOT NULL,
-            sport INTEGER NOT NULL,
-            league VARCHAR(50) NOT NULL,
-            homeTeamName VARCHAR(30) NOT NULL,
-            awayTeamName VARCHAR(30) NOT NULL,
-            homeTeamScore INTEGER,
-            awayTeamScore INTEGER,
-            isComplete BOOLEAN DEFAULT FALSE,
-            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            miner_hotkey VARCHAR(64) NULL,
-            vali_hotkey VARCHAR(64) NULL,
-            valiLastUpdated TIMESTAMP NULL,
-            minerHasIssue BOOLEAN DEFAULT FALSE,
-            minerIssueMessage VARCHAR(255) NULL
-        )"""
-        )
         conn.commit()
     except Exception as e:
         logging.error("Failed to create matches table in MySQL database", exc_info=True)
@@ -1865,4 +1313,3 @@ def get_db_conn():
 
 
 create_tables()
-create_app_tables()

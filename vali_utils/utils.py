@@ -22,6 +22,7 @@ from common.constants import (
     VALIDATOR_TIMEOUT,
     SCORING_CUTOFF_IN_DAYS,
     LEAGUES_ALLOWING_DRAWS,
+    ROI_BET_AMOUNT,
 )
 
 from neurons.validator import Validator
@@ -706,6 +707,11 @@ def post_prediction_edge_results(
     vali,
     prediction_edge_results_endpoint: str,
     league_scores: Dict[League, List[float]],
+    league_edge_scores: Dict[League, List[float]],
+    league_roi_scores: Dict[League, List[float]],
+    league_roi_counts: Dict[League, List[int]],
+    league_roi_payouts: Dict[League, List[float]],
+    league_roi_market_payouts: Dict[League, List[float]],
     league_pred_counts: Dict[League, List[int]],
     all_scores: Dict[str, List[float]],
 ):
@@ -731,6 +737,10 @@ def post_prediction_edge_results(
             league_pred_counts[league] = [0] * len(all_uids)
         if league not in league_scores:
             league_scores[league] = [0] * len(all_uids)
+        if league not in league_edge_scores:
+            league_edge_scores[league] = [0] * len(all_uids)
+        if league not in league_roi_scores:
+            league_roi_scores[league] = [0] * len(all_uids)
     
     # Build complete score data for each UID
     for uid in all_uids:
@@ -742,24 +752,48 @@ def post_prediction_edge_results(
             league_pred_counts[League.EPL][uid]
         )
 
+        # Initialize ROI values for each league
+        roi_values = {
+            League.MLB: {"roi": 0.0, "market_roi": 0.0},
+            League.NFL: {"roi": 0.0, "market_roi": 0.0},
+            League.NBA: {"roi": 0.0, "market_roi": 0.0},
+            League.MLS: {"roi": 0.0, "market_roi": 0.0},
+            League.EPL: {"roi": 0.0, "market_roi": 0.0},
+        }
+
+        # Calculate ROI values
+        for league in roi_values:
+            if league not in league_roi_counts:
+                continue
+            if league_roi_counts[league][uid] > 0:
+                roi_values[league]["roi"] = (
+                    league_roi_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+                )
+                roi_values[league]["market_roi"] = (
+                    league_roi_market_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+                )
+
+        # Construct miner scores dictionary
         miner_scores[uid] = {
             "uid": uid,
             "hotkey": vali.metagraph.axons[uid].hotkey,
             "vali_hotkey": vali.wallet.hotkey.ss58_address,
             "total_score": all_scores[uid],
             "total_pred_count": total_pred_count,
-            "mlb_score": league_scores[League.MLB][uid],
-            "mlb_pred_count": league_pred_counts[League.MLB][uid],
-            "nfl_score": league_scores[League.NFL][uid],
-            "nfl_pred_count": league_pred_counts[League.NFL][uid],
-            "nba_score": league_scores[League.NBA][uid],
-            "nba_pred_count": league_pred_counts[League.NBA][uid],
-            "mls_score": league_scores[League.MLS][uid],
-            "mls_pred_count": league_pred_counts[League.MLS][uid],
-            "epl_score": league_scores[League.EPL][uid],
-            "epl_pred_count": league_pred_counts[League.EPL][uid],
-            "lastUpdated": current_time
+            "lastUpdated": current_time,
         }
+
+        # Dynamically update miner_scores with league-specific data
+        for league in roi_values:
+            league_name = league.name.lower()  # Convert to lowercase for consistency
+            miner_scores[uid].update({
+                f"{league_name}_score": league_scores[league][uid],
+                f"{league_name}_edge_score": league_edge_scores[league][uid],
+                f"{league_name}_roi_score": league_roi_scores[league][uid],
+                f"{league_name}_roi": roi_values[league]["roi"],
+                f"{league_name}_market_roi": roi_values[league]["market_roi"],
+                f"{league_name}_pred_count": league_pred_counts[league][uid],
+            })
 
     for attempt in range(max_retries):
         try:

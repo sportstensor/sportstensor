@@ -324,6 +324,7 @@ def calculate_incentives_and_update_scores(vali):
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_edge_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     # Initialize overall ROI dictionaries
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -505,6 +506,7 @@ def calculate_incentives_and_update_scores(vali):
             # Calculate final edge score
             final_edge_score = rho * total_score
             league_scores[league][index] = final_edge_score
+            league_edge_scores[league][index] = final_edge_score
             league_pred_counts[league][index] = len(predictions_with_match_data)
             # Calculate market ROI
             market_roi = league_roi_market_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
@@ -723,7 +725,7 @@ def calculate_incentives_and_update_scores(vali):
     else:
         bt.logging.info("\nNo non-zero scores recorded.")
 
-    return league_scores, league_pred_counts, all_scores
+    return league_scores, league_edge_scores, league_roi_scores, league_roi_counts, league_roi_payouts, league_roi_market_payouts, league_pred_counts, all_scores
 
 def update_miner_scores(vali, rewards: np.ndarray, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""
