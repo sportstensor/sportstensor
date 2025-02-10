@@ -326,6 +326,7 @@ def calculate_incentives_and_update_scores(vali):
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_edge_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_pred_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    league_pred_win_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     # Initialize overall ROI dictionaries
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -403,6 +404,10 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"Closing odds were found to be 0 for matchId {pwmd.prediction.matchId}. homeTeamOdds: {pwmd.homeTeamOdds}, awayTeamOdds: {pwmd.awayTeamOdds}, drawOdds: {pwmd.drawOdds}")
                         bt.logging.debug(f"Skipping calculation of this prediction.")
                         continue
+
+                    # Add to total prediction wins, if applicable
+                    if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
+                        league_pred_win_counts[league][index] += 1
 
                     # Calculate ROI for the prediction
                     league_roi_counts[league][index] += 1
@@ -725,7 +730,7 @@ def calculate_incentives_and_update_scores(vali):
     else:
         bt.logging.info("\nNo non-zero scores recorded.")
 
-    return league_scores, league_edge_scores, league_roi_scores, league_roi_counts, league_roi_payouts, league_roi_market_payouts, league_pred_counts, all_scores
+    return league_scores, league_edge_scores, league_roi_scores, league_roi_counts, league_roi_payouts, league_roi_market_payouts, league_pred_counts, league_pred_win_counts, all_scores
 
 def update_miner_scores(vali, rewards: np.ndarray, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""

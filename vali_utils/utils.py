@@ -713,6 +713,7 @@ def post_prediction_edge_results(
     league_roi_payouts: Dict[League, List[float]],
     league_roi_market_payouts: Dict[League, List[float]],
     league_pred_counts: Dict[League, List[int]],
+    league_pred_win_counts: Dict[League, List[int]],
     all_scores: Dict[str, List[float]],
 ):
     keypair = vali.dendrite.keypair
@@ -793,6 +794,7 @@ def post_prediction_edge_results(
                 f"{league_name}_roi": roi_values[league]["roi"],
                 f"{league_name}_market_roi": roi_values[league]["market_roi"],
                 f"{league_name}_pred_count": league_pred_counts[league][uid],
+                f"{league_name}_pred_win_count": league_pred_win_counts[league][uid],
             })
 
     for attempt in range(max_retries):
