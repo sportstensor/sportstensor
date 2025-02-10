@@ -190,6 +190,7 @@ class Validator(BaseValidatorNeuron):
                         league_roi_payouts,
                         league_roi_market_payouts,
                         league_pred_counts,
+                        league_pred_win_counts,
                         all_scores,
                     ) = scoring_utils.calculate_incentives_and_update_scores(self)
                     bt.logging.debug("Finished calculating incentives.")
@@ -217,15 +218,16 @@ class Validator(BaseValidatorNeuron):
                         ):
                             bt.logging.info("Posting league scores to API.")
                             post_result = utils.post_prediction_edge_results(
-                                self, 
-                                self.prediction_edge_results_endpoint, 
+                                self,
+                                self.prediction_edge_results_endpoint,
                                 league_scores,
                                 league_edge_scores,
-                                league_roi_scores, 
-                                league_roi_counts, 
-                                league_roi_payouts, 
-                                league_roi_market_payouts, 
-                                league_pred_counts, 
+                                league_roi_scores,
+                                league_roi_counts,
+                                league_roi_payouts,
+                                league_roi_market_payouts,
+                                league_pred_counts,
+                                league_pred_win_counts,
                                 all_scores
                             )
 
