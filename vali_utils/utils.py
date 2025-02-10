@@ -736,6 +736,8 @@ def post_prediction_edge_results(
             continue
         if league not in league_pred_counts:
             league_pred_counts[league] = [0] * len(all_uids)
+        if league not in league_pred_win_counts:
+            league_pred_win_counts[league] = [0] * len(all_uids)
         if league not in league_scores:
             league_scores[league] = [0] * len(all_uids)
         if league not in league_edge_scores:
