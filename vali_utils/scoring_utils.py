@@ -21,6 +21,7 @@ from common.constants import (
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
+    MIN_EDGE_SCORE,
     ROI_BET_AMOUNT,
     ROI_INCR_PRED_COUNT_PERCENTAGE,
     MAX_INCR_ROI_DIFF_PERCENTAGE,
@@ -571,15 +572,22 @@ def calculate_incentives_and_update_scores(vali):
         # Normalize league scores and weight for Edge and ROI scores
         # Normalize edge scores
         min_edge, max_edge = min(league_scores[league]), max(league_scores[league])
-        normalized_edge = [(score - min_edge) / (max_edge - min_edge) if score > 0 else 0 for score in league_scores[league]]
+        if max_edge - min_edge == 0:
+            normalized_edge = [0 for score in league_scores[league]]
+        else:
+            # If edge score is better than our minimum, normalize it, otherwise set to 0
+            normalized_edge = [(score - min_edge) / (max_edge - min_edge) if score > MIN_EDGE_SCORE else 0 for score in league_scores[league]]
         # Normalize ROI scores
         min_roi, max_roi = min(league_roi_scores[league]), max(league_roi_scores[league])
-        normalized_roi = [(score - min_roi) / (max_roi - min_roi) if (max_roi - min_roi) > 0 else 0 for score in league_roi_scores[league]]
+        if max_roi - min_roi == 0:
+            normalized_roi = [0 for score in league_roi_scores[league]]
+        else:
+            normalized_roi = [(score - min_roi) / (max_roi - min_roi) if (max_roi - min_roi) > 0 else 0 for score in league_roi_scores[league]]
 
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
             ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if r > 0 else 0 # if roi score is <= 0, set to 0. beat the market first
+            if e > 0 and r > 0 else 0 # if edge score <= 0 or roi score is <= 0, set to 0. beat the market first
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
