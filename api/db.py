@@ -831,44 +831,44 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
             miners_table_name += "_test"
 
         query = f"""
-            SELECT *
-            FROM {prediction_edge_results_table_name}
+            SELECT mpr.*
+            FROM {prediction_edge_results_table_name} mpr
         """
 
         if not include_deregistered:
             query += f"""
-                LEFT JOIN {miners_table_name} m ON m.miner_hotkey = miner_hotkey AND m.miner_is_registered = 1
+                LEFT JOIN {miners_table_name} m ON m.miner_hotkey = mpr.miner_hotkey AND m.miner_is_registered = 1
             """
 
         query += """
-            WHERE vali_hotkey = %s
+            WHERE mpr.vali_hotkey = %s
         """
 
         if miner_hotkey:
-            query += " AND miner_hotkey = %s"
+            query += " AND mpr.miner_hotkey = %s"
             params.append(miner_hotkey)
         
         if miner_id:
-            query += " AND miner_uid = %s"
+            query += " AND mpr.miner_uid = %s"
             params.append(miner_id)
 
         if league:
-            query += f" AND {league.lower()}_pred_count > 0 AND {league.lower()}_score > 0"
+            query += f" AND mpr.{league.lower()}_pred_count > 0 AND mpr.{league.lower()}_score > 0"
         
         if date:
-            query += " AND DATE(lastUpdated) >= %s"
+            query += " AND DATE(mpr.lastUpdated) >= %s"
             date = dt.datetime.strptime(date, "%Y-%m-%d")
             params.append(date)
             if not count:
                 count = 1
 
         query += """
-            ORDER BY lastUpdated DESC
+            ORDER BY mpr.lastUpdated DESC
         """
 
         if league:
             query += f"""
-                , {league.lower()}_score DESC
+                , mpr.{league.lower()}_score DESC
             """
 
         if count:
