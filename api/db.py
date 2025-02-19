@@ -836,7 +836,7 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
         """
 
         if not include_deregistered:
-            query += """
+            query += f"""
                 LEFT JOIN {miners_table_name} m ON m.miner_hotkey = miner_hotkey AND m.miner_is_registered = 1
             """
 
