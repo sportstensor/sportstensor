@@ -588,22 +588,54 @@ class SqliteValidatorStorage(ValidatorStorage):
                         '10_min': bool(row[4])
                     } for row in cursor.fetchall()}
                 
-    def delete_match_prediction_requests(self):
-        """Deletes a match prediction requests from matches that are older than 1 day."""
+    def check_and_fix_match_prediction_requests(self, matchId: Optional[str] = None) -> None:
+        """Checks and fixes the match prediction requests in the database."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
-                cursor.execute(
-                    """
-                    DELETE FROM MatchPredictionRequests
-                    WHERE matchId IN (
-                        SELECT mpr.matchId
+                if matchId:
+                    # Check if the matchId exists in the MatchPredictionRequests table last updated more than 2 days ago for wiggle room
+                    cursor.execute(
+                        """
+                        SELECT mpr.matchId, mpr.prediction_24_hour, mpr.prediction_12_hour, mpr.prediction_4_hour, mpr.prediction_10_min, mpr.lastUpdated
                         FROM MatchPredictionRequests mpr
-                        JOIN matches m ON mpr.matchId = m.matchId
-                        WHERE datetime(m.matchDate) < datetime('now', '-1 day')
+                        WHERE mpr.matchId = ?
+                        AND mpr.lastUpdated < datetime('now', '-2 day')
+                        """,
+                        (matchId,)
                     )
-                    """
-                )
+                    row = cursor.fetchone()
+                    # if record exists, let's delete it and force a new entry for this matchId
+                    if row:
+                        bt.logging.debug(f"Found MatchPredictionRequests for matchId {matchId} that is older than 2 days ({row[5]}). Deleting it for reset (shouldn't exist).")
+                        self.delete_match_prediction_requests(matchId)
+                
+    def delete_match_prediction_requests(self, matchId: Optional[str] = None) -> None:
+        """Deletes specific match prediction requests, or match prediction requests from matches that are older than 1 day."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                if matchId:
+                    # Delete the specific matchId from MatchPredictionRequests
+                    cursor.execute(
+                        """
+                        DELETE FROM MatchPredictionRequests
+                        WHERE matchId = ?
+                        """,
+                        (matchId,)
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        DELETE FROM MatchPredictionRequests
+                        WHERE matchId IN (
+                            SELECT mpr.matchId
+                            FROM MatchPredictionRequests mpr
+                            JOIN matches m ON mpr.matchId = m.matchId
+                            WHERE datetime(m.matchDate) < datetime('now', '-1 day')
+                        )
+                        """
+                    )
                 connection.commit()
 
     def insert_match_predictions(self, predictions: List[GetMatchPrediction]):
