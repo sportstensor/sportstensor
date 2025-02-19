@@ -391,6 +391,10 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
     if not matches:
         return [], "No upcoming matches scheduled."
     
+    for match in matches:
+        # Check if the matchId is in the database already and fix if needed
+        storage.check_and_fix_match_prediction_requests(match.matchId)
+    
     current_time = dt.datetime.now(dt.timezone.utc)
     match_prediction_requests = storage.get_match_prediction_requests()
 

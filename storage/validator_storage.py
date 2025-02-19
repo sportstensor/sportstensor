@@ -80,8 +80,13 @@ class ValidatorStorage(ABC):
         raise NotImplemented
     
     @abstractmethod
-    def delete_match_prediction_requests(self):
-        """Deletes a match prediction requests from matches that are older than 1 day."""
+    def check_and_fix_match_prediction_requests(self, matchId: Optional[str] = None) -> None:
+        """Checks and fixes the match prediction requests in the database."""
+        raise NotImplemented
+    
+    @abstractmethod
+    def delete_match_prediction_requests(self, matchId: Optional[str] = None) -> None:
+        """Deletes specific match prediction requests, or match prediction requests from matches that are older than 1 day."""
         raise NotImplemented
 
     @abstractmethod
