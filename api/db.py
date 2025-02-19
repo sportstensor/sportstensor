@@ -825,8 +825,10 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
 
         prediction_edge_results_table_name = "MatchPredictionEdgeResults"
         params = [vali_hotkey]
+        miners_table_name = "Miners"
         if not IS_PROD:
             prediction_edge_results_table_name += "_test"
+            miners_table_name += "_test"
 
         query = f"""
             SELECT *
@@ -835,7 +837,7 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
 
         if not include_deregistered:
             query += """
-                LEFT JOIN miners m ON m.miner_hotkey = miner_hotkey AND m.miner_is_registered = 1
+                LEFT JOIN {miners_table_name} m ON m.miner_hotkey = miner_hotkey AND m.miner_is_registered = 1
             """
 
         query += """
