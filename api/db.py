@@ -818,7 +818,7 @@ def upload_prediction_edge_results(prediction_results):
         conn.close()
 
 
-def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, league=None, date=None, count=10):
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, league=None, date=None, include_deregistered=False, count=10):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -831,6 +831,14 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
         query = f"""
             SELECT *
             FROM {prediction_edge_results_table_name}
+        """
+
+        if not include_deregistered:
+            query += """
+                LEFT JOIN miners m ON m.miner_hotkey = miner_hotkey AND m.miner_is_registered = 1
+            """
+
+        query += """
             WHERE vali_hotkey = %s
         """
 
