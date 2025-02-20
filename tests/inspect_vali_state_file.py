@@ -1,7 +1,9 @@
 import numpy as np
 
+state_file = ''
+
 # Load the .npz file
-npz_file = np.load('/home/andy/.bittensor/miners/st-vali/st-vali-hot/netuid172/validator/state.npz', allow_pickle=True)
+npz_file = np.load(state_file, allow_pickle=True)
 
 # List the arrays contained in the file
 print(npz_file.files)
