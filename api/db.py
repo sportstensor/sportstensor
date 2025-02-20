@@ -853,7 +853,7 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
             params.append(miner_id)
 
         if league:
-            query += f" AND mpr.{league.lower()}_pred_count > 0 AND mpr.{league.lower()}_score > 0"
+            query += f" AND mpr.{league.lower()}_pred_count > 0"
         
         if date:
             query += " AND DATE(mpr.lastUpdated) >= %s"
