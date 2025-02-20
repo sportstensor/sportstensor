@@ -72,9 +72,6 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        bt.logging.info("load_state()")
-        self.load_state()
-
         self.wandb_run_start = None
         if not self.config.wandb.off:
             if os.getenv("WANDB_API_KEY"):
@@ -128,19 +125,15 @@ class Validator(BaseValidatorNeuron):
         self.next_league_commitments_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
-
         
         self.accumulated_league_commitment_penalties = {}
         self.accumulated_league_commitment_penalties_lock = threading.RLock()
         self.accumulated_no_response_penalties = {}
         self.accumulated_no_response_penalties_lock = threading.RLock()
 
-        # Create a set of uids to corresponding leagues that miners are committed to.
-        self.uids_to_leagues: Dict[int, List[League]] = {}
+        # Create a set of locks for the corresponding uids to leagues dictionaries initialized in our validator state (base/validator.py)
         self.uids_to_leagues_lock = threading.RLock()
-        self.uids_to_last_leagues: Dict[int, List[League]] = {}
         self.uids_to_last_leagues_lock = threading.RLock()
-        self.uids_to_leagues_last_updated: Dict[int, dt.datetime] = {}
         self.uids_to_leagues_last_updated_lock = threading.RLock()
 
         # Initialize the incentive scoring and weight setting thread
@@ -461,6 +454,10 @@ class Validator(BaseValidatorNeuron):
             self.next_league_commitments_datetime = dt.datetime.now(
                 dt.timezone.utc
             ) + dt.timedelta(minutes=LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES)
+            
+            # Save state
+            bt.logging.info("save_state()")
+            self.save_state()
         """ END LEAGUE COMMITMENTS REQUESTS """
 
         """ START MATCH PREDICTION REQUESTS """

@@ -35,6 +35,11 @@ from base.neuron import BaseNeuron
 from base.mock import MockDendrite
 from base.utils.config import add_validator_args
 
+import os
+from typing import List, Dict
+import datetime as dt
+from common.data import League
+
 
 class BaseValidatorNeuron(BaseNeuron):
     """
@@ -50,6 +55,10 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+
+        # load state first for our league commitment data so it doesn't get lost during the first save_state() call inside of sync()
+        bt.logging.info("load_state()")
+        self.load_state()
 
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
@@ -445,14 +454,44 @@ class BaseValidatorNeuron(BaseNeuron):
             step=self.step,
             scores=self.scores,
             hotkeys=self.hotkeys,
+            uids_to_leagues=self.uids_to_leagues,
+            uids_to_last_leagues=self.uids_to_last_leagues,
+            uids_to_leagues_last_updated=self.uids_to_leagues_last_updated,
         )
 
     def load_state(self):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
 
+        # Check if the state file exists.
+        if not os.path.exists(self.config.neuron.full_path + "/state.npz"):
+            bt.logging.warning("State file does not exist. Initializing state.")
+            self.step = 0
+            self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+            self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
+            self.uids_to_leagues: Dict[int, List[League]] = {}
+            self.uids_to_last_leagues: Dict[int, List[League]] = {}
+            self.uids_to_leagues_last_updated: Dict[int, dt.datetime] = {}
+            self.save_state()
+            return
+
         # Load the state of the validator from file.
-        state = np.load(self.config.neuron.full_path + "/state.npz")
+        state = np.load(self.config.neuron.full_path + "/state.npz", allow_pickle=True)
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]
+
+        if "uids_to_leagues" in state:
+            self.uids_to_leagues = state["uids_to_leagues"].item()  # Extract dict properly
+        else:
+            self.uids_to_leagues = {}
+
+        if "uids_to_last_leagues" in state:
+            self.uids_to_last_leagues = state["uids_to_last_leagues"].item()
+        else:
+            self.uids_to_last_leagues = {}
+
+        if "uids_to_leagues_last_updated" in state:
+            self.uids_to_leagues_last_updated = state["uids_to_leagues_last_updated"].item()
+        else:
+            self.uids_to_leagues_last_updated = {}
