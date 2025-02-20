@@ -837,7 +837,7 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
 
         if not include_deregistered:
             query += f"""
-                LEFT JOIN {miners_table_name} m ON m.miner_hotkey = mpr.miner_hotkey AND m.miner_is_registered = 1
+                LEFT JOIN {miners_table_name} m ON m.miner_hotkey = mpr.miner_hotkey AND m.miner_uid = mpr.miner_uid AND m.miner_is_registered = 1
             """
 
         query += """
@@ -868,7 +868,7 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
 
         if league:
             query += f"""
-                , mpr.{league.lower()}_score DESC
+                , mpr.{league.lower()}_score DESC, mpr.{league.lower()}_pred_count DESC
             """
 
         if count:
