@@ -576,7 +576,7 @@ def calculate_incentives_and_update_scores(vali):
             normalized_edge = [0 for score in league_scores[league]]
         else:
             # If edge score is better than our minimum, normalize it, otherwise set to 0
-            normalized_edge = [(score - min_edge) / (max_edge - min_edge) if score > MIN_EDGE_SCORE else 0 for score in league_scores[league]]
+            normalized_edge = [(score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE) if score > MIN_EDGE_SCORE else 0 for score in league_scores[league]]
         # Normalize ROI scores
         min_roi, max_roi = min(league_roi_scores[league]), max(league_roi_scores[league])
         if max_roi - min_roi == 0:
