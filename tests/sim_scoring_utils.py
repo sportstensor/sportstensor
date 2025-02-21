@@ -1,11 +1,13 @@
 import os
 import matplotlib.pyplot as plt
+import itertools
 import numpy as np
 
 import datetime as dt
 from datetime import timezone
+import time
 import random
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 from tabulate import tabulate
 
 import bittensor
@@ -21,7 +23,9 @@ from common.constants import (
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     ROI_BET_AMOUNT,
-    MIN_ROI_THRESHOLD,
+    ROI_INCR_PRED_COUNT_PERCENTAGE,
+    MAX_INCR_ROI_DIFF_PERCENTAGE,
+    MIN_EDGE_SCORE,
     ROI_SCORING_WEIGHT,
     LEAGUES_ALLOWING_DRAWS,
     SENSITIVITY_ALPHA,
@@ -85,6 +89,11 @@ def calculate_incentives_and_update_scores():
     # Use this to get payouts to calculate ROI
     league_roi_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_roi_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_roi_market_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_roi_incr_counts: Dict[League, List[int]] = {league: [0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_roi_incr_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_roi_incr_market_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    league_roi_incr_max_possible_payouts: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     # Initialize league_rhos dictionary
     league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
@@ -95,56 +104,225 @@ def calculate_incentives_and_update_scores():
     uids_to_last_leagues = {}
     uids_to_leagues_last_updated = {}
 
-    # Recreating the dictionary with UID to League mapping from the provided data
-
-    uid_to_best_league = {
-        0: 'NBA', 4: 'NBA', 5: 'NBA', 6: 'NBA', 7: 'NBA',
-        8: 'NBA', 9: 'NBA', 10: 'NBA', 11: 'NFL', 12: 'NFL',
-        13: 'NFL', 14: 'NBA', 15: 'NBA', 16: 'NFL', 17: 'NFL',
-        18: 'NBA', 19: 'NBA', 20: 'NFL', 21: 'NFL', 22: 'NBA',
-        23: 'NFL', 24: 'NBA', 25: 'NBA', 26: 'NFL', 27: 'NBA',
-        28: 'NBA', 29: 'NBA', 30: 'NFL', 31: 'NFL', 32: 'NBA',
-        33: 'NBA', 34: 'NFL', 35: 'NBA', 36: 'NFL', 37: 'NBA',
-        38: 'NFL', 40: 'NBA', 41: 'NBA', 42: 'NFL', 43: 'NBA',
-        44: 'NBA', 45: 'NBA', 46: 'NBA', 47: 'NFL', 48: 'NBA',
-        49: 'NBA', 50: 'NBA', 51: 'NFL', 52: 'NBA', 53: 'NBA',
-        54: 'NFL', 56: 'NBA', 57: 'EPL', 58: 'NBA', 59: 'NBA',
-        60: 'NBA', 61: 'NFL', 62: 'NFL', 63: 'NBA', 64: 'NFL',
-        65: 'NBA', 66: 'NBA', 67: 'NFL', 68: 'NFL', 69: 'NBA',
-        70: 'NBA', 71: 'NBA', 72: 'NBA', 73: 'NFL', 74: 'NBA',
-        75: 'NFL', 76: 'NBA', 77: 'NBA', 78: 'NBA', 79: 'NBA',
-        80: 'NFL', 81: 'NBA', 82: 'NBA', 83: 'NBA', 84: 'NBA',
-        85: 'NBA', 86: 'NBA', 87: 'NBA', 88: 'NBA', 89: 'NBA',
-        90: 'NFL', 91: 'NFL', 92: 'NBA', 93: 'NFL', 94: 'NBA',
-        95: 'NBA', 97: 'NFL', 98: 'NBA', 99: 'NFL', 100: 'NFL',
-        101: 'NFL', 102: 'NFL', 103: 'NFL', 104: 'NFL', 105: 'NBA',
-        107: 'NBA', 108: 'NFL', 109: 'NBA', 110: 'NFL', 111: 'NFL',
-        112: 'NFL', 113: 'NFL', 114: 'NFL', 115: 'NFL', 116: 'NBA',
-        117: 'NFL', 118: 'NFL', 119: 'NFL', 120: 'NFL', 121: 'NFL',
-        122: 'NBA', 123: 'NFL', 124: 'NBA', 125: 'NBA', 126: 'NFL',
-        127: 'NBA', 128: 'NFL', 129: 'NFL', 130: 'NFL', 131: 'NFL',
-        132: 'NBA', 133: 'NFL', 134: 'NFL', 135: 'NBA', 136: 'NBA',
-        137: 'NFL', 138: 'NFL', 139: 'NBA', 140: 'NBA', 141: 'NBA',
-        143: 'NBA', 144: 'NFL', 145: 'NBA', 146: 'NBA', 147: 'NBA',
-        148: 'NBA', 149: 'NFL', 150: 'NFL', 151: 'NBA', 152: 'NFL',
-        153: 'NFL', 154: 'NBA', 155: 'NFL', 156: 'NFL', 157: 'NFL',
-        158: 'NFL', 159: 'NFL', 160: 'NFL', 161: 'NBA', 162: 'NBA',
-        163: 'NFL', 164: 'NFL', 165: 'NFL', 166: 'NBA', 167: 'NBA',
-        168: 'NFL', 169: 'NBA', 170: 'NFL', 171: 'NFL', 172: 'NBA',
-        173: 'NFL', 174: 'NBA', 175: 'NFL', 176: 'NBA', 177: 'NBA',
-        178: 'NFL', 179: 'NBA', 181: 'NFL', 183: 'NBA', 184: 'NBA',
-        186: 'NBA', 187: 'NBA', 188: 'NBA', 189: 'NBA', 191: 'NFL',
-        192: 'NFL', 193: 'NFL', 194: 'NFL', 195: 'NFL', 196: 'NBA',
-        197: 'NFL', 198: 'NBA', 199: 'NBA', 200: 'NBA', 202: 'NBA', 204: 'NBA',
-        205: 'NFL', 206: 'NFL', 207: 'NFL', 208: 'NBA', 210: 'NFL',
-        211: 'NFL', 213: 'NFL', 214: 'NBA', 215: 'NFL', 216: 'NBA',
-        218: 'NFL', 219: 'NBA', 220: 'NFL', 222: 'NFL', 224: 'NFL',
-        225: 'NFL', 227: 'NBA', 229: 'NFL', 230: 'NBA', 232: 'NFL',
-        234: 'NBA', 235: 'NBA', 236: 'NBA', 237: 'NFL', 238: 'NBA',
-        240: 'NFL', 241: 'NFL', 243: 'NBA', 245: 'NBA', 247: 'NBA',
-        249: 'NBA', 250: 'NFL', 251: 'NBA', 252: 'NFL', 253: 'NFL',
-        254: 'NBA', 255: 'NFL'
-    }
+    uids_to_league = {}
+    if len(uids_to_league) == 0:
+        print("No UID to League mapping found. Using fallback hardcoded mapping.")
+        # Recreating the dictionary with UID to League mapping from the provided data
+        uids_to_league = {
+            87: 'EPL',
+            119: 'NBA',
+            207: 'NBA',
+            57: 'NBA',
+            45: 'NBA',
+            134: 'EPL',
+            171: 'EPL',
+            225: 'NBA',
+            98: 'EPL',
+            20: 'EPL',
+            42: 'NBA',
+            141: 'EPL',
+            200: 'NBA',
+            153: 'EPL',
+            0: 'NBA',
+            152: 'NBA',
+            54: 'NBA',
+            14: 'EPL',
+            110: 'NBA',
+            221: 'EPL',
+            241: 'NBA',
+            211: 'NBA',
+            160: 'NBA',
+            138: 'EPL',
+            145: 'EPL',
+            155: 'NBA',
+            183: 'NBA',
+            175: 'NBA',
+            246: 'NBA',
+            148: 'NBA',
+            92: 'NBA',
+            133: 'NBA',
+            223: 'NBA',
+            18: 'NBA',
+            170: 'NBA',
+            234: 'EPL',
+            212: 'EPL',
+            41: 'EPL',
+            236: 'NBA',
+            208: 'NBA',
+            245: 'NBA',
+            187: 'EPL',
+            107: 'NBA',
+            73: 'NBA',
+            209: 'EPL',
+            156: 'NBA',
+            6: 'EPL',
+            198: 'NBA',
+            121: 'EPL',
+            32: 'NBA',
+            128: 'NBA',
+            227: 'NBA',
+            243: 'NBA',
+            244: 'EPL',
+            95: 'NBA',
+            129: 'NBA',
+            89: 'NBA',
+            189: 'EPL',
+            70: 'NBA',
+            204: 'NBA',
+            43: 'NBA',
+            191: 'NBA',
+            65: 'NBA',
+            85: 'EPL',
+            186: 'NBA',
+            8: 'EPL',
+            157: 'NBA',
+            163: 'EPL',
+            151: 'EPL',
+            109: 'NBA',
+            196: 'EPL',
+            58: 'NBA',
+            220: 'NBA',
+            106: 'NBA',
+            84: 'NBA',
+            25: 'NBA',
+            71: 'EPL',
+            177: 'NBA',
+            120: 'NBA',
+            115: 'EPL',
+            88: 'EPL',
+            93: 'NBA',
+            111: 'EPL',
+            182: 'NBA',
+            136: 'NBA',
+            197: 'NBA',
+            27: 'EPL',
+            250: 'NBA',
+            161: 'NBA',
+            147: 'EPL',
+            59: 'NBA',
+            116: 'EPL',
+            122: 'NBA',
+            50: 'NBA',
+            215: 'NBA',
+            135: 'NBA',
+            253: 'NBA',
+            28: 'NBA',
+            185: 'EPL',
+            224: 'EPL',
+            13: 'NBA',
+            247: 'NBA',
+            108: 'NBA',
+            169: 'NBA',
+            99: 'NBA',
+            202: 'NBA',
+            46: 'EPL',
+            154: 'NBA',
+            35: 'EPL',
+            60: 'EPL',
+            66: 'NBA',
+            255: 'NBA',
+            249: 'NBA',
+            184: 'NBA',
+            10: 'NBA',
+            167: 'NBA',
+            162: 'NBA',
+            180: 'NBA',
+            76: 'EPL',
+            103: 'NBA',
+            232: 'NBA',
+            33: 'NBA',
+            144: 'EPL',
+            226: 'NBA',
+            216: 'NBA',
+            86: 'NBA',
+            4: 'NBA',
+            124: 'NBA',
+            101: 'NBA',
+            125: 'NBA',
+            12: 'NBA',
+            51: 'NBA',
+            127: 'EPL',
+            199: 'EPL',
+            188: 'EPL',
+            56: 'EPL',
+            24: 'NBA',
+            217: 'EPL',
+            172: 'NBA',
+            181: 'EPL',
+            11: 'EPL',
+            26: 'NBA',
+            146: 'NBA',
+            165: 'NBA',
+            159: 'NBA',
+            30: 'NBA',
+            114: 'NBA',
+            158: 'EPL',
+            242: 'NBA',
+            214: 'NBA',
+            37: 'NBA',
+            201: 'EPL',
+            63: 'EPL',
+            218: 'NBA',
+            44: 'NBA',
+            9: 'NBA',
+            21: 'NBA',
+            131: 'NBA',
+            64: 'NBA',
+            176: 'NBA',
+            193: 'NBA',
+            195: 'NBA',
+            19: 'NBA',
+            139: 'NBA',
+            166: 'NBA',
+            78: 'EPL',
+            94: 'NBA',
+            91: 'NBA',
+            69: 'NBA',
+            29: 'NBA',
+            230: 'EPL',
+            235: 'EPL',
+            97: 'NBA',
+            192: 'EPL',
+            36: 'EPL',
+            40: 'NBA',
+            206: 'NBA',
+            123: 'NBA',
+            105: 'NBA',
+            82: 'EPL',
+            140: 'NBA',
+            238: 'NBA',
+            178: 'NBA',
+            143: 'NBA',
+            83: 'NBA',
+            251: 'EPL',
+            5: 'NBA',
+            168: 'NBA',
+            174: 'EPL',
+            113: 'NBA',
+            149: 'NBA',
+            254: 'NBA',
+            74: 'EPL',
+            150: 'NBA',
+            62: 'NBA',
+            72: 'NBA',
+            47: 'NBA',
+            240: 'EPL',
+            49: 'NBA',
+            67: 'NBA',
+            142: 'NBA',
+            52: 'EPL',
+            102: 'NBA',
+            118: 'EPL',
+            17: 'NBA',
+            77: 'NBA',
+            80: 'NBA',
+            231: 'EPL',
+            90: 'EPL',
+            117: 'NBA',
+            137: 'EPL',
+            112: 'EPL',
+            126: 'NBA',
+        }
 
     for league in leagues_to_analyze:
         print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
@@ -155,9 +333,9 @@ def calculate_incentives_and_update_scores():
         # Get all miners committed to this league within the grace period
         league_miner_uids = []
         for uid in all_uids:
-            if uid not in uid_to_best_league:
+            if uid not in uids_to_league:
                 continue
-            if uid_to_best_league[uid] == league or uid_to_best_league[uid] == league.name:
+            if uids_to_league[uid] == league or uids_to_league[uid] == league.name:
                 league_miner_uids.append(uid)
                 uids_to_last_leagues[uid] = [league]
                 uids_to_leagues_last_updated[uid] = dt.datetime.now()
@@ -221,6 +399,24 @@ def calculate_incentives_and_update_scores():
                     else:
                         league_roi_payouts[league][index] -= ROI_BET_AMOUNT
 
+                    # Calculate the market ROI for the prediction
+                    if pwmd.actualHomeTeamScore > pwmd.actualAwayTeamScore and pwmd.homeTeamOdds < pwmd.awayTeamOdds:
+                        league_roi_market_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    elif pwmd.actualAwayTeamScore > pwmd.actualHomeTeamScore and pwmd.awayTeamOdds < pwmd.homeTeamOdds:
+                        league_roi_market_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    elif pwmd.actualHomeTeamScore == pwmd.actualAwayTeamScore and pwmd.drawOdds < pwmd.homeTeamOdds and pwmd.drawOdds < pwmd.awayTeamOdds:
+                        league_roi_market_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    else:
+                        league_roi_market_payouts[league][index] -= ROI_BET_AMOUNT
+
+                    # Store the ROI incremental counts and payouts. Incremental ROI is a subset of the most recent prediction ROI
+                    if league_roi_counts[league][index] < round(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0):
+                        league_roi_incr_max_possible_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                    if league_roi_counts[league][index] == round(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0):
+                        league_roi_incr_counts[league][index] = league_roi_counts[league][index]
+                        league_roi_incr_payouts[league][index] = league_roi_payouts[league][index]
+                        league_roi_incr_market_payouts[league][index] = league_roi_market_payouts[league][index]
+
                     # Ensure prediction.matchDate is offset-aware
                     if pwmd.prediction.matchDate.tzinfo is None:
                         match_date = pwmd.prediction.matchDate.replace(tzinfo=dt.timezone.utc)
@@ -267,12 +463,7 @@ def calculate_incentives_and_update_scores():
 
                     # Get sigma, aka the closing edge
                     sigma = pwmd.prediction.closingEdge
-                    #sigma, correct_winner_score = calculate_edge(
-                    #    prediction_team=pwmd.prediction.get_predicted_team(),
-                    #    prediction_prob=pwmd.prediction.probability,
-                    #    actual_team=pwmd.get_actual_winner(),
-                    #    closing_odds=pwmd.get_closing_odds_for_predicted_outcome(),
-                    #)
+                    
                     if log_prediction:
                         print(f"      • MatchId: {pwmd.prediction.matchId}")
                         print(f"      • {pwmd.prediction.awayTeamName} ({pwmd.awayTeamOdds:.4f}) at {pwmd.prediction.homeTeamName} ({pwmd.homeTeamOdds:.4f})")
@@ -333,39 +524,102 @@ def calculate_incentives_and_update_scores():
             total_underdog_preds = len([
                 pwmd for pwmd in predictions_with_match_data if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS)
             ])
-            avg_pred_score = final_edge_score / len(predictions_with_match_data) if len(predictions_with_match_data) > 0 else 0.0
+            #avg_pred_score = final_edge_score / len(predictions_with_match_data) if len(predictions_with_match_data) > 0 else 0.0
             raw_edge = 0
             for pwmd in predictions_with_match_data:
                 raw_edge += pwmd.prediction.closingEdge
+            market_roi = league_roi_market_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
-            raw_roi = roi
-            if roi < MIN_ROI_THRESHOLD:
-                roi = 0.0
-            final_roi_score = round(rho * ((roi if roi>0 else 0)*100), 2)
+            roi_diff = roi - market_roi
+
+            # Base ROI score requires the miner is beating the market
+            final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
+
+            # If ROI is less than 0, but greater than market ROI, penalize the ROI score by distance from 0
+            if roi < 0 and roi_diff > 0:
+                print(f"Penalizing ROI score for miner {uid} in league {league.name} by {roi:.4f} ({final_roi_score * roi:.4f}): {final_roi_score:.4f} -> {final_roi_score + (final_roi_score * roi):.4f}")
+                final_roi_score = final_roi_score + (final_roi_score * roi)
+            
+            roi_incr = roi
+            market_roi_incr = market_roi
+            max_possible_roi_incr = 0
+            # Calculate incremental ROI score for miner and market. Penalize if too similar.
+            if league_roi_incr_counts[league][index] == round(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0) and final_roi_score > 0:
+                max_possible_roi_incr = league_roi_incr_max_possible_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
+                market_roi_incr = league_roi_incr_market_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
+                roi_incr = league_roi_incr_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
+                roi_incr_diff = roi_incr - market_roi_incr
+                max_possible_roi_incr_diff = max_possible_roi_incr - market_roi_incr
+                
+                # if incremental ROI and incremental market ROI is within the difference threshold, calculate penalty
+                if abs(roi_incr_diff) <= MAX_INCR_ROI_DIFF_PERCENTAGE:
+                    # Exponential decay scaling
+                    k = 30  # Decay constant; increase for steeper decay
+                    # Scale the penalty factor to max at 0.99
+                    penalty_factor = 0.99 * np.exp(-k * abs(roi_incr_diff))
+                    adjustment_factor = 1 - penalty_factor
+                    print(f"Incremental ROI score penalty for miner {uid} in league {league.name}: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_roi_score:.4f} -> {final_roi_score * adjustment_factor:.4f}")
+                    if abs(max_possible_roi_incr_diff) <= MAX_INCR_ROI_DIFF_PERCENTAGE:
+                        print(f"-- Ope, just kidding. Max possible incremental ROI is close to incremental market ROI. Miner and market killing it. No penalty.")
+                    else:
+                        final_roi_score *= adjustment_factor
+
             league_roi_scores[league][index] = final_roi_score
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
-                league_table_data.append([uid, round(final_edge_score, 2), round(final_roi_score, 2), str(round(raw_roi*100, 2)) + "%", len(predictions_with_match_data), round(avg_pred_score, 4), round(rho, 2), str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), total_underdog_preds, round(raw_edge, 4)])
+                league_table_data.append([
+                    uid,
+                    round(final_edge_score, 2), 
+                    round(final_roi_score, 4), 
+                    str(round(roi*100, 2)) + "%", 
+                    str(round(market_roi*100, 2)) + "%", 
+                    str(round(roi_diff*100, 2)) + "%", 
+                    str(round(roi_incr*100, 2)) + "%", 
+                    str(round(market_roi_incr*100, 2)) + "%",
+                    str(round(max_possible_roi_incr*100, 2)) + "%",
+                    len(predictions_with_match_data),
+                    round(rho, 2), 
+                    str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), 
+                    total_underdog_preds, 
+                    round(raw_edge, 4)
+                ])
 
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print(tabulate(league_table_data, headers=['UID', 'Score', 'ROI Score', 'ROI', '# Predictions', 'Avg Pred Score', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
+            print(tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'Max ROI Incr', '# Preds', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
         else:
             print(f"No non-zero scores for {league.name}")
 
         # Normalize league scores and weight for Edge and ROI scores
         # Normalize edge scores
         min_edge, max_edge = min(league_scores[league]), max(league_scores[league])
-        normalized_edge = [(score - min_edge) / (max_edge - min_edge) if score > 0 else 0 for score in league_scores[league]]
+        #print(f"min_edge: {min_edge}, max_edge: {max_edge}")
+        if max_edge - MIN_EDGE_SCORE == 0:
+            normalized_edge = [0 for score in league_scores[league]] # avoid division by zero
+        else:
+            normalized_edge = [(score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE) if score > MIN_EDGE_SCORE else 0 for score in league_scores[league]]
+        
+        """ # debugging code:
+        for i, score in enumerate(league_scores[league]):
+            if i == 242 and league == League.NBA:
+                print(f"i: {i}, score: {score}, normalized_edge: {normalized_edge[i]}, league_scores[league]: {league_scores[league][i]}")
+                # print out the individual values of the normalized_edge
+                #print(f"({score} - {min_edge}) / ({max_edge} - {min_edge}): {(score - min_edge) / (max_edge - min_edge)}")
+                print(f"({score} - {MIN_EDGE_SCORE}) / ({max_edge} - {MIN_EDGE_SCORE}): {(score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE)}")
+        """
+
         # Normalize ROI scores
         min_roi, max_roi = min(league_roi_scores[league]), max(league_roi_scores[league])
-        normalized_roi = [(score - min_roi) / (max_roi - min_roi) if (max_roi - min_roi) > 0 else 0 for score in league_roi_scores[league]]
+        if max_roi - min_roi == 0:
+            normalized_roi = [0 for score in league_roi_scores[league]]
+        else:
+            normalized_roi = [(score - min_roi) / (max_roi - min_roi) if (max_roi - min_roi) > 0 else 0 for score in league_roi_scores[league]]
         
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
             ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if r > 0 else 0
+            if r > 0 and e > 0 else 0 # roi and edge must be > 0
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
@@ -497,6 +751,59 @@ def calculate_incentives_and_update_scores():
     print(f"Applying Pareto distribution (mu: {PARETO_MU}, alpha: {PARETO_ALPHA}) to scores...")
     final_scores = apply_pareto(all_scores, all_uids, PARETO_MU, PARETO_ALPHA)
 
+    """ Weird attempt to apply Pareto per league before scaling 
+    final_scores = [0.0] * len(all_uids)
+    for i in range(len(all_uids)):
+        all_scores[i] = sum(league_scores[league][i] for league in ACTIVE_LEAGUES)
+
+    # Step 1: Calculate total positive scores for each league
+    league_totals = {league: 0.0 for league in ACTIVE_LEAGUES}
+    for league in ACTIVE_LEAGUES:
+        league_totals[league] = sum(score for score in league_scores[league] if score > 0)
+
+    # Step 2: Apply Pareto per league before scaling
+    pareto_scores_per_league = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    for league in ACTIVE_LEAGUES:
+        total_league_score = league_totals[league]
+
+        # Apply Pareto before scaling
+        if total_league_score > 0:
+            pareto_scores_per_league[league] = apply_pareto(league_scores[league], all_uids, PARETO_MU, PARETO_ALPHA)
+            #pareto_scores_per_league[league] = [score if score > (PARETO_MU + PARETO_MU*0.05) else 0 for score in pareto_scores_per_league[league]]
+
+    # Step 3: Scale scores within each league to match allocation percentage
+    scaled_scores_per_league = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    for league in ACTIVE_LEAGUES:
+        total_league_score = sum(pareto_scores_per_league[league])
+        allocation = LEAGUE_SCORING_PERCENTAGES[league] * 100  # Convert to percentage
+
+        if total_league_score > 0:
+            scaling_factor = allocation / total_league_score  # Factor to scale league scores
+            scaled_scores_per_league[league] = [
+                (score * scaling_factor if score > 0 else 0) for score in pareto_scores_per_league[league]
+            ]
+
+    # Step 4: Aggregate scaled scores across all leagues
+    for i in range(len(all_uids)):
+        final_scores[i] = sum(scaled_scores_per_league[league][i] for league in ACTIVE_LEAGUES)
+
+    # Step 5: Verify emissions allocation percentages
+    league_emissions = {league: sum(scaled_scores_per_league[league]) for league in ACTIVE_LEAGUES}
+    total_emissions = sum(league_emissions.values())
+
+    # Print league emissions and verify percentages
+    print("\nLeague Emissions and Allocations:")
+    for league, emissions in league_emissions.items():
+        percentage = (emissions / total_emissions) * 100 if total_emissions > 0 else 0
+        print(f"League: {league.name}, Total Emissions: {emissions:.4f}, Percentage: {percentage:.2f}%")
+
+        # Cross-check to ensure percentages match expected allocations
+        expected_percentage = LEAGUE_SCORING_PERCENTAGES[league] * 100
+        if not abs(percentage - expected_percentage) < 0.01:  # Allow a small tolerance
+            print(f"  Warning: Allocation mismatch for {league.name}! Expected: {expected_percentage:.2f}%, Actual: {percentage:.2f}%")
+
+    """
+
     # Prepare final scores table
     final_scores_table = []
     for i, uid in enumerate(all_uids):
@@ -541,7 +848,7 @@ def calculate_incentives_and_update_scores():
         print("\nNo non-zero scores recorded.")
 
     # Generate graph of Pre-Pareto vs Final Pareto Scores
-    graph_results(all_uids, all_scores, final_scores)
+    graph_results(all_uids, all_scores, final_scores, uids_to_league)
 
     cabal_uids = ""
     for uid in all_uids:
@@ -550,40 +857,64 @@ def calculate_incentives_and_update_scores():
     print(f"\nCabal UIDs: {cabal_uids}")
 
 
-def graph_results(all_uids, all_scores, final_scores):
+def graph_results(all_uids, all_scores, final_scores, uids_to_league):
     """
-    Graphs the Pre-Pareto and Final Pareto scores with smaller, transparent dots and improved aesthetics.
+    Graphs the Pre-Pareto and Final Pareto scores with league-based color coding.
 
     :param all_uids: List of unique identifiers for the miners
     :param all_scores: List of Pre-Pareto scores
     :param final_scores: List of Final Pareto scores
+    :param uids_to_league: Dictionary mapping miner UID to league
     """
-    # Sort the miners based on Pre-Pareto Scores
-    sorted_indices = np.argsort(all_scores)
-    sorted_pre_pareto_scores = np.array(all_scores)[sorted_indices]
+    # Sort the miners based on Final Pareto Scores
+    sorted_indices = np.argsort(final_scores)
+    sorted_uids = np.array(all_uids)[sorted_indices]
     sorted_final_pareto_scores = np.array(final_scores)[sorted_indices]
 
     # X-axis for the miners (from 0 to number of miners)
     x_axis = np.arange(len(all_uids))
 
+    # Filter out zero scores after sorting
+    non_zero_indices = sorted_final_pareto_scores > 0.1
+    x_axis = x_axis[non_zero_indices]
+    sorted_uids = sorted_uids[non_zero_indices]
+    sorted_final_pareto_scores = sorted_final_pareto_scores[non_zero_indices]
+
     # Create the output directory if it doesn't exist
     output_dir = "tests/imgs"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Plot the graph with smaller, transparent dots
+    # Set up dark mode
+    plt.style.use("dark_background")
+
+    # Assign colors to leagues dynamically
+    unique_leagues = sorted(set(uids_to_league.values()))
+    color_cycle = itertools.cycle(["#FF5733", "#33FF57", "#5733FF", "#FFC300", "#33FFF5"])  # Expandable color list
+    league_colors = {league: next(color_cycle) for league in unique_leagues}
+
+    # Plot each league separately
     plt.figure(figsize=(12, 6))
-    #plt.scatter(x_axis, sorted_pre_pareto_scores, label="Pre-Pareto Score", color='blue', s=10, alpha=0.6)
-    plt.scatter(x_axis, sorted_final_pareto_scores, label="Final Pareto Score", color='orange', s=10, alpha=0.6)
-    plt.xlabel("Miners (sorted by Pre-Pareto Score)")
-    plt.ylabel("Scores")
-    plt.title("Final Scores")
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.5)
+    for league in unique_leagues:
+        league_indices = [i for i, uid in enumerate(sorted_uids) if uids_to_league.get(uid) == league]
+        plt.scatter(
+            np.array(x_axis)[league_indices], 
+            np.array(sorted_final_pareto_scores)[league_indices], 
+            label=league, 
+            color=league_colors[league], 
+            s=10, 
+            alpha=0.8
+        )
+
+    plt.xlabel("Miners (sorted by score)", fontsize=12, color='white')
+    plt.ylabel("Scores", fontsize=12, color='white')
+    plt.title("Final Pareto Scores by League", fontsize=14, color='white')
+    plt.legend(title="Leagues", fontsize=10, facecolor='gray', edgecolor='white')
+    plt.grid(True, linestyle='--', alpha=0.3, color='gray')
     plt.tight_layout()
 
     # Save the graph as an image
     output_path = os.path.join(output_dir, "pareto_scores.png")
-    plt.savefig(output_path)
+    plt.savefig(output_path, dpi=300)
     plt.close()
 
     return output_path
