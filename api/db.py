@@ -818,47 +818,60 @@ def upload_prediction_edge_results(prediction_results):
         conn.close()
 
 
-def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, league=None, date=None, count=10):
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, league=None, date=None, include_deregistered=False, count=10):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
 
         prediction_edge_results_table_name = "MatchPredictionEdgeResults"
         params = [vali_hotkey]
+        miners_table_name = "Miners"
         if not IS_PROD:
             prediction_edge_results_table_name += "_test"
+            miners_table_name += "_test"
 
         query = f"""
-            SELECT *
-            FROM {prediction_edge_results_table_name}
-            WHERE vali_hotkey = %s
+            SELECT mpr.*
+            FROM {prediction_edge_results_table_name} mpr
+        """
+
+        if not include_deregistered:
+            query += f"""
+                LEFT JOIN {miners_table_name} m ON m.miner_hotkey = mpr.miner_hotkey AND m.miner_uid = mpr.miner_uid
+            """
+
+        query += """
+            WHERE mpr.vali_hotkey = %s
         """
 
         if miner_hotkey:
-            query += " AND miner_hotkey = %s"
+            query += " AND mpr.miner_hotkey = %s"
             params.append(miner_hotkey)
         
         if miner_id:
-            query += " AND miner_uid = %s"
+            query += " AND mpr.miner_uid = %s"
             params.append(miner_id)
 
+        if not include_deregistered:
+            query += " AND m.miner_is_registered = 1"
+
         if league:
-            query += f" AND {league.lower()}_pred_count > 0 AND {league.lower()}_score > 0"
+            query += f" AND mpr.{league.lower()}_pred_count > 0"
         
         if date:
-            query += " AND DATE(lastUpdated) >= %s"
+            query += " AND DATE(mpr.lastUpdated) >= %s"
             date = dt.datetime.strptime(date, "%Y-%m-%d")
             params.append(date)
             if not count:
                 count = 1
 
         query += """
-            ORDER BY lastUpdated DESC
+            ORDER BY mpr.lastUpdated DESC
         """
 
         if league:
             query += f"""
-                , {league.lower()}_score DESC
+                , mpr.{league.lower()}_score DESC, mpr.{league.lower()}_pred_count DESC
             """
 
         if count:

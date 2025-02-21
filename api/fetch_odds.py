@@ -47,7 +47,7 @@ mismatch_teams_mapping = {
     'Orlando City SC': 'Orlando City',
     'Inter Miami CF': 'Inter Miami',
     'Atlanta United FC': 'Atlanta United',
-    'Montreal Impact': 'CF Montréal',
+    'CF Montreal': 'CF Montréal',
     'D.C. United': 'DC United',
     'Tottenham Hotspur': 'Tottenham',
     'Columbus Crew SC': 'Columbus Crew',
