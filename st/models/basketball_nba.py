@@ -7,7 +7,7 @@ from st.models.basketball import BasketballPredictionModel
 
 
 class NBABasketballPredictionModel(BasketballPredictionModel):
-    def make_prediction(self):
+    async def make_prediction(self):
         bt.logging.info("Predicting NBA basketball game...")
         
         # Set your probability predictions here

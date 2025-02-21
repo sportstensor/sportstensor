@@ -5,7 +5,7 @@ from common.data import ProbabilityChoice
 
 
 class SoccerPredictionModel(SportPredictionModel):
-    def make_prediction(self):
+    async def make_prediction(self):
         bt.logging.info("Predicting soccer match...")
 
         self.set_default_probability(canTie=True)
