@@ -399,9 +399,7 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
     match_prediction_requests = storage.get_match_prediction_requests()
 
     match_predictions = []
-    next_prediction_time = None
-    next_prediction_match = None
-    next_prediction_window = None
+    next_predictions = []
 
     prediction_windows = [
         ('24_hour', timedelta(hours=24), timedelta(hours=23), 'prediction_24_hour'),
@@ -409,7 +407,7 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
         ('4_hour', timedelta(hours=4), timedelta(hours=3), 'prediction_4_hour'),
         ('10_min', timedelta(minutes=10), timedelta(minutes=5), 'prediction_10_min')
     ]
-
+    
     for match in matches:
         if match.league not in vali.ACTIVE_LEAGUES:
             continue
@@ -421,14 +419,6 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
         time_until_match = match_date_aware - current_time
 
         for window, upper_bound, lower_bound, update_key in prediction_windows:
-            if not match_prediction_requests[match.matchId][window]:
-                prediction_time = match_date_aware - upper_bound
-                if prediction_time > current_time:
-                    if next_prediction_time is None or prediction_time < next_prediction_time:
-                        next_prediction_time = prediction_time
-                        next_prediction_match = match
-                        next_prediction_window = window
-
             # Check if this match needs a prediction in the current cycle
             if (not match_prediction_requests[match.matchId][window] and
                 upper_bound >= time_until_match > lower_bound):
@@ -446,28 +436,37 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
                 storage.update_match_prediction_request(match.matchId, update_key)
                 break  # Only one prediction per match per cycle
 
-    # Prepare next match info string
-    next_match_info = ""
-    if next_prediction_match:
-        time_until_next = next_prediction_time - current_time
-        hours, remainder = divmod(time_until_next.total_seconds(), 3600)
-        minutes, _ = divmod(remainder, 60)
-        
-        window_display = {
-            '24_hour': 'T-24h',
-            '12_hour': 'T-12h',
-            '4_hour': 'T-4h',
-            '10_min': 'T-10m'
-        }
+            elif not match_prediction_requests[match.matchId][window]:
+                prediction_time = match_date_aware - upper_bound
+                if prediction_time > current_time or time_until_match > upper_bound:
+                    next_predictions.append((prediction_time, match, window))
 
-        next_match_info = (
-            f"Next match prediction request: "
-            f"{int(hours)}h {int(minutes)}m | "
-            f"{window_display.get(next_prediction_window, '?')} | "
-            f"{next_prediction_match.homeTeamName} vs {next_prediction_match.awayTeamName} "
-            f"({next_prediction_time.strftime('%Y-%m-%d %H:%M')} UTC) | "
-            f"{next_prediction_match.league}"
-        )
+    # Sort and get the top 3 upcoming matches
+    next_predictions.sort(key=lambda x: x[0])  # Sort by prediction_time
+    next_predictions = next_predictions[:3]
+    
+    # Prepare next matches info string
+    window_display = {
+        '24_hour': 'T-24h',
+        '12_hour': 'T-12h',
+        '4_hour': 'T-4h',
+        '10_min': 'T-10m'
+    }
+    
+    if next_predictions:
+        next_match_info = "Next match prediction requests: "
+        for pred_time, match, window in next_predictions:
+            time_until_next = pred_time - current_time
+            hours, remainder = divmod(time_until_next.total_seconds(), 3600)
+            minutes, _ = divmod(remainder, 60)
+            
+            next_match_info += (
+                f"\n\t\t\t\t\t\t{int(hours)}h {int(minutes)}m | "
+                f"{window_display.get(window, '?')} | "
+                f"{match.homeTeamName} vs {match.awayTeamName} "
+                f"({pred_time.strftime('%Y-%m-%d %H:%M')} UTC) | "
+                f"{match.league}"
+            )
     else:
         next_match_info = "No upcoming matches scheduled for prediction requests."
 

@@ -456,9 +456,9 @@ class SqliteValidatorStorage(ValidatorStorage):
                 lower_bound_timestamp = (
                     current_timestamp + MIN_PREDICTION_TIME_THRESHOLD
                 )
-                # Calculate the upper bound timestamp (latest match date allowed for predictions)
+                # Calculate the upper bound timestamp (latest match date allowed for predictions) with buffer of 1 hour
                 upper_bound_timestamp = (
-                    current_timestamp + MAX_PREDICTION_DAYS_THRESHOLD * 24 * 3600
+                    current_timestamp + (MAX_PREDICTION_DAYS_THRESHOLD * 24 * 3600) + 3600
                 )
                 # Convert timestamps to strings in 'YYYY-MM-DD HH:MM:SS' format
                 lower_bound_str = dt.datetime.utcfromtimestamp(

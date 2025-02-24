@@ -22,6 +22,7 @@ from common.constants import (
     MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
     MIN_EDGE_SCORE,
+    MAX_MIN_EDGE_SCORE,
     ROI_BET_AMOUNT,
     ROI_INCR_PRED_COUNT_PERCENTAGE,
     MAX_INCR_ROI_DIFF_PERCENTAGE,
@@ -570,13 +571,29 @@ def calculate_incentives_and_update_scores(vali):
             bt.logging.info(f"No non-zero scores for {league.name}")
 
         # Normalize league scores and weight for Edge and ROI scores
-        # Normalize edge scores
         min_edge, max_edge = min(league_scores[league]), max(league_scores[league])
-        if max_edge - min_edge == 0:
-            normalized_edge = [0 for score in league_scores[league]]
+        # Avoid division by zero
+        if max_edge - MIN_EDGE_SCORE == 0:
+            normalized_edge = [0 for _ in league_scores[league]]
         else:
-            # If edge score is better than our minimum, normalize it, otherwise set to 0
-            normalized_edge = [(score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE) if score > MIN_EDGE_SCORE else 0 for score in league_scores[league]]
+            normalized_edge = []
+            for i, score in enumerate(league_scores[league]):
+                rho = league_rhos[league][i]
+                # Dynamic minimum edge score based on rho
+                if rho <= 0.95:
+                    min_edge_for_miner = MIN_EDGE_SCORE + (rho / 0.95) * (MAX_MIN_EDGE_SCORE - MIN_EDGE_SCORE)  # Linearly interpolate between min edge and maximum min edge (for older miners)
+                else:
+                    min_edge_for_miner = MAX_MIN_EDGE_SCORE
+                
+                # Compute normalized edge score
+                if score > min_edge_for_miner:
+                    normalized_value = (score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE)
+                else:
+                    print(f"Miner {i} did not meet minimum edge score of {min_edge_for_miner:.2f} with score {score:.2f} and rho {rho:.2f}. Setting normalized score to 0.")
+                    normalized_value = 0
+
+                normalized_edge.append(normalized_value)
+        
         # Normalize ROI scores
         min_roi, max_roi = min(league_roi_scores[league]), max(league_roi_scores[league])
         if max_roi - min_roi == 0:
