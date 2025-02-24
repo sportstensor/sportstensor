@@ -21,6 +21,7 @@ from common.constants import (
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
+    MIN_RHO,
     MIN_EDGE_SCORE,
     MAX_MIN_EDGE_SCORE,
     ROI_BET_AMOUNT,
@@ -604,7 +605,7 @@ def calculate_incentives_and_update_scores(vali):
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
             ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if e > 0 and r > 0 else 0 # if edge score <= 0 or roi score is <= 0, set to 0. beat the market first
+            if r > 0 and e > 0 and rho >= MIN_RHO else 0 # roi and edge must be > 0 and rho must be >= min rho
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
