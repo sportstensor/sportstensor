@@ -53,7 +53,9 @@ NO_PREDICTION_RESPONSE_PENALTY = -0.1
 NO_LEAGUE_COMMITMENT_GRACE_PERIOD = 60 * 60 * 24 # 24 hours
 MAX_GFILTER_FOR_WRONG_PREDICTION = 0.7
 MIN_GFILTER_FOR_UNDERDOG_PREDICTION = 1.0
+MIN_RHO = 0.1
 MIN_EDGE_SCORE = -5.0
+MAX_MIN_EDGE_SCORE = -2.0
 
 # ROI constants
 ROI_BET_AMOUNT = 1
@@ -90,8 +92,8 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
     League.MLB: 0.0,
-    League.NBA: 0.94,
-    League.EPL: 0.05,
+    League.NBA: 0.91,
+    League.EPL: 0.08,
     League.MLS: 0.01,
     League.NFL: 0.0
 }
@@ -116,4 +118,4 @@ EXTREMIS_BETA = 0.25
 # PARETO_MU is the minimum value for the Pareto distribution
 PARETO_MU = 1.0
 # PARETO_ALPHA is the shape of the Pareto distribution. The lower the ALPHA, the more suppressed the distribution.
-PARETO_ALPHA = 1.0
+PARETO_ALPHA = 1.2
