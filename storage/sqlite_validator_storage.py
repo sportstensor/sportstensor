@@ -7,11 +7,9 @@ import sqlite3
 import threading
 import random
 from pydantic import ValidationError
-from typing import Any, Dict, Optional, Set, Tuple, List
+from typing import Any, Dict, Optional, List
 from common.data import (
-    Sport,
     Match,
-    Prediction,
     MatchPrediction,
     League,
     MatchPredictionWithMatchData,
@@ -25,6 +23,7 @@ from common.constants import (
 )
 from storage.validator_storage import ValidatorStorage
 
+ARCHIVE_OLDER_THAN_MONTHS = 6
 
 class SqliteValidatorStorage(ValidatorStorage):
     _instance: Optional['SqliteValidatorStorage'] = None
@@ -149,6 +148,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Lock to avoid concurrency issues on interacting with the database.
                 self.lock = threading.RLock()
 
+            # Execute archiving. Must run before cleanup.
+            self.archive_old_data()
             # Execute cleanup queries
             self.cleanup()
 
@@ -209,13 +210,54 @@ class SqliteValidatorStorage(ValidatorStorage):
                 cursor.execute("SELECT COUNT(*) FROM MatchPredictions")
                 total_rows = cursor.fetchone()[0]
                 print(f"Total number of rows in MatchPredictions: {total_rows}")
-
-                # Print the total number of rows in the MatchPredictions table
-                cursor.execute(f"SELECT COUNT(*) FROM MatchPredictions WHERE isScored = 0 AND lastUpdated < DATETIME('now', '-{SCORING_CUTOFF_IN_DAYS} day')")
-                total_unscored_rows = cursor.fetchone()[0]
-                print(f"Total number of MatchPredictions {SCORING_CUTOFF_IN_DAYS}+ days old that haven't been scored: {total_unscored_rows}")
                 
                 try:
+                    ### Start Cleanup old matches and their associated data ###
+                    
+                    # Get match IDs of matches older than ARCHIVE_OLDER_THAN_MONTHS months
+                    cursor.execute(f"SELECT matchId FROM Matches WHERE matchDate < DATETIME('now', '-{ARCHIVE_OLDER_THAN_MONTHS} months')")
+                    old_match_ids = [row[0] for row in cursor.fetchall()]
+
+                    if not old_match_ids:
+                        print("No old matches and data to delete.")
+                    
+                    else:
+                        print(f"Found {len(old_match_ids)} matches older than {ARCHIVE_OLDER_THAN_MONTHS} months for cleanup.")
+
+                        # Convert matchIds to a format suitable for SQL IN clause
+                        match_ids_tuple = tuple(old_match_ids)
+                        
+                        # Step 2: Log and delete from MatchPredictions
+                        cursor.execute(f"SELECT COUNT(*) FROM MatchPredictions WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+                        predictions_count = cursor.fetchone()[0]
+                        print(f"Deleting {predictions_count} rows from MatchPredictions...")
+                        cursor.execute(f"DELETE FROM MatchPredictions WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+
+                        # Step 3: Log and delete from MatchOdds
+                        cursor.execute(f"SELECT COUNT(*) FROM MatchOdds WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+                        odds_count = cursor.fetchone()[0]
+                        print(f"Deleting {odds_count} rows from MatchOdds...")
+                        cursor.execute(f"DELETE FROM MatchOdds WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+
+                        # Step 4: Log and delete from MatchPredictionRequests
+                        cursor.execute(f"SELECT COUNT(*) FROM MatchPredictionRequests WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+                        requests_count = cursor.fetchone()[0]
+                        print(f"Deleting {requests_count} rows from MatchPredictionRequests...")
+                        cursor.execute(f"DELETE FROM MatchPredictionRequests WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+
+                        # Step 5: Log and delete from Matches
+                        print(f"Deleting {len(old_match_ids)} rows from Matches...")
+                        cursor.execute(f"DELETE FROM Matches WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+
+                        # Commit the transaction
+                        connection.commit()
+                    ### End Cleanup old matches and their associated data ###
+
+                    # Print the total number of rows in the MatchPredictions table
+                    cursor.execute(f"SELECT COUNT(*) FROM MatchPredictions WHERE isScored = 0 AND lastUpdated < DATETIME('now', '-{SCORING_CUTOFF_IN_DAYS} day')")
+                    total_unscored_rows = cursor.fetchone()[0]
+                    print(f"Total number of MatchPredictions {SCORING_CUTOFF_IN_DAYS}+ days old that haven't been scored: {total_unscored_rows}")
+
                     # Execute cleanup queries
                     if total_unscored_rows > 0:
                         # Clean up old predictions that haven't been scored (for whatever reason) and never will be
@@ -226,8 +268,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                         connection.commit()
 
                     # Run VACUUM to reclaim unused space
-                    #print("Running VACUUM to reclaim unused space...")
-                    #cursor.execute("VACUUM")
+                    print("Running VACUUM to reclaim unused space...")
+                    cursor.execute("VACUUM")
                     
                     # Check database integrity
                     print("Checking database integrity...")
@@ -237,11 +279,61 @@ class SqliteValidatorStorage(ValidatorStorage):
                         print("*** ERROR: Database integrity check failed! Contact Sportstensor admin. ***")
                     else:
                         print("Database integrity check passed.")
+
+                    if old_match_ids and len(old_match_ids) > 0:
+                        db_size_bytes = os.path.getsize("SportsTensorEdge.db")
+                        db_size_gb = db_size_bytes / (1024 ** 3)
+                        db_size_mb = db_size_bytes / (1024 ** 2)
+                        print(f"Updated SportsTensorEdge.db size: {db_size_gb:.2f} GB ({db_size_mb:.2f} MB)")
                 
                 except Exception as e:
                     print(f"An error occurred during cleanup: {e}")
                     raise e
         print("========================================================================================")
+
+    def archive_old_data(self):
+        print("================================== Database archiving ==================================")
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as main_conn:
+                #main_conn = sqlite3.connect("SportsTensorEdge.db")
+                archive_conn = sqlite3.connect("SportsTensorEdgeArchive.db")
+                
+                main_cursor = main_conn.cursor()
+                archive_cursor = archive_conn.cursor()
+
+                # Ensure the archive DB has the necessary tables
+                archive_cursor.execute(SqliteValidatorStorage.MATCHES_TABLE_CREATE)
+                archive_cursor.execute(SqliteValidatorStorage.MATCH_ODDS_CREATE)
+                archive_cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONREQUESTS_TABLE_CREATE)
+                archive_cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
+
+                # Select old matches
+                main_cursor.execute(f"SELECT matchId FROM Matches WHERE matchDate < DATETIME('now', '-{ARCHIVE_OLDER_THAN_MONTHS} months')")
+                old_match_ids = [row[0] for row in main_cursor.fetchall()]
+                
+                if not old_match_ids:
+                    print("No old matches to archive.")
+                    return
+
+                print(f"Archiving {len(old_match_ids)} matches older than {ARCHIVE_OLDER_THAN_MONTHS} months.")
+
+                match_ids_tuple = tuple(old_match_ids)
+
+                # Move data to archive
+                for table in ["MatchPredictions", "MatchOdds", "MatchPredictionRequests", "Matches"]:
+                    main_cursor.execute(f"SELECT * FROM {table} WHERE matchId IN ({','.join(['?'] * len(match_ids_tuple))})", match_ids_tuple)
+                    rows = main_cursor.fetchall()
+                    
+                    if rows:
+                        placeholders = ",".join("?" * len(rows[0]))
+                        archive_cursor.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows)
+                        print(f"Archived {len(rows)} rows from {table}")
+
+                archive_conn.commit()
+                
+                archive_conn.close()
+                print("========================================================================================")
 
     def insert_leagues(self, leagues: List[League]):
         """Stores leagues associated with sports. Indicates which leagues are active to run predictions on."""
