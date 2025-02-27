@@ -119,3 +119,7 @@ EXTREMIS_BETA = 0.25
 PARETO_MU = 1.0
 # PARETO_ALPHA is the shape of the Pareto distribution. The lower the ALPHA, the more suppressed the distribution.
 PARETO_ALPHA = 1.2
+
+ENABLE_EMISSION_CONTROL = True
+EMISSION_CONTROL_UID = 7
+EMISSION_CONTROL_PERC = 0.5
