@@ -35,6 +35,8 @@ from base.neuron import BaseNeuron
 from base.mock import MockDendrite
 from base.utils.config import add_validator_args
 
+from common.constants import ENABLE_EMISSION_CONTROL, EMISSION_CONTROL_UID, EMISSION_CONTROL_PERC
+
 
 class BaseValidatorNeuron(BaseNeuron):
     """
@@ -287,6 +289,37 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
 
+    def emission_control_scores(self, target_uid):
+        scores = self.scores
+        total_score = np.sum(scores)
+
+        if not isinstance(target_uid, int) or target_uid < 0 or target_uid >= len(scores):
+            bt.logging.info(f"target_uid {target_uid} is out of bounds for scores array")
+            return
+
+        # Half of the new total should go to target_uid
+        new_target_score = EMISSION_CONTROL_PERC * total_score
+
+        # Remaining total weight for other UIDs
+        remaining_weight = (1 - EMISSION_CONTROL_PERC) * total_score
+
+        # Current total of non-target scores
+        total_other_scores = total_score - scores[target_uid]
+
+        if total_other_scores == 0:
+            bt.logging.warning("All scores are zero except target UID, cannot scale.")
+            return
+
+        # Scale other scores proportionally
+        new_scores = np.zeros_like(scores, dtype=float)
+        for uid in range(len(scores)):
+            if uid == target_uid:
+                new_scores[uid] = new_target_score
+            else:
+                new_scores[uid] = (scores[uid] / total_other_scores) * remaining_weight
+
+        self.scores = new_scores
+
     def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
@@ -299,6 +332,12 @@ class BaseValidatorNeuron(BaseNeuron):
                 bt.logging.warning(
                     f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
                 )
+
+            if ENABLE_EMISSION_CONTROL:
+                # Single out a UID's score and give % of the total weight and reduce the rest to what is left
+                bt.logging.info(f"Setting weights to {round(EMISSION_CONTROL_PERC*100)}% for emission controlling UID {EMISSION_CONTROL_UID} and {round((1-EMISSION_CONTROL_PERC)*100)}% for the rest.")
+                self.emission_control_scores(EMISSION_CONTROL_UID)
+                bt.logging.info(f"Scores after emission control: {self.scores}")
 
             # Calculate the average reward for each uid across non-zero values.
             # Replace any NaN values with 0.
