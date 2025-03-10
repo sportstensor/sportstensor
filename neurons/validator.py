@@ -209,8 +209,8 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
                 try:
-                    # Check if we're at a 2-hour 0-minute mark. Run this only once every 2 hours. Overwrites current day's scores.
-                    if minutes == 0 and hour % 2 == 0:
+                    # Check if we're at a 1-hour 0-minute mark. Run this every hour. Overwrites current day's scores.
+                    if minutes == 0 and hour % 1 == 0:
                         if (
                             league_scores and len(league_scores) > 0 and
                             ((self.config.subtensor.network == "test") or 
