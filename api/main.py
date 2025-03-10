@@ -7,7 +7,7 @@ import uvicorn
 import asyncio
 import logging
 import random
-from fastapi import FastAPI, HTTPException, Depends, Body, Path, Security
+from fastapi import FastAPI, HTTPException, Depends, Body, Path, Security, Request
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
@@ -49,25 +49,21 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-async def get_api_key(api_key_header: str = Security(api_key_header)):
+async def get_api_key(api_key_header: Optional[str] = Security(api_key_header)) -> Optional[str]:
     if api_key_header is not None and api_key_header in API_KEYS:
         return api_key_header
-    else:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid API Key"
-        )
+    return None
 
-def get_hotkey(credentials: Annotated[HTTPBasicCredentials, Depends(security)]) -> str:
+def get_hotkey(credentials: Optional[HTTPBasicCredentials] = Depends(security)) -> Optional[str]:
+    if not credentials:
+        return None
+    
     keypair = Keypair(ss58_address=credentials.username)
 
     if keypair.verify(credentials.username, credentials.password):
         return credentials.username
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Signature mismatch",
-    )
+    
+    return None
 
 def authenticate_with_bittensor(hotkey, metagraph):
     if hotkey not in metagraph.hotkeys:
@@ -145,6 +141,29 @@ async def main():
 
             await asyncio.sleep(300)
 
+    async def authenticate_user(
+        request: Request,
+        api_key: Optional[str] = Depends(get_api_key, use_cache=False),
+        #credentials: Optional[HTTPBasicCredentials] = Depends(security)
+    ):
+        """Unified authentication function that allows access via either API key or hotkey."""
+        # API Key is valid, allow access
+        if api_key:
+            return {"authenticated_by": "api_key", "user": api_key}
+
+        # Try to get HTTP Basic credentials manually
+        credentials: Optional[HTTPBasicCredentials] = await security(request)
+        hotkey = get_hotkey(credentials) if credentials else None
+
+        if hotkey and authenticate_with_bittensor(hotkey, metagraph):
+            return {"authenticated_by": "hotkey", "user": hotkey}
+
+        # If neither authentication method is valid, deny access
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Valid API key or hotkey required."
+        )
+
     @app.get("/")
     def healthcheck():
         return {"status": "ok", "message": datetime.utcnow()}
@@ -200,7 +219,21 @@ async def main():
             raise HTTPException(status_code=500, detail="Internal server error.")
 
     @app.get("/matchOdds")
-    async def get_match_odds(matchId: Optional[str] = None):
+    async def get_match_odds(
+        matchId: Optional[str] = None,
+        auth: dict = Depends(authenticate_user),
+    ):
+        """Allows access if authenticated via either an API key or hotkey.
+        user = auth["user"]
+        auth_method = auth["authenticated_by"]
+        
+        # If authenticated via hotkey, enforce metagraph validation
+        if auth_method == "hotkey":
+            uid = metagraph.hotkeys.index(user)
+        else:
+            uid = None  # Not needed for API key access
+        """
+
         try:
             match_odds = db.get_match_odds_by_id(matchId)
             if match_odds:
