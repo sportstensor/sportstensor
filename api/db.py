@@ -655,6 +655,21 @@ def upload_prediction_edge_results(prediction_results):
         conn = get_db_conn()
         c = conn.cursor()
 
+        prediction_edge_scores_table_name = "MatchPredictionEdgeResults"
+        if not IS_PROD:
+            prediction_edge_scores_table_name += "_test"
+
+        # Delete existing rows for today's date for each miner_uid and vali_hotkey
+        for uid, score_data in prediction_results["miner_scores"].items():
+            delete_sql = f"""
+                DELETE FROM {prediction_edge_scores_table_name}
+                WHERE miner_uid = %s
+                AND miner_hotkey = %s
+                AND vali_hotkey = %s
+                AND DATE(lastUpdated) = CURDATE()
+            """
+            c.execute(delete_sql, (uid, score_data.get("hotkey"), score_data.get("vali_hotkey")))
+
         """
         {
             'miner_scores': [
@@ -751,10 +766,7 @@ def upload_prediction_edge_results(prediction_results):
                 score_data.get("epl_pred_win_count", 0),
             )
             values_list.append(values_tuple)
-
-        prediction_edge_scores_table_name = "MatchPredictionEdgeResults"
-        if not IS_PROD:
-            prediction_edge_scores_table_name += "_test"
+        
         c.executemany(
             f"""
             INSERT INTO {prediction_edge_scores_table_name} (
