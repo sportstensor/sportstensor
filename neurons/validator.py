@@ -172,7 +172,7 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.info(
                         "*** Syncing the latest match odds data to local validator storage. ***"
                     )
-                    sync_result = utils.sync_match_odds_data(self.match_odds_endpoint)
+                    sync_result = utils.sync_match_odds_data(self, self.match_odds_endpoint)
                     if sync_result:
                         bt.logging.info("Successfully synced match odds data.")
                     else:

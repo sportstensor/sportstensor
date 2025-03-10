@@ -87,14 +87,22 @@ async def sync_match_data(match_data_endpoint) -> bool:
         bt.logging.error(f"Error getting match data: {e}")
         return False
     
-def fetch_match_odds(match_odds_data_endpoint: str, match_id: str) -> Dict:
+def fetch_match_odds(vali, match_odds_data_endpoint: str, match_id: str) -> Dict:
     url = f"{match_odds_data_endpoint}?matchId={match_id}"
-    # TODO: add in authentication?
-    response = requests.get(url, timeout=10)
+    
+    keypair = vali.dendrite.keypair
+    hotkey = keypair.ss58_address
+    signature = f"0x{keypair.sign(hotkey).hex()}"
+
+    response = requests.get(
+        url, 
+        auth=HTTPBasicAuth(hotkey, signature),
+        timeout=10
+    )
     response.raise_for_status()
     return response.json()
 
-def sync_match_odds_data(match_odds_data_endpoint: str) -> bool:
+def sync_match_odds_data(vali, match_odds_data_endpoint: str) -> bool:
     try:
         # Get matches from the last SCORING_CUTOFF_IN_DAYS days
         x_days_ago = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=SCORING_CUTOFF_IN_DAYS)
@@ -108,7 +116,7 @@ def sync_match_odds_data(match_odds_data_endpoint: str) -> bool:
 
         for match in recent_matches:
             try:
-                odds_data = fetch_match_odds(match_odds_data_endpoint, match.matchId)
+                odds_data = fetch_match_odds(vali, match_odds_data_endpoint, match.matchId)
             except Exception as e:
                 bt.logging.error(f"Error fetching odds for match {match.matchId}: {e}")
                 continue
@@ -464,7 +472,7 @@ def get_match_prediction_requests(vali: Validator) -> Tuple[List[MatchPrediction
                 f"\n\t\t\t\t\t\t{int(hours)}h {int(minutes)}m | "
                 f"{window_display.get(window, '?')} | "
                 f"{match.homeTeamName} vs {match.awayTeamName} "
-                f"({pred_time.strftime('%Y-%m-%d %H:%M')} UTC) | "
+                f"({match.matchDate.strftime('%Y-%m-%d %H:%M')} UTC) | "
                 f"{match.league}"
             )
     else:
