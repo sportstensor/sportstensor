@@ -397,6 +397,53 @@ def get_matches_with_missing_odds():
         if conn is not None:
             conn.close()
 
+def get_live_matches():
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        # Set the current time in UTC
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
+
+        query = """
+            SELECT
+                m.matchId,
+                m.matchDate,
+                m.homeTeamName,
+                m.awayTeamName,
+                m.sport,
+                CASE 
+                    WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                    ELSE m.homeTeamScore 
+                END AS homeTeamScore,
+                CASE 
+                    WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                    ELSE m.awayTeamScore 
+                END AS awayTeamScore,
+                m.matchLeague,
+                m.isComplete,
+                ml.oddsapiMatchId
+            FROM matches m
+            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+            WHERE m.matchDate < @current_time_utc AND @current_time_utc < m.matchDate + INTERVAL 5 HOUR
+            AND m.isComplete = 0
+        """
+
+        cursor.execute(query)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 def get_match_by_id(match_id):
     try:
         conn = get_db_conn()
