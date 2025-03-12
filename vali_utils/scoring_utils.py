@@ -19,7 +19,8 @@ from common.constants import (
     COPYCAT_PENALTY_SCORE,
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
-    MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
+    MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
+    MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
     MIN_RHO,
     MIN_EDGE_SCORE,
@@ -73,8 +74,8 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
     closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
 
-    t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
-    t2 = 0.05 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
+    t = 1.0 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    t2 = 0.10 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
     a = 0.25 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
     c = 0.25 # Minimum plateau width/boundary
@@ -490,9 +491,12 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"      • Gaussian filter: {gfilter:.4f}")
                     
                     # Set minimum value for Gaussian filter if the prediction was for the underdog
-                    if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS) and pwmd.get_closing_odds_for_predicted_outcome() > (1 / pwmd.prediction.probability):
+                    if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS) and pwmd.get_closing_odds_for_predicted_outcome() > (1 / pwmd.prediction.probability) and round(gfilter, 4) > 0:
                         prev_gfilter = gfilter
-                        gfilter =  max(MIN_GFILTER_FOR_UNDERDOG_PREDICTION, gfilter)
+                        if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
+                            gfilter = max(MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION, gfilter)
+                        else:
+                            gfilter =  max(MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION, gfilter)
                         if log_prediction:
                             bt.logging.debug(f"      • Underdog prediction detected. gfilter: {gfilter:.4f} | old_gfilter: {prev_gfilter:.4f}")
                     
@@ -561,7 +565,7 @@ def calculate_incentives_and_update_scores(vali):
                     str(round(roi_incr*100, 2)) + "%", 
                     str(round(market_roi_incr*100, 2)) + "%",
                     len(predictions_with_match_data),
-                    round(rho, 2)
+                    round(rho, 4)
                 ])
 
         # Log league scores
