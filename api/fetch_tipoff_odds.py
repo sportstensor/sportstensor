@@ -1,10 +1,9 @@
 import requests
 import api.db as db
 import logging
+import schedule
+import time
 from api.config import ODDS_API_KEY
-import json
-from datetime import timedelta, datetime
-from collections import defaultdict
 import api.fetch_odds as fo
 
 league_sports_types_mapping = {
@@ -36,6 +35,7 @@ def fetch_odds(api_url, event_id, start):
     if response.status_code == 200:
         data = response.json()
         odds = data.get("data")
+        odds = [odds] if odds else []
         reduced_odds = fo.get_reduced_odds(odds)
         if reduced_odds:
             lastUpdated = reduced_odds[0]["last_updated"]
@@ -63,4 +63,13 @@ def fetch_tipoff_odds():
         fetch_odds(api_url, oddsapiMatchId, t_0)
 
 if __name__ == "__main__":
+    # Schedule the function to run every 15 minutes
+    schedule.every(15).minutes.do(fetch_tipoff_odds)
+
+    # Initial fetch and store to ensure setup is correct
     fetch_tipoff_odds()
+
+    # Run the scheduler in an infinite loop
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

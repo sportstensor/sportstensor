@@ -424,7 +424,7 @@ def get_live_matches():
                 ml.oddsapiMatchId
             FROM matches m
             LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
-            WHERE m.matchDate < @current_time_utc AND @current_time_utc < m.matchDate + INTERVAL 5 HOUR
+            WHERE m.matchDate < @current_time_utc AND @current_time_utc < m.matchDate + INTERVAL 6 HOUR
             AND m.isComplete = 0
         """
 
