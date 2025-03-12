@@ -48,6 +48,11 @@ def fetch_odds(api_url, event_id, start):
 def fetch_tipoff_odds():
     live_matches = db.get_live_matches()
     
+    if not live_matches:
+        logging.info("No live matches found. Skipping fetching tip off odds.")
+        return
+    
+    logging.info(f"Fetching tip off odds for {len(live_matches)} live matches")
     for match in live_matches:
         matchDate = match['matchDate']
         matchLeague = match['matchLeague']
