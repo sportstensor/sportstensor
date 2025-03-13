@@ -711,11 +711,10 @@ def upload_prediction_edge_results(prediction_results):
             delete_sql = f"""
                 DELETE FROM {prediction_edge_scores_table_name}
                 WHERE miner_uid = %s
-                AND miner_hotkey = %s
                 AND vali_hotkey = %s
                 AND DATE(lastUpdated) = CURDATE()
             """
-            c.execute(delete_sql, (uid, score_data.get("hotkey"), score_data.get("vali_hotkey")))
+            c.execute(delete_sql, (uid, score_data.get("vali_hotkey")))
 
         """
         {
