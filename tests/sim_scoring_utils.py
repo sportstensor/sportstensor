@@ -21,11 +21,14 @@ from common.constants import (
     LEAGUE_SENSITIVITY_ALPHAS,
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
-    MIN_GFILTER_FOR_UNDERDOG_PREDICTION,
+    MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
+    MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
     ROI_BET_AMOUNT,
     ROI_INCR_PRED_COUNT_PERCENTAGE,
     MAX_INCR_ROI_DIFF_PERCENTAGE,
+    MIN_RHO,
     MIN_EDGE_SCORE,
+    MAX_MIN_EDGE_SCORE,
     ROI_SCORING_WEIGHT,
     LEAGUES_ALLOWING_DRAWS,
     SENSITIVITY_ALPHA,
@@ -109,219 +112,223 @@ def calculate_incentives_and_update_scores():
         print("No UID to League mapping found. Using fallback hardcoded mapping.")
         # Recreating the dictionary with UID to League mapping from the provided data
         uids_to_league = {
-            87: 'EPL',
-            119: 'NBA',
-            207: 'NBA',
-            57: 'NBA',
-            45: 'NBA',
-            134: 'EPL',
-            171: 'EPL',
-            225: 'NBA',
-            98: 'EPL',
-            20: 'EPL',
-            42: 'NBA',
-            141: 'EPL',
-            200: 'NBA',
-            153: 'EPL',
-            0: 'NBA',
-            152: 'NBA',
-            54: 'NBA',
-            14: 'EPL',
-            110: 'NBA',
-            221: 'EPL',
-            241: 'NBA',
-            211: 'NBA',
-            160: 'NBA',
-            138: 'EPL',
-            145: 'EPL',
-            155: 'NBA',
-            183: 'NBA',
-            175: 'NBA',
-            246: 'NBA',
-            148: 'NBA',
-            92: 'NBA',
-            133: 'NBA',
-            223: 'NBA',
-            18: 'NBA',
-            170: 'NBA',
-            234: 'EPL',
-            212: 'EPL',
-            41: 'EPL',
-            236: 'NBA',
-            208: 'NBA',
-            245: 'NBA',
-            187: 'EPL',
-            107: 'NBA',
-            73: 'NBA',
-            209: 'EPL',
-            156: 'NBA',
-            6: 'EPL',
-            198: 'NBA',
-            121: 'EPL',
-            32: 'NBA',
-            128: 'NBA',
-            227: 'NBA',
-            243: 'NBA',
-            244: 'EPL',
-            95: 'NBA',
-            129: 'NBA',
-            89: 'NBA',
-            189: 'EPL',
-            70: 'NBA',
-            204: 'NBA',
-            43: 'NBA',
-            191: 'NBA',
-            65: 'NBA',
-            85: 'EPL',
-            186: 'NBA',
-            8: 'EPL',
-            157: 'NBA',
-            163: 'EPL',
-            151: 'EPL',
-            109: 'NBA',
-            196: 'EPL',
-            58: 'NBA',
-            220: 'NBA',
-            106: 'NBA',
-            84: 'NBA',
-            25: 'NBA',
-            71: 'EPL',
-            177: 'NBA',
-            120: 'NBA',
-            115: 'EPL',
-            88: 'EPL',
-            93: 'NBA',
-            111: 'EPL',
-            182: 'NBA',
-            136: 'NBA',
-            197: 'NBA',
+            145: 'NBA',
             27: 'EPL',
-            250: 'NBA',
-            161: 'NBA',
-            147: 'EPL',
-            59: 'NBA',
-            116: 'EPL',
-            122: 'NBA',
-            50: 'NBA',
-            215: 'NBA',
-            135: 'NBA',
-            253: 'NBA',
-            28: 'NBA',
-            185: 'EPL',
-            224: 'EPL',
-            13: 'NBA',
-            247: 'NBA',
-            108: 'NBA',
-            169: 'NBA',
-            99: 'NBA',
-            202: 'NBA',
-            46: 'EPL',
-            154: 'NBA',
-            35: 'EPL',
-            60: 'EPL',
-            66: 'NBA',
-            255: 'NBA',
-            249: 'NBA',
-            184: 'NBA',
-            10: 'NBA',
-            167: 'NBA',
-            162: 'NBA',
-            180: 'NBA',
-            76: 'EPL',
-            103: 'NBA',
-            232: 'NBA',
-            33: 'NBA',
-            144: 'EPL',
-            226: 'NBA',
-            216: 'NBA',
-            86: 'NBA',
-            4: 'NBA',
-            124: 'NBA',
-            101: 'NBA',
-            125: 'NBA',
-            12: 'NBA',
-            51: 'NBA',
-            127: 'EPL',
-            199: 'EPL',
-            188: 'EPL',
-            56: 'EPL',
-            24: 'NBA',
-            217: 'EPL',
-            172: 'NBA',
-            181: 'EPL',
-            11: 'EPL',
-            26: 'NBA',
-            146: 'NBA',
-            165: 'NBA',
-            159: 'NBA',
-            30: 'NBA',
-            114: 'NBA',
-            158: 'EPL',
-            242: 'NBA',
-            214: 'NBA',
-            37: 'NBA',
-            201: 'EPL',
-            63: 'EPL',
-            218: 'NBA',
-            44: 'NBA',
-            9: 'NBA',
-            21: 'NBA',
-            131: 'NBA',
-            64: 'NBA',
-            176: 'NBA',
-            193: 'NBA',
-            195: 'NBA',
-            19: 'NBA',
-            139: 'NBA',
-            166: 'NBA',
-            78: 'EPL',
-            94: 'NBA',
-            91: 'NBA',
-            69: 'NBA',
-            29: 'NBA',
-            230: 'EPL',
-            235: 'EPL',
-            97: 'NBA',
-            192: 'EPL',
-            36: 'EPL',
-            40: 'NBA',
-            206: 'NBA',
-            123: 'NBA',
-            105: 'NBA',
+            170: 'MLS',
             82: 'EPL',
-            140: 'NBA',
-            238: 'NBA',
+            175: 'NBA',
+            72: 'MLS',
+            151: 'EPL',
+            214: 'NBA',
+            242: 'NBA',
+            10: 'NBA',
             178: 'NBA',
-            143: 'NBA',
-            83: 'NBA',
-            251: 'EPL',
-            5: 'NBA',
-            168: 'NBA',
-            174: 'EPL',
-            113: 'NBA',
+            110: 'NBA',
+            127: 'NBA',
+            144: 'NBA',
+            40: 'NBA',
+            26: 'NBA',
+            0: 'EPL',
+            103: 'EPL',
+            70: 'EPL',
+            237: 'NBA',
+            188: 'NBA',
+            173: 'EPL',
+            223: 'NBA',
+            241: 'NBA',
+            226: 'MLS',
+            166: 'NBA',
+            131: 'NBA',
+            160: 'NBA',
+            124: 'NBA',
+            97: 'MLS',
+            71: 'NBA',
             149: 'NBA',
-            254: 'NBA',
-            74: 'EPL',
-            150: 'NBA',
-            62: 'NBA',
-            72: 'NBA',
-            47: 'NBA',
-            240: 'EPL',
-            49: 'NBA',
-            67: 'NBA',
-            142: 'NBA',
-            52: 'EPL',
+            182: 'NBA',
+            248: 'NBA',
+            76: 'EPL',
+            199: 'EPL',
+            254: 'MLS',
+            208: 'NBA',
+            244: 'EPL',
+            92: 'NBA',
+            45: 'MLS',
             102: 'NBA',
-            118: 'EPL',
-            17: 'NBA',
-            77: 'NBA',
-            80: 'NBA',
+            60: 'MLS',
+            63: 'MLS',
+            152: 'NBA',
+            48: 'MLS',
+            215: 'MLS',
+            37: 'NBA',
+            195: 'MLS',
+            162: 'NBA',
+            25: 'NBA',
+            119: 'NBA',
+            126: 'EPL',
+            167: 'NBA',
             231: 'EPL',
-            90: 'EPL',
-            117: 'NBA',
-            137: 'EPL',
+            67: 'NBA',
+            155: 'NBA',
+            28: 'EPL',
+            143: 'NBA',
+            43: 'EPL',
+            123: 'NBA',
+            47: 'MLS',
+            150: 'MLS',
+            31: 'MLS',
+            189: 'NBA',
+            225: 'NBA',
+            52: 'NBA',
+            183: 'NBA',
+            111: 'MLS',
+            196: 'EPL',
+            95: 'NBA',
+            59: 'NBA',
+            204: 'NBA',
+            6: 'EPL',
+            5: 'NBA',
+            86: 'NBA',
+            171: 'NBA',
+            218: 'EPL',
+            94: 'NBA',
+            163: 'NBA',
+            19: 'NBA',
+            165: 'NBA',
+            117: 'EPL',
+            8: 'NBA',
+            80: 'EPL',
+            50: 'EPL',
+            138: 'NBA',
+            115: 'NBA',
             112: 'EPL',
-            126: 'NBA',
+            133: 'NBA',
+            116: 'NBA',
+            197: 'NBA',
+            73: 'NBA',
+            168: 'MLS',
+            66: 'NBA',
+            14: 'NBA',
+            128: 'MLS',
+            109: 'NBA',
+            220: 'MLS',
+            54: 'NBA',
+            202: 'MLS',
+            114: 'NBA',
+            230: 'NBA',
+            129: 'NBA',
+            89: 'EPL',
+            184: 'EPL',
+            13: 'NBA',
+            51: 'MLS',
+            185: 'EPL',
+            238: 'NBA',
+            236: 'NBA',
+            85: 'EPL',
+            245: 'NBA',
+            12: 'EPL',
+            139: 'MLS',
+            120: 'MLS',
+            147: 'NBA',
+            36: 'EPL',
+            135: 'NBA',
+            90: 'EPL',
+            207: 'MLS',
+            58: 'NBA',
+            186: 'NBA',
+            57: 'EPL',
+            216: 'NBA',
+            159: 'MLS',
+            108: 'NBA',
+            192: 'NBA',
+            234: 'EPL',
+            118: 'MLS',
+            3: 'MLS',
+            212: 'NBA',
+            169: 'NBA',
+            62: 'MLS',
+            35: 'NBA',
+            211: 'NBA',
+            249: 'NBA',
+            29: 'NBA',
+            69: 'EPL',
+            136: 'NBA',
+            83: 'NBA',
+            122: 'EPL',
+            172: 'NBA',
+            158: 'EPL',
+            177: 'NBA',
+            174: 'NBA',
+            219: 'NBA',
+            227: 'NBA',
+            250: 'MLS',
+            87: 'EPL',
+            235: 'EPL',
+            224: 'NBA',
+            30: 'EPL',
+            146: 'NBA',
+            107: 'MLS',
+            113: 'NBA',
+            4: 'NBA',
+            125: 'NBA',
+            17: 'NBA',
+            180: 'NBA',
+            243: 'MLS',
+            232: 'NBA',
+            93: 'NBA',
+            251: 'NBA',
+            33: 'NBA',
+            191: 'NBA',
+            247: 'NBA',
+            41: 'EPL',
+            65: 'NBA',
+            176: 'NBA',
+            217: 'EPL',
+            156: 'NBA',
+            181: 'NBA',
+            142: 'NBA',
+            91: 'MLS',
+            32: 'EPL',
+            106: 'NBA',
+            88: 'NBA',
+            84: 'NBA',
+            21: 'NBA',
+            221: 'EPL',
+            78: 'EPL',
+            24: 'EPL',
+            246: 'NBA',
+            44: 'EPL',
+            56: 'NBA',
+            42: 'NBA',
+            198: 'NBA',
+            137: 'EPL',
+            64: 'MLS',
+            154: 'NBA',
+            46: 'MLS',
+            18: 'EPL',
+            11: 'NBA',
+            101: 'NBA',
+            134: 'NBA',
+            255: 'NBA',
+            200: 'MLS',
+            98: 'MLS',
+            206: 'MLS',
+            38: 'MLS',
+            148: 'EPL',
+            157: 'NBA',
+            121: 'NBA',
+            140: 'NBA',
+            187: 'NBA',
+            240: 'NBA',
+            99: 'NBA',
+            153: 'EPL',
+            74: 'EPL',
+            209: 'NBA',
+            161: 'NBA',
+            253: 'NBA',
+            9: 'NBA',
+            141: 'NBA',
+            20: 'NBA',
+            22: 'MLS',
         }
 
     for league in leagues_to_analyze:
@@ -480,10 +487,13 @@ def calculate_incentives_and_update_scores():
                         print(f"      • Gaussian filter: {gfilter:.4f}")
                     
                     # Set minimum value for Gaussian filter if the prediction was for the underdog
-                    if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS) and pwmd.get_closing_odds_for_predicted_outcome() > (1 / pwmd.prediction.probability):
+                    if pwmd.is_prediction_for_underdog(LEAGUES_ALLOWING_DRAWS) and pwmd.get_closing_odds_for_predicted_outcome() > (1 / pwmd.prediction.probability) and round(gfilter, 4) > 0:
                         
                         prev_gfilter = gfilter
-                        gfilter =  max(MIN_GFILTER_FOR_UNDERDOG_PREDICTION, gfilter)
+                        if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
+                            gfilter = max(MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION, gfilter)
+                        else:
+                            gfilter =  max(MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION, gfilter)
 
                         # Only log the T-10m interval
                         """
@@ -539,6 +549,13 @@ def calculate_incentives_and_update_scores():
             if roi < 0 and roi_diff > 0:
                 print(f"Penalizing ROI score for miner {uid} in league {league.name} by {roi:.4f} ({final_roi_score * roi:.4f}): {final_roi_score:.4f} -> {final_roi_score + (final_roi_score * roi):.4f}")
                 final_roi_score = final_roi_score + (final_roi_score * roi)
+
+            """
+            # If roi_diff is less than 0, but rho is greater than our threshold and roi is still above 0, give small score. this is for leniency of long-standing miners
+            if roi_diff <= 0 and rho > 0.5 and roi > 0:
+                print(f"Giving leniency to miner {uid} in league {league.name} with rho {rho:.4f} and roi_diff {roi_diff:.4f}: {final_roi_score:.4f} -> {round((roi * rho) * 50, 4):.4f}")
+                final_roi_score = round((roi * rho) * 50, 4)
+            """
             
             roi_incr = roi
             market_roi_incr = market_roi
@@ -578,7 +595,7 @@ def calculate_incentives_and_update_scores():
                     str(round(market_roi_incr*100, 2)) + "%",
                     str(round(max_possible_roi_incr*100, 2)) + "%",
                     len(predictions_with_match_data),
-                    round(rho, 2), 
+                    round(rho, 4), 
                     str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), 
                     total_underdog_preds, 
                     round(raw_edge, 4)
@@ -594,21 +611,36 @@ def calculate_incentives_and_update_scores():
         # Normalize league scores and weight for Edge and ROI scores
         # Normalize edge scores
         min_edge, max_edge = min(league_scores[league]), max(league_scores[league])
-        #print(f"min_edge: {min_edge}, max_edge: {max_edge}")
-        if max_edge - MIN_EDGE_SCORE == 0:
-            normalized_edge = [0 for score in league_scores[league]] # avoid division by zero
-        else:
-            normalized_edge = [(score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE) if score > MIN_EDGE_SCORE else 0 for score in league_scores[league]]
-        
-        """ # debugging code:
-        for i, score in enumerate(league_scores[league]):
-            if i == 242 and league == League.NBA:
-                print(f"i: {i}, score: {score}, normalized_edge: {normalized_edge[i]}, league_scores[league]: {league_scores[league][i]}")
-                # print out the individual values of the normalized_edge
-                #print(f"({score} - {min_edge}) / ({max_edge} - {min_edge}): {(score - min_edge) / (max_edge - min_edge)}")
-                print(f"({score} - {MIN_EDGE_SCORE}) / ({max_edge} - {MIN_EDGE_SCORE}): {(score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE)}")
-        """
 
+        # Avoid division by zero
+        if max_edge - MIN_EDGE_SCORE == 0:
+            normalized_edge = [0 for _ in league_scores[league]]
+        else:
+            normalized_edge = []
+            for i, score in enumerate(league_scores[league]):
+                rho = league_rhos[league][i]
+                # Dynamic minimum edge score based on rho
+                if rho <= 0.95:
+                    min_edge_for_miner = MIN_EDGE_SCORE + (rho / 0.95) * (MAX_MIN_EDGE_SCORE - MIN_EDGE_SCORE)  # Linearly interpolate between min edge and maximum min edge (for older miners)
+                else:
+                    min_edge_for_miner = MAX_MIN_EDGE_SCORE
+                
+                # Compute normalized edge score
+                if score > min_edge_for_miner:
+                    normalized_value = (score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE)
+                else:
+                    print(f"Miner {i} did not meet minimum edge score of {min_edge_for_miner:.2f} with score {score:.2f} and rho {rho:.2f}. Setting normalized score to 0.")
+                    normalized_value = 0
+
+                normalized_edge.append(normalized_value)
+
+                """ # Debugging output for specific case
+                if i == 242 and league == League.NBA:
+                    print(f"i: {i}, score: {score}, normalized_edge: {normalized_edge[i]}")
+                    print(f"min_edge_for_miner: {min_edge_for_miner}, rho: {rho}")
+                    print(f"({score} - {MIN_EDGE_SCORE}) / ({max_edge} - {MIN_EDGE_SCORE}): {(score - MIN_EDGE_SCORE) / (max_edge - MIN_EDGE_SCORE)}")
+                """
+                
         # Normalize ROI scores
         min_roi, max_roi = min(league_roi_scores[league]), max(league_roi_scores[league])
         if max_roi - min_roi == 0:
@@ -619,7 +651,7 @@ def calculate_incentives_and_update_scores():
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
             ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if r > 0 and e > 0 else 0 # roi and edge must be > 0
+            if r > 0 and e > 0 and rho >= MIN_RHO else 0 # roi and edge must be > 0 and rho must be >= min rho
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
@@ -646,8 +678,8 @@ def calculate_incentives_and_update_scores():
             pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
         ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
         ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
-        suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
-        #suspicious_miners, penalties, exact_matches = [], [], []
+        #suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
+        suspicious_miners, penalties, exact_matches = [], [], []
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
