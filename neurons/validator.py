@@ -565,12 +565,14 @@ class Validator(BaseValidatorNeuron):
                     f"Closing Edge scores: {edge_scores}"
                 )
 
+                """ 3/18/2025: Commenting out the post_scored_predictions call to the API. Not needed at this time. 
                 # Post scored predictions to API for storage/analysis
                 post_result = await utils.post_scored_predictions(
                     self,
                     self.scored_predictions_endpoint,
                     predictions,
                 )
+                """
 
             else:
                 bt.logging.info("No predictions to score.")
