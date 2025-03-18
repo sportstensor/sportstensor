@@ -102,7 +102,7 @@ async def main():
                 print("Error during metagraph sync", str(err))
                 print_exception(type(err), err, err.__traceback__)
 
-            await asyncio.sleep(90)
+            await asyncio.sleep(300)
 
     async def resync_miner_statuses():
         while True:

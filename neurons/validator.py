@@ -189,6 +189,9 @@ class Validator(BaseValidatorNeuron):
                         league_roi_counts,
                         league_roi_payouts,
                         league_roi_market_payouts,
+                        league_roi_incr_counts,
+                        league_roi_incr_payouts,
+                        league_roi_incr_market_payouts,
                         league_pred_counts,
                         league_pred_win_counts,
                         all_scores,
@@ -226,6 +229,9 @@ class Validator(BaseValidatorNeuron):
                                 league_roi_counts,
                                 league_roi_payouts,
                                 league_roi_market_payouts,
+                                league_roi_incr_counts,
+                                league_roi_incr_payouts,
+                                league_roi_incr_market_payouts,
                                 league_pred_counts,
                                 league_pred_win_counts,
                                 all_scores
@@ -458,6 +464,15 @@ class Validator(BaseValidatorNeuron):
             await utils.send_league_commitments_to_miners(
                 self, input_synapse, miner_uids
             )
+            # write the uids to league mapping to a file
+            with open("_uids_to_league.txt", mode="w") as txt_file:
+                txt_file.write("uids_to_league = {\n")
+                # Sort by UID before iterating
+                for uid in sorted(self.uids_to_last_leagues.keys()):
+                    leagues = self.uids_to_last_leagues[uid]
+                    first_league = leagues[0] if isinstance(leagues, (list, set, tuple)) and leagues else leagues
+                    txt_file.write(f"    {repr(uid)}: {repr(first_league.name)},\n")
+                txt_file.write("}\n")
             self.next_league_commitments_datetime = dt.datetime.now(
                 dt.timezone.utc
             ) + dt.timedelta(minutes=LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES)
@@ -559,12 +574,14 @@ class Validator(BaseValidatorNeuron):
                     f"Closing Edge scores: {edge_scores}"
                 )
 
+                """ 3/18/2025: Commenting out the post_scored_predictions call to the API. Not needed at this time. 
                 # Post scored predictions to API for storage/analysis
                 post_result = await utils.post_scored_predictions(
                     self,
                     self.scored_predictions_endpoint,
                     predictions,
                 )
+                """
 
             else:
                 bt.logging.info("No predictions to score.")
