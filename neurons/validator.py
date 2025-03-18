@@ -464,6 +464,15 @@ class Validator(BaseValidatorNeuron):
             await utils.send_league_commitments_to_miners(
                 self, input_synapse, miner_uids
             )
+            # write the uids to league mapping to a file
+            with open("_uids_to_league.txt", mode="w") as txt_file:
+                txt_file.write("uids_to_league = {\n")
+                # Sort by UID before iterating
+                for uid in sorted(self.uids_to_last_leagues.keys()):
+                    leagues = self.uids_to_last_leagues[uid]
+                    first_league = leagues[0] if isinstance(leagues, (list, set, tuple)) and leagues else leagues
+                    txt_file.write(f"    {repr(uid)}: {repr(first_league.name)},\n")
+                txt_file.write("}\n")
             self.next_league_commitments_datetime = dt.datetime.now(
                 dt.timezone.utc
             ) + dt.timedelta(minutes=LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES)
