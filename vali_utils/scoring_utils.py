@@ -759,8 +759,11 @@ def calculate_incentives_and_update_scores(vali):
         bt.logging.info(f"Lowest non-zero score: {min(non_zero_scores):.6f}")
     else:
         bt.logging.info("\nNo non-zero scores recorded.")
-
-    return league_scores, league_edge_scores, league_roi_scores, league_roi_counts, league_roi_payouts, league_roi_market_payouts, league_pred_counts, league_pred_win_counts, all_scores
+    
+    return (league_scores, league_edge_scores, league_roi_scores, 
+            league_roi_counts, league_roi_payouts, league_roi_market_payouts, 
+            league_roi_incr_counts, league_roi_incr_payouts, league_roi_incr_market_payouts,
+            league_pred_counts, league_pred_win_counts, all_scores)
 
 def update_miner_scores(vali, rewards: np.ndarray, uids: List[int]):
     """Performs exponential moving average on the scores based on the rewards received from the miners."""

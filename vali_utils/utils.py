@@ -723,6 +723,9 @@ def post_prediction_edge_results(
     league_roi_counts: Dict[League, List[int]],
     league_roi_payouts: Dict[League, List[float]],
     league_roi_market_payouts: Dict[League, List[float]],
+    league_roi_incr_counts: Dict[League, List[int]],
+    league_roi_incr_payouts: Dict[League, List[float]],
+    league_roi_incr_market_payouts: Dict[League, List[float]],
     league_pred_counts: Dict[League, List[int]],
     league_pred_win_counts: Dict[League, List[int]],
     all_scores: Dict[str, List[float]],
@@ -768,11 +771,11 @@ def post_prediction_edge_results(
 
         # Initialize ROI values for each league
         roi_values = {
-            League.MLB: {"roi": 0.0, "market_roi": 0.0},
-            League.NFL: {"roi": 0.0, "market_roi": 0.0},
-            League.NBA: {"roi": 0.0, "market_roi": 0.0},
-            League.MLS: {"roi": 0.0, "market_roi": 0.0},
-            League.EPL: {"roi": 0.0, "market_roi": 0.0},
+            League.MLB: {"roi": 0.0, "market_roi": 0.0, "incr_roi": 0.0, "incr_market_roi": 0.0},
+            League.NFL: {"roi": 0.0, "market_roi": 0.0, "incr_roi": 0.0, "incr_market_roi": 0.0},
+            League.NBA: {"roi": 0.0, "market_roi": 0.0, "incr_roi": 0.0, "incr_market_roi": 0.0},
+            League.MLS: {"roi": 0.0, "market_roi": 0.0, "incr_roi": 0.0, "incr_market_roi": 0.0},
+            League.EPL: {"roi": 0.0, "market_roi": 0.0, "incr_roi": 0.0, "incr_market_roi": 0.0},
         }
 
         # Calculate ROI values
@@ -785,6 +788,13 @@ def post_prediction_edge_results(
                 )
                 roi_values[league]["market_roi"] = (
                     league_roi_market_payouts[league][uid] / (league_roi_counts[league][uid] * ROI_BET_AMOUNT)
+                )
+            if league_roi_incr_counts[league][uid] > 0:
+                roi_values[league]["incr_roi"] = (
+                    league_roi_incr_payouts[league][uid] / (league_roi_incr_counts[league][uid] * ROI_BET_AMOUNT)
+                )
+                roi_values[league]["incr_market_roi"] = (
+                    league_roi_incr_market_payouts[league][uid] / (league_roi_incr_counts[league][uid] * ROI_BET_AMOUNT)
                 )
 
         # Construct miner scores dictionary
@@ -806,6 +816,8 @@ def post_prediction_edge_results(
                 f"{league_name}_roi_score": league_roi_scores[league][uid],
                 f"{league_name}_roi": roi_values[league]["roi"],
                 f"{league_name}_market_roi": roi_values[league]["market_roi"],
+                f"{league_name}_incr_roi": roi_values[league]["incr_roi"],
+                f"{league_name}_incr_market_roi": roi_values[league]["incr_market_roi"],
                 f"{league_name}_pred_count": league_pred_counts[league][uid],
                 f"{league_name}_pred_win_count": league_pred_win_counts[league][uid],
             })
