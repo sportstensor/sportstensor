@@ -6,7 +6,7 @@ import time
 # Set your wandb project and entity
 PROJECT_NAME = 'sportstensor-vali-logs'
 ENTITY_NAME = 'sportstensor'
-DAYS_TO_KEEP = 3  # Number of days to keep logs and artifacts
+DAYS_TO_KEEP = 2  # Number of days to keep logs and artifacts
 
 # Authenticate with wandb
 wandb.login()
