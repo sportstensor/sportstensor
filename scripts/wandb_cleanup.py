@@ -46,8 +46,8 @@ def delete_old_runs():
     print("\n--------------------------------------------------------------------")
 
 if __name__ == "__main__":
-    # Schedule the function to run every 4 hours
-    schedule.every(240).minutes.do(delete_old_runs)
+    # Schedule the function to run every hour
+    schedule.every(60).minutes.do(delete_old_runs)
 
     # Delete old runs
     delete_old_runs()
