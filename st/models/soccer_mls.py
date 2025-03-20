@@ -7,7 +7,7 @@ from st.models.soccer import SoccerPredictionModel
 
 
 class MLSSoccerPredictionModel(SoccerPredictionModel):
-    def make_prediction(self):
+    async def make_prediction(self):
         bt.logging.info("Predicting MLS soccer match...")
 
         self.set_default_probability(canTie=True)

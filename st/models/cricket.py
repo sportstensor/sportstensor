@@ -5,7 +5,7 @@ from common.data import ProbabilityChoice
 
 
 class CricketPredictionModel(SportPredictionModel):
-    def make_prediction(self):
+    async def make_prediction(self):
         bt.logging.info("Predicting cricket game...")
         
         # Set your probability predictions here

@@ -7,7 +7,7 @@ from st.models.football import FootballPredictionModel
 
 
 class NFLFootballPredictionModel(FootballPredictionModel):
-    def make_prediction(self):
+    async def make_prediction(self):
         bt.logging.info("Predicting NFL football game...")
         
         # Set your probability predictions here

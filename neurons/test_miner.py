@@ -2,12 +2,13 @@ import datetime as dt
 from common.data import Sport, League, MatchPrediction
 from st.sport_prediction_model import make_match_prediction
 import bittensor as bt
+import asyncio
 
 bt.logging.set_trace(True)
 bt.logging.set_debug(True)
 
 
-def mls():
+async def mls():
     matchDate = "2024-08-20"
     match_prediction = MatchPrediction(
         matchId=1234,
@@ -18,7 +19,7 @@ def mls():
         awayTeamName="Miami Fusion",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     bt.logging.info(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
@@ -28,7 +29,7 @@ def mls():
     return match_prediction
 
 
-def mlb():
+async def mlb():
     matchDate = "2024-08-25"
     match_prediction = MatchPrediction(
         matchId=1234,
@@ -39,14 +40,14 @@ def mlb():
         awayTeamName="Oakland Athletics",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     bt.logging.info(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
         {match_prediction.probabilityChoice} ({match_prediction.get_predicted_team()}) with wp {round(match_prediction.probability, 4)}"
     )
 
-def epl():
+async def epl():
     matchDate = "2024-12-20"
     match_prediction = MatchPrediction(
         matchId="0b25bc4bd29ca0cd5d4b8031a3a36480",
@@ -57,14 +58,14 @@ def epl():
         awayTeamName="Manchester City",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     bt.logging.info(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
         {match_prediction.probabilityChoice} ({match_prediction.get_predicted_team()}) with wp {round(match_prediction.probability, 4)}"
     )
 
-def nfl():
+async def nfl():
     matchDate = "2024-12-20"
     match_prediction = MatchPrediction(
         matchId="d308633813328ef6c47859652c6970e2",
@@ -75,7 +76,7 @@ def nfl():
         awayTeamName="Denver Broncos",
     )
 
-    match_prediction = make_match_prediction(match_prediction)
+    match_prediction = await make_match_prediction(match_prediction)
 
     bt.logging.info(
         f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
@@ -84,29 +85,39 @@ def nfl():
 
     return match_prediction
 
-def nba():
-    matchDate = "2024-12-20"
-    match_prediction = MatchPrediction(
-        matchId="ad71b94e2848f96ac01305e357df1e8a",
-        matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
-        sport=Sport.BASKETBALL,
-        league=League.NBA,
-        homeTeamName="Detroit Pistons",
-        awayTeamName="Utah Jazz",
-    )
+async def nba():
+    matchDate = "2025-02-20"
+    match_predictions = [
+        MatchPrediction(
+            matchId="d1fc26857f2ac88f58cb3b601c9dd88c",
+            matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
+            sport=Sport.BASKETBALL,
+            league=League.NBA,
+            homeTeamName="San Antonio Spurs",
+            awayTeamName="Phoenix Suns",
+        ),
+        MatchPrediction(
+            matchId="e6a39ecdde1417e008fed58878a66a55",
+            matchDate=dt.datetime.strptime(matchDate, "%Y-%m-%d"),
+            sport=Sport.BASKETBALL,
+            league=League.NBA,
+            homeTeamName="Portland Trail Blazers",
+            awayTeamName="Los Angeles Lakers",
+        ),
+    ]
+    for match_prediction in match_predictions:
+        match_prediction = await make_match_prediction(match_prediction)
+        bt.logging.info(
+            f"-------------------------------------------------------------------------------------- \n \
+            Match: {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}\n \
+            Prediction: {match_prediction.probabilityChoice} ({match_prediction.get_predicted_team()}) with probability {match_prediction.probability}"
+        )
 
-    match_prediction = make_match_prediction(match_prediction)
-
-    bt.logging.info(
-        f"Match Prediction for {match_prediction.awayTeamName} at {match_prediction.homeTeamName} on {matchDate}: \
-        {match_prediction.probabilityChoice} ({match_prediction.get_predicted_team()}) with wp {round(match_prediction.probability, 4)}"
-    )
-
-    return match_prediction
+    return match_predictions
 
 if __name__ == "__main__":
-    #mls()
-    #mlb()
-    #epl()
-    nfl()
-    #nba()
+    #asyncio.run(mlb())
+    #asyncio.run(epl())
+    #asyncio.run(mls())
+    #asyncio.run(nfl())
+    asyncio.run(nba())

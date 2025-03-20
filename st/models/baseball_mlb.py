@@ -7,7 +7,7 @@ from st.models.baseball import BaseballPredictionModel
 
 
 class MLBBaseballPredictionModel(BaseballPredictionModel):
-    def make_prediction(self):
+    async def make_prediction(self):
         bt.logging.info("Predicting MLB baseball game...")
         
         # Set your probability predictions here
