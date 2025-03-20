@@ -7,7 +7,7 @@ import uvicorn
 import asyncio
 import logging
 import random
-from fastapi import FastAPI, HTTPException, Depends, Body, Path, Security, Request
+from fastapi import FastAPI, HTTPException, Depends, Body, Path, Security, Request, BackgroundTasks
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
@@ -248,6 +248,7 @@ async def main():
     async def upload_prediction_edge_results(
         prediction_edge_results: dict = Body(...),
         hotkey: Annotated[str, Depends(get_hotkey)] = None,
+        background_tasks: BackgroundTasks = None,
     ):
         if not authenticate_with_bittensor(hotkey, metagraph):
             print(f"Valid hotkey required, returning 403. hotkey: {hotkey}")
@@ -259,6 +260,9 @@ async def main():
         uid = metagraph.hotkeys.index(hotkey)
 
         try:
+            background_tasks.add_task(db.upload_prediction_edge_results, prediction_edge_results)
+
+            """
             result = db.upload_prediction_edge_results(prediction_edge_results)
             if result:
                 return {
@@ -270,6 +274,13 @@ async def main():
                     status_code=500, detail="Failed to upload prediction edge results from validator "
                     + str(uid)
                 )
+            """
+            
+            return {
+                "message": "Prediction edge results upload scheduled from validator "
+                + str(uid)
+            }
+        
         except Exception as e:
             logging.error(f"Error posting predictionEdgeResults: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
