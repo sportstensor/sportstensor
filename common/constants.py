@@ -75,6 +75,7 @@ ACTIVE_LEAGUES = [
     League.EPL,
     League.MLS,
     League.NBA,
+    League.MLB
 ]
 
 LEAGUES_ALLOWING_DRAWS = [
@@ -92,10 +93,10 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
-    League.MLB: 0.0,
-    League.NBA: 0.91,
-    League.EPL: 0.08,
-    League.MLS: 0.01,
+    League.MLB: 0.10,
+    League.NBA: 0.7,
+    League.EPL: 0.15,
+    League.MLS: 0.05,
     League.NFL: 0.0
 }
 
