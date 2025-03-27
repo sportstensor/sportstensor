@@ -43,6 +43,7 @@ league_mapping = {
     'NBA': 'NBA',
 }
 
+# odds api : thesportsdb
 mismatch_teams_mapping = {
     'Orlando City SC': 'Orlando City',
     'Inter Miami CF': 'Inter Miami',
@@ -60,7 +61,8 @@ mismatch_teams_mapping = {
     'Brighton and Hove Albion': 'Brighton',
     'Wolverhampton Wanderers': 'Wolves',
     'Newcastle United': 'Newcastle',
-    'LA Galaxy': 'L.A. Galaxy'
+    'LA Galaxy': 'L.A. Galaxy',
+    'Oakland Athletics': 'Athletics',
 }
 
 def get_reduced_odds(all_odds):
