@@ -32,7 +32,8 @@ mismatch_teams_mapping = {
     "Brighton and Hove Albion": "Brighton",
     "Wolverhampton Wanderers": "Wolves",
     "Newcastle United": "Newcastle",
-    "LA Galaxy": "L.A. Galaxy"
+    "LA Galaxy": "L.A. Galaxy",
+    "Oakland Athletics": "Athletics",
 }
 
 SPORTS_TYPES = [
