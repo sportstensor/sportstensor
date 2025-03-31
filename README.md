@@ -108,6 +108,7 @@ cd sportstensor
 cp neurons/example.miner.env neurons/miner.env
 ```
 5. Update `miner.env` with your league commitment. Ensure that your commitment reflects the league you are participating in. This will enable the system to send you predictions for the appropriate matches.
+6. Override or replace our base model found at `st/models/base.py` or tap into the parent controller `st/sport_prediction_model.py` to integrate your own model. 
 
 #### League Committments Return Format
 When responding to league commitment requests, miners need to provide the active league they are submitting predictions for.
