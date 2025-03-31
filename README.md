@@ -10,7 +10,6 @@
 - [Miner and Validator Functionality](#miner-and-validator-functionality)
   - [Miner](#miner)
   - [Validator](#validator)
-- [Roadmap](#roadmap)
 - [Running Miners and Validators](#running-miners-and-validators)
   - [Running a Miner](#running-a-miner)
   - [Running a Validator](#running-a-validator)
@@ -66,25 +65,6 @@ Miners must return two key pieces of information when responding to prediction r
 - After all active leagues have been scored, league-specific scoring percentages are applied.
 - Final scores are aggregated and logged for weight setting.
 - Validators set the miners' weights on the chain based on these scores.
-
-## Roadmap
-
-- [x] Launch on testnet (172)
-- [x] Develop baseline model for soccer (Major League Soccer)
-- [x] Develop baseline model for baseball (Major League Baseball)
-- [x] Launch website (sportstensor.com)
-- [x] Begin marketing for brand awareness and interest
-- [x] Build dashboard
-- [x] Launch front-end application
-- [x] Upgrade incentive mechanism to v2
-- [x] Upgrade dashboard to track miner performance and progress
-- [ ] Achieve machine learning dominance over the sports prediction market by our top miners
-- [ ] Collaborations and partnerships with synergistic companies and subnets
-- [ ] Build application to monetize validator bandwidth
-- [ ] Expand on commitable leagues
-- [ ] Market and B2B sales expansion
-- [ ] Explore niche sports offerings
-- [ ] Develop additional products
 
 ## Running Miners and Validators
 
