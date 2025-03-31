@@ -138,7 +138,7 @@ class SportstensorBaseModel(SportPredictionModel):
             bt.logging.error(f"Error converting odds to probabilities: {str(e)}")
             return None
     
-    def make_prediction(self):
+    async def make_prediction(self):
         """Synchronous wrapper for async prediction logic."""
         bt.logging.info(f"Predicting {self.prediction.league} game...")
         
@@ -179,8 +179,8 @@ class SportstensorBaseModel(SportPredictionModel):
 
             # Determine the region (optional customization for regions)
             region = "us,eu" if sport_key in ["baseball_mlb", "americanfootball_nfl", "basketball_nba"] else "uk,eu"
-
-            odds_data = asyncio.run(self.fetch_odds(sport_key, region))
+            
+            odds_data = await self.fetch_odds(sport_key, region)
 
             if not odds_data:
                 bt.logging.error("No odds data fetched.")

@@ -82,7 +82,7 @@ class Miner(BaseMinerNeuron):
         )
 
         # Make the match prediction based on the requested MatchPrediction object
-        synapse.match_prediction = make_match_prediction(synapse.match_prediction)
+        synapse.match_prediction = await make_match_prediction(synapse.match_prediction)
         synapse.version = constants.PROTOCOL_VERSION
 
         bt.logging.success(
