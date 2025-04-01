@@ -1,4 +1,6 @@
 import os
+import csv
+import shutil
 import contextlib
 import datetime as dt
 import time
@@ -7,11 +9,9 @@ import sqlite3
 import threading
 import random
 from pydantic import ValidationError
-from typing import Any, Dict, Optional, Set, Tuple, List
+from typing import Any, Dict, Optional, List
 from common.data import (
-    Sport,
     Match,
-    Prediction,
     MatchPrediction,
     League,
     MatchPredictionWithMatchData,
@@ -149,6 +149,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Lock to avoid concurrency issues on interacting with the database.
                 self.lock = threading.RLock()
 
+            # Execute archiving. Must run before cleanup.
+            self.archive_old_data()
             # Execute cleanup queries
             self.cleanup()
 
@@ -209,13 +211,13 @@ class SqliteValidatorStorage(ValidatorStorage):
                 cursor.execute("SELECT COUNT(*) FROM MatchPredictions")
                 total_rows = cursor.fetchone()[0]
                 print(f"Total number of rows in MatchPredictions: {total_rows}")
-
-                # Print the total number of rows in the MatchPredictions table
-                cursor.execute(f"SELECT COUNT(*) FROM MatchPredictions WHERE isScored = 0 AND lastUpdated < DATETIME('now', '-{SCORING_CUTOFF_IN_DAYS} day')")
-                total_unscored_rows = cursor.fetchone()[0]
-                print(f"Total number of MatchPredictions {SCORING_CUTOFF_IN_DAYS}+ days old that haven't been scored: {total_unscored_rows}")
                 
                 try:
+                    # Print the total number of rows in the MatchPredictions table
+                    cursor.execute(f"SELECT COUNT(*) FROM MatchPredictions WHERE isScored = 0 AND lastUpdated < DATETIME('now', '-{SCORING_CUTOFF_IN_DAYS} day')")
+                    total_unscored_rows = cursor.fetchone()[0]
+                    print(f"Total number of MatchPredictions {SCORING_CUTOFF_IN_DAYS}+ days old that haven't been scored: {total_unscored_rows}")
+
                     # Execute cleanup queries
                     if total_unscored_rows > 0:
                         # Clean up old predictions that haven't been scored (for whatever reason) and never will be
@@ -226,8 +228,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                         connection.commit()
 
                     # Run VACUUM to reclaim unused space
-                    #print("Running VACUUM to reclaim unused space...")
-                    #cursor.execute("VACUUM")
+                    print("Running VACUUM to reclaim unused space...")
+                    cursor.execute("VACUUM")
                     
                     # Check database integrity
                     print("Checking database integrity...")
@@ -242,6 +244,249 @@ class SqliteValidatorStorage(ValidatorStorage):
                     print(f"An error occurred during cleanup: {e}")
                     raise e
         print("========================================================================================")
+
+    def archive_old_data(self):
+        """
+        Archive leagues based on CSV configuration.
+        
+        The CSV should have the following format:
+        LEAGUE,SHORTNAME,ARCHIVING STATUS,SEASON/YEAR,START,END
+        
+        If ARCHIVING STATUS is 'Active', we will archive the league.
+        """
+        print("================================== Database archiving ==================================")
+        
+        # Create archives directory if it doesn't exist
+        archive_dir = os.path.join("storage", "archives")
+        os.makedirs(archive_dir, exist_ok=True)
+        
+        # Path to CSV file containing archiving configuration
+        csv_path = os.path.join("storage", "league_archiving.csv")
+        
+        if not os.path.exists(csv_path):
+            print(f"Archiving CSV file not found at {csv_path}. Skipping archiving.")
+            return
+        
+        try:
+            with open(csv_path, 'r') as f:
+                reader = csv.DictReader(f)
+                leagues_to_archive = []
+                
+                for row in reader:
+                    # Check if this league should be archived
+                    if row['ARCHIVING STATUS'].strip() == 'Active':
+                        leagues_to_archive.append({
+                            'league': row['LEAGUE'].strip(),
+                            'shortname': row['SHORTNAME'].strip(),
+                            'season': row['SEASON/YEAR'].strip(),
+                            'start': row['START'].strip(),
+                            'end': row['END'].strip()
+                        })
+            
+            if not leagues_to_archive:
+                print("No leagues marked for archiving in the CSV.")
+                return
+            
+            # make a copy of the main database, just in case
+            shutil.copy("SportsTensorEdge.db", "SportsTensorEdge_preArchive.db")
+            print(f"Created pre archive copy of main db: SportsTensorEdge_preArchive.db")
+
+            print(f"Found {len(leagues_to_archive)} leagues to archive: {[l['league'] for l in leagues_to_archive]}")
+            
+            with self.lock:
+                # Work through each league that needs to be archived
+                for league_info in leagues_to_archive:
+                    print("-" * 100)
+                    league_name = league_info['league']
+                    shortname = league_info['shortname']
+                    season = league_info['season']
+                    league_start = league_info['start']
+                    league_end = league_info['end']
+                    
+                    # Define the archive filename
+                    archive_filename = f"SportsTensorEdge_{shortname}_{season}.db"
+                    archive_path = os.path.join(archive_dir, archive_filename)
+                    
+                    # Check if archive already exists
+                    if os.path.exists(archive_path):
+                        print(f"Archive for {league_name} ({season}) already exists at {archive_path}. Skipping.")
+                        continue
+                    
+                    print(f"Archiving {league_name} ({season})...")
+                    
+                    # 1. Copy the main database to create the archive
+                    shutil.copy("SportsTensorEdge.db", archive_path)
+                    print(f"Created archive copy at {archive_path}")
+                    
+                    # 2. Connect to the archive database and delete non-relevant data
+                    self._process_archive_db(archive_path, league_name, league_start, league_end)
+                    
+                    # 3. Delete the archived league data from the main database
+                    self._delete_archived_league_from_main_db(league_name, league_start, league_end)
+                    
+                    print(f"Successfully archived {league_name} ({season})")
+                
+                print("-" * 100)
+                print("Archiving process completed successfully.")
+                
+        except Exception as e:
+            print(f"Error during archiving process: {e}")
+            raise e
+        
+        print("========================================================================================")
+    
+    def _process_archive_db(self, archive_path, league_name, league_start, league_end):
+        """Process the archive database by removing non-relevant data"""
+        try:
+            # Connect to the archive database
+            with contextlib.closing(sqlite3.connect(archive_path)) as archive_conn:
+                cursor = archive_conn.cursor()
+                
+                # Begin transaction
+                cursor.execute("BEGIN TRANSACTION")
+                
+                # Keep only data related to the specified league
+                # First, get list of matchIds for this league
+                cursor.execute("SELECT matchId FROM Matches WHERE league = ? AND matchDate >= ? AND matchDate <= ?", (league_name, league_start, league_end))
+                relevant_match_ids = [row[0] for row in cursor.fetchall()]
+                
+                if relevant_match_ids:
+                    match_ids_tuple = tuple(relevant_match_ids)
+                    
+                    # Delete data from related tables
+                    if len(match_ids_tuple) == 1:
+                        # Handle single item tuples
+                        match_id_sql = f"!= '{match_ids_tuple[0]}'"
+                    else:
+                        match_id_sql = f"NOT IN {match_ids_tuple}"
+                    
+                    print(f"  Archive DB: Removing data from MatchPredictions...")
+                    cursor.execute(f"DELETE FROM MatchPredictions WHERE matchId {match_id_sql}")
+                    
+                    print(f"  Archive DB: Removing data from MatchOdds...")
+                    cursor.execute(f"DELETE FROM MatchOdds WHERE matchId {match_id_sql}")
+                    
+                    print(f"  Archive DB: Removing data from MatchPredictionRequests...")
+                    cursor.execute(f"DELETE FROM MatchPredictionRequests WHERE matchId {match_id_sql}")
+                    
+                    print(f"  Archive DB: Removing non-relevant matches...")
+                    cursor.execute(f"DELETE FROM Matches WHERE matchId {match_id_sql}")
+                
+                    # Commit the transaction
+                    cursor.execute("COMMIT")
+                    
+                    # Optimize the database
+                    print(f"  Archive DB: Running VACUUM to optimize database...")
+                    cursor.execute("VACUUM")
+                    
+                    # Check the integrity of the archive
+                    cursor.execute("PRAGMA integrity_check")
+                    integrity_result = cursor.fetchone()[0]
+                    if integrity_result != "ok":
+                        print(f"  Archive DB: *** WARNING: Integrity check failed for {archive_path}! ***")
+                    else:
+                        print(f"  Archive DB: Integrity check passed.")
+                    
+                    # Get statistics on archived data
+                    cursor.execute("SELECT COUNT(*) FROM Matches")
+                    matches_count = cursor.fetchone()[0]
+                    
+                    cursor.execute("SELECT COUNT(*) FROM MatchPredictions")
+                    predictions_count = cursor.fetchone()[0]
+                    
+                    print(f"  Archive DB: Contains {matches_count} matches and {predictions_count} predictions.")
+                    
+                    db_size_bytes = os.path.getsize(archive_path)
+                    db_size_mb = db_size_bytes / (1024 ** 2)
+                    print(f"  Archive DB: Size: {db_size_mb:.2f} MB")
+                
+                else:
+                    print(f"  Archive DB: No matches found for league {league_name} ({league_start} - {league_end}). Deleting archive.")
+                    cursor.execute("ROLLBACK")
+                    # Delete the archive file if no relevant data was found
+                    os.remove(archive_path)
+                
+        except Exception as e:
+            print(f"Error processing archive database: {e}")
+            raise e
+    
+    def _delete_archived_league_from_main_db(self, league_name, league_start, league_end):
+        """Delete the archived league data from the main database"""
+        try:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                
+                # Begin transaction
+                cursor.execute("BEGIN TRANSACTION")
+                
+                # First, find all match IDs for this league
+                cursor.execute("SELECT matchId FROM Matches WHERE league = ? AND matchDate >= ? AND matchDate <= ?", (league_name, league_start, league_end))
+                match_ids = [row[0] for row in cursor.fetchall()]
+                
+                if not match_ids:
+                    print(f"  Main DB: No matches found for league {league_name}. Nothing to delete.")
+                    cursor.execute("ROLLBACK")
+                    return
+                
+                match_ids_tuple = tuple(match_ids)
+                
+                # Delete related data
+                if len(match_ids_tuple) == 1:
+                    # Handle single item tuples
+                    match_id_sql = f"= '{match_ids_tuple[0]}'"
+                else:
+                    match_id_sql = f"IN {match_ids_tuple}"
+                
+                print(f"  Main DB: Deleting {len(match_ids)} matches and related data for {league_name}...")
+                
+                # Delete predictions
+                cursor.execute(f"SELECT COUNT(*) FROM MatchPredictions WHERE matchId {match_id_sql}")
+                predictions_count = cursor.fetchone()[0]
+                print(f"  Main DB: Deleting {predictions_count} rows from MatchPredictions...")
+                cursor.execute(f"DELETE FROM MatchPredictions WHERE matchId {match_id_sql}")
+                
+                # Delete odds
+                cursor.execute(f"SELECT COUNT(*) FROM MatchOdds WHERE matchId {match_id_sql}")
+                odds_count = cursor.fetchone()[0]
+                print(f"  Main DB: Deleting {odds_count} rows from MatchOdds...")
+                cursor.execute(f"DELETE FROM MatchOdds WHERE matchId {match_id_sql}")
+                
+                # Delete prediction requests
+                cursor.execute(f"SELECT COUNT(*) FROM MatchPredictionRequests WHERE matchId {match_id_sql}")
+                requests_count = cursor.fetchone()[0]
+                print(f"  Main DB: Deleting {requests_count} rows from MatchPredictionRequests...")
+                cursor.execute(f"DELETE FROM MatchPredictionRequests WHERE matchId {match_id_sql}")
+                
+                # Delete matches
+                print(f"  Main DB: Deleting matches for {league_name}...")
+                cursor.execute(f"DELETE FROM Matches WHERE matchId {match_id_sql}")
+                
+                # Commit changes
+                cursor.execute("COMMIT")
+                
+                # Log successful deletion
+                print(f"  Main DB: Successfully deleted {league_name} data ({len(match_ids)} matches, {predictions_count} predictions)")
+
+                # Optimize the database
+                print(f"  Running VACUUM to optimize database...")
+                cursor.execute("VACUUM")
+                
+                # Check the integrity of the archive
+                cursor.execute("PRAGMA integrity_check")
+                integrity_result = cursor.fetchone()[0]
+                if integrity_result != "ok":
+                    print(f"  *** WARNING: Integrity check failed after archiving {league_name} ({league_start} - {league_end})! ***")
+                else:
+                    print(f"  Integrity check passed.")
+                
+                # Size after deletion
+                db_size_bytes = os.path.getsize("SportsTensorEdge.db")
+                db_size_mb = db_size_bytes / (1024 ** 2)
+                print(f"  Main DB: Current size: {db_size_mb:.2f} MB")
+            
+        except Exception as e:
+            print(f"Error deleting league data from main database: {e}")
+            raise e
 
     def insert_leagues(self, leagues: List[League]):
         """Stores leagues associated with sports. Indicates which leagues are active to run predictions on."""
