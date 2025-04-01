@@ -25,7 +25,6 @@ from common.constants import (
 )
 from storage.validator_storage import ValidatorStorage
 
-ARCHIVE_OLDER_THAN_MONTHS = 6
 
 class SqliteValidatorStorage(ValidatorStorage):
     _instance: Optional['SqliteValidatorStorage'] = None
