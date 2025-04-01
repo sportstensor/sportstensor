@@ -288,6 +288,10 @@ class SqliteValidatorStorage(ValidatorStorage):
                 print("No leagues marked for archiving in the CSV.")
                 return
             
+            # make a copy of the main database, just in case
+            shutil.copy("SportsTensorEdge.db", "SportsTensorEdge_preArchive.db")
+            print(f"Created pre archive copy of main db: SportsTensorEdge_preArchive.db")
+
             print(f"Found {len(leagues_to_archive)} leagues to archive: {[l['league'] for l in leagues_to_archive]}")
             
             with self.lock:
