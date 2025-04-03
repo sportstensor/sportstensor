@@ -22,7 +22,7 @@ import sentry_sdk
 import mysql.connector
 from mysql.connector import Error
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import api.db as db
 from api.config import NETWORK, NETUID, IS_PROD, API_KEYS, TESTNET_VALI_HOTKEYS
 from common.constants import ENABLE_APP, APP_PREDICTIONS_UNFULFILLED_THRESHOLD
@@ -43,6 +43,9 @@ app = FastAPI()
 # define the APIKeyHeader for API authorization to our APP endpoints
 api_key_header = APIKeyHeader(name="ST_API_KEY", auto_error=False)
 security = HTTPBasic()
+
+# Cache configuration
+MATCHES_CACHE_TTL = 300  # 5 minutes
 
 # Setup basic configuration for logging
 logging.basicConfig(
@@ -84,6 +87,11 @@ def authenticate_with_bittensor(hotkey, metagraph):
 
 async def main():
     app = FastAPI()
+
+    matches_cache = {
+        "data": None,
+        "last_updated": None
+    }
 
     subtensor = bittensor.subtensor(network=NETWORK)
     metagraph: bittensor.metagraph = subtensor.metagraph(NETUID)
@@ -170,12 +178,28 @@ async def main():
 
     @app.get("/matches")
     def get_matches():
+        current_time = datetime.now()
+        
         try:
+            # Use cached data if it exists and is still valid
+            if (matches_cache["data"] is not None and 
+                matches_cache["last_updated"] is not None and
+                current_time - matches_cache["last_updated"] < timedelta(seconds=MATCHES_CACHE_TTL)):
+                logging.info("-- Returning cached matches data.")
+                return {"matches": matches_cache["data"]}
+            
+            # Cache expired or doesn't exist, fetch fresh data
             match_list = db.get_matches()
+            
+            # Update cache
+            matches_cache["data"] = match_list
+            matches_cache["last_updated"] = current_time
+            
             if match_list:
                 return {"matches": match_list}
             else:
                 return {"matches": []}
+                
         except Exception as e:
             logging.error(f"Error retrieving matches: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
@@ -352,6 +376,12 @@ async def main():
         except Exception as e:
             logging.error(f"Error retrieving predictionResultsPerMiner: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
+    
+    @app.post("/admin/clear-matches-cache")
+    def clear_matches_cache():
+        matches_cache["data"] = None
+        matches_cache["last_updated"] = None
+        return {"message": "Matches cache cleared successfully"}
 
     def serialize_datetime(value):
         """Serialize datetime to JSON-compatible format, if necessary."""
