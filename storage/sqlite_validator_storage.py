@@ -183,7 +183,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 with contextlib.closing(self._create_connection()) as connection:
                     cursor = connection.cursor()
                     cursor.execute(
-                        """DELETE FROM MatchPredictions WHERE matchId IN ('b270fb69f9d1bc85c1ea6d4bd1241f95', '45c43e101810be48851e88fde3cc15fd', '4700aae86174a44f726ab023b8889f2a')""",
+                        """UPDATE MatchPredictions SET isArchived = 1 WHERE matchId IN ('b270fb69f9d1bc85c1ea6d4bd1241f95', '45c43e101810be48851e88fde3cc15fd', '4700aae86174a44f726ab023b8889f2a')""",
                     )
                     cursor.execute(
                         """DELETE FROM Matches WHERE matchId IN ('30ad5abd755a61dbcf4ff79759e32a2f', '1c7a5a8373c1bae26e044037d6c12f21', 'ef1aa8b53826d5dbe374291e08cd6b2b')""",
