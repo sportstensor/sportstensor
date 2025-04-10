@@ -41,6 +41,9 @@ MAX_BATCHSIZE_FOR_SCORING = 500
 # Cut off days to attempt to score predictions. i.e. Any predictions not scored with X days will be left behind
 SCORING_CUTOFF_IN_DAYS = 30
 
+# Cut off days to attempt to sync match odds. i.e. Any match odds not synced with X days will be left behind
+MATCH_ODDS_CUTOFF_IN_DAYS = 7
+
 # Interval in minutes that we attempt to score predictions
 SCORING_INTERVAL_IN_MINUTES = 1
 
