@@ -102,7 +102,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             isArchived          INTEGER         DEFAULT 0
                             )"""
     
-    HOTFIX_ZERO_PROB_MARKER_FILE = "HOTFIX_ZERO_PROB_MARKER_FILE.txt"
+    HOTFIX_MLB_20250410_MARKER_FILE = "HOTFIX_MLB_20250410_MARKER_FILE.txt"
 
     def __init__(self):
         self._initialized = False
@@ -140,8 +140,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Create the MatchPredictions table (if it does not already exist).
                 cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
-                # Execute db hotfix ce_draws
-                self.execute_db_hotfix_zero_prob()
+                # Execute db hotfixes
+                self.execute_db_hotfixes()
 
                 # Commit the changes and close the connection
                 connection.commit()
@@ -173,9 +173,9 @@ class SqliteValidatorStorage(ValidatorStorage):
             raise RuntimeError("SqliteValidatorStorage has not been initialized")
         return self.continuous_connection_do_not_reuse
     
-    def execute_db_hotfix_zero_prob(self):
-        if os.path.exists(self.HOTFIX_ZERO_PROB_MARKER_FILE):
-            print(f"{self.HOTFIX_ZERO_PROB_MARKER_FILE} Delete has already been executed. Skipping.")
+    def execute_db_hotfixes(self):
+        if os.path.exists(self.HOTFIX_MLB_20250410_MARKER_FILE):
+            print(f"{self.HOTFIX_MLB_20250410_MARKER_FILE} hotfix has already been executed. Skipping.")
             return
 
         try:
@@ -183,15 +183,18 @@ class SqliteValidatorStorage(ValidatorStorage):
                 with contextlib.closing(self._create_connection()) as connection:
                     cursor = connection.cursor()
                     cursor.execute(
-                        """DELETE FROM MatchPredictions WHERE probability = 0""",
+                        """UPDATE MatchPredictions SET isArchived = 1 WHERE matchId IN ('b270fb69f9d1bc85c1ea6d4bd1241f95', '45c43e101810be48851e88fde3cc15fd', '4700aae86174a44f726ab023b8889f2a')""",
+                    )
+                    cursor.execute(
+                        """DELETE FROM Matches WHERE matchId IN ('30ad5abd755a61dbcf4ff79759e32a2f', '1c7a5a8373c1bae26e044037d6c12f21', 'ef1aa8b53826d5dbe374291e08cd6b2b')""",
                     )
                     connection.commit()
             
             # Create the marker file
-            with open(self.HOTFIX_ZERO_PROB_MARKER_FILE, "w") as f:
-                f.write("Delete executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
+            with open(self.HOTFIX_MLB_20250410_MARKER_FILE, "w") as f:
+                f.write("Hotfix executed on: " + dt.datetime.now(dt.timezone.utc).isoformat())
             
-            print(f"Marker file created: {self.HOTFIX_ZERO_PROB_MARKER_FILE}. This script will not run the delete again.")
+            print(f"Marker file created: {self.HOTFIX_MLB_20250410_MARKER_FILE}. This script will not run the hotfix again.")
         except Exception as e:
             print(f"An error occurred: {e}")
     

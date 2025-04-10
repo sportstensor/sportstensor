@@ -20,7 +20,7 @@ from storage.sqlite_validator_storage import SqliteValidatorStorage
 from common.constants import (
     IS_DEV,
     VALIDATOR_TIMEOUT,
-    SCORING_CUTOFF_IN_DAYS,
+    MATCH_ODDS_CUTOFF_IN_DAYS,
     LEAGUES_ALLOWING_DRAWS,
     ROI_BET_AMOUNT,
 )
@@ -104,8 +104,8 @@ def fetch_match_odds(vali, match_odds_data_endpoint: str, match_id: str) -> Dict
 
 def sync_match_odds_data(vali, match_odds_data_endpoint: str) -> bool:
     try:
-        # Get matches from the last SCORING_CUTOFF_IN_DAYS days
-        x_days_ago = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=SCORING_CUTOFF_IN_DAYS)
+        # Get matches from the last MATCH_ODDS_CUTOFF_IN_DAYS days
+        x_days_ago = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=MATCH_ODDS_CUTOFF_IN_DAYS)
         recent_matches = storage.get_recently_completed_matches(x_days_ago)
 
         if not recent_matches:
