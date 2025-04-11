@@ -480,8 +480,13 @@ def calculate_incentives_and_update_scores(vali):
                     if log_prediction:
                         bt.logging.debug(f"      • Incentive score (v): {v:.4f}")
 
-                    # Get sigma, aka the closing edge
-                    sigma = pwmd.prediction.closingEdge
+                    # Calculate sigma, aka the closing edge
+                    sigma, _ = calculate_edge(
+                        prediction_team=pwmd.prediction.get_predicted_team(),
+                        prediction_prob=pwmd.prediction.probability,
+                        actual_team=pwmd.get_actual_winner(),
+                        closing_odds=pwmd.get_closing_odds_for_predicted_outcome(),
+                    )
                     if log_prediction:
                         bt.logging.debug(f"      • Sigma (aka Closing Edge): {sigma:.4f}")
 
