@@ -281,13 +281,15 @@ def apply_no_prediction_response_penalties(
     """
     Apply any penalties for miners that have not responded to prediction requests.
 
-    :param vali: Validator, the validator object
+    :param metagraph: The metagraph object
+    :param league: The league to check for prediction response
+    :param uids_to_last_leagues: Dictionary mapping UIDs to their last league commitments
+    :param uids_to_leagues_last_updated: Dictionary mapping UIDs to the last updated time of their leagues
+    :param league_rhos: Dictionary mapping leagues to their rho values
     :param league_scores: List of scores to check and penalize
     :param all_uids: List of UIDs corresponding to the scores
     :return: List of scores after penalizing miners that have not responded to prediction requests
     """
-    no_response_miner_uids = []
-    no_response_miner_penalties = []
 
     league_miner_uids = []
     for uid in all_uids:
@@ -304,12 +306,12 @@ def apply_no_prediction_response_penalties(
     if completed_matches_count and completed_matches_count > 0:
         # total possible predictions are the number of matches * 4 (T-24h, T-12h, T-4h, T-10m)
         total_possible_predictions = completed_matches_count * 4
-        print(f"Checking miner prediction responses for league {league.name} (total possible predictions: {total_possible_predictions})")
+        bt.logging.info(f"Checking miner prediction responses for league {league.name} (total possible predictions: {total_possible_predictions})")
         # Check all miners committed to this league
         for uid in league_miner_uids:
             # skip miners that haven't met min rho as they are 0 already anyway
             if league_rhos[league][uid] < MIN_RHO:
-                print(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {MIN_RHO}. Skipping.")
+                bt.logging.info(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {MIN_RHO}. Skipping.")
                 continue
             miner_hotkey = metagraph.hotkeys[uid]
             get_miner_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league)
@@ -317,14 +319,8 @@ def apply_no_prediction_response_penalties(
             if get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY:
                 # Miner has not been responding to prediction requests and will score 0
                 league_scores[uid] = 0
-                print(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
-        print("-" * 50)
-    
-    if no_response_miner_uids:
-        bt.logging.info(
-            f"Penalizing miners {no_response_miner_uids} that did not respond to prediction requests this run step.\n"
-            f"Accumulated penalties: {no_response_miner_penalties}"
-        )
+                bt.logging.info(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
+        bt.logging.info("-" * 50)
     
     return league_scores
 
