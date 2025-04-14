@@ -70,6 +70,11 @@ class ValidatorStorage(ABC):
         raise NotImplemented
     
     @abstractmethod
+    def get_completed_matches_count(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> int:
+        """Gets count of completed matches with predictions since the passed in date."""
+        raise NotImplemented
+    
+    @abstractmethod
     def update_match_prediction_request(self, matchId: str, request_time: str):
         """Updates a match prediction request with the status of the request_time."""
         raise NotImplemented
@@ -115,7 +120,7 @@ class ValidatorStorage(ABC):
         raise NotImplemented
 
     @abstractmethod
-    def get_total_match_predictions_by_miner(self, miner_hotkey: str, miner_uid: int) -> int:
+    def get_total_match_predictions_by_miner(self, miner_hotkey: str, miner_uid: int, matchDateSince: Optional[dt.datetime] = None, league: Optional[League] = None) -> int:
         """Gets the total number of predictions a miner has made since being registered. Must be scored and not archived."""
         raise NotImplemented
     

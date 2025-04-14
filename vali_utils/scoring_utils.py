@@ -16,6 +16,8 @@ from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     NO_LEAGUE_COMMITMENT_PENALTY,
     NO_LEAGUE_COMMITMENT_GRACE_PERIOD,
+    MINER_RELIABILITY_CUTOFF_IN_DAYS,
+    MIN_MINER_RELIABILITY,
     COPYCAT_PENALTY_SCORE,
     COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
@@ -267,41 +269,64 @@ def check_and_apply_league_commitment_penalties(vali, all_scores: List[float], a
     
     return all_scores
 
-def apply_no_prediction_response_penalties(vali, all_scores: List[float], all_uids: List[int]) -> List[float]:
+def apply_no_prediction_response_penalties(
+        metagraph: bt.metagraph, 
+        league: League, 
+        uids_to_last_leagues: Dict[int, List[League]], 
+        uids_to_leagues_last_updated: Dict[int, dt.datetime],
+        league_rhos: Dict[League, List[float]],
+        league_scores: List[float], 
+        all_uids: List[int]
+    ) -> List[float]:
     """
     Apply any penalties for miners that have not responded to prediction requests.
 
     :param vali: Validator, the validator object
-    :param all_scores: List of scores to check and penalize
+    :param league_scores: List of scores to check and penalize
     :param all_uids: List of UIDs corresponding to the scores
     :return: List of scores after penalizing miners that have not responded to prediction requests
     """
     no_response_miner_uids = []
     no_response_miner_penalties = []
-    
-    for i, uid in enumerate(all_uids):
-        with vali.accumulated_no_response_penalties_lock:
-            # Initialize penalty for this UID if it doesn't exist
-            if uid not in vali.accumulated_no_response_penalties:
-                vali.accumulated_no_response_penalties[uid] = 0.0
-            elif vali.accumulated_no_response_penalties[uid] < 0.0:
-                # Skip miners with score of zero or negative
-                if all_scores[i] <= 0.0:
-                    continue
-                # Apply the penalty to the score
-                all_scores[i] += vali.accumulated_no_response_penalties[uid]
-                no_response_miner_uids.append(uid)
-                no_response_miner_penalties.append(vali.accumulated_no_response_penalties[uid])
-                # Clear the penalty for this UID because it has been applied
-                vali.accumulated_no_response_penalties[uid] = 0.0
 
+    league_miner_uids = []
+    for uid in all_uids:
+        if uid not in uids_to_last_leagues:
+            continue
+        if league in uids_to_last_leagues[uid] and uids_to_leagues_last_updated[uid] >= (datetime.now(timezone.utc) - dt.timedelta(seconds=NO_LEAGUE_COMMITMENT_GRACE_PERIOD)):
+            league_miner_uids.append(uid)
+
+    storage = get_storage()
+
+    # Query the database for all eligible matches within the last MINER_RELIABILITY_CUTOFF_IN_DAYS days
+    match_date_since = dt.datetime.now() - dt.timedelta(days=MINER_RELIABILITY_CUTOFF_IN_DAYS)
+    completed_matches_count = storage.get_completed_matches_count(matchDateSince=match_date_since, league=league)
+    if completed_matches_count and completed_matches_count > 0:
+        # total possible predictions are the number of matches * 4 (T-24h, T-12h, T-4h, T-10m)
+        total_possible_predictions = completed_matches_count * 4
+        print(f"Checking miner prediction responses for league {league.name} (total possible predictions: {total_possible_predictions})")
+        # Check all miners committed to this league
+        for uid in league_miner_uids:
+            # skip miners that haven't met min rho as they are 0 already anyway
+            if league_rhos[league][uid] < MIN_RHO:
+                print(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {MIN_RHO}. Skipping.")
+                continue
+            miner_hotkey = metagraph.hotkeys[uid]
+            get_miner_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league)
+            # Check if miner predictions count is within MIN_MINER_RELIABILITY % of total possible predictions
+            if get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY:
+                # Miner has not been responding to prediction requests and will score 0
+                league_scores[uid] = 0
+                print(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
+        print("-" * 50)
+    
     if no_response_miner_uids:
         bt.logging.info(
             f"Penalizing miners {no_response_miner_uids} that did not respond to prediction requests this run step.\n"
             f"Accumulated penalties: {no_response_miner_penalties}"
         )
     
-    return all_scores
+    return league_scores
 
 def calculate_incentives_and_update_scores(vali):
     """
@@ -669,7 +694,7 @@ def calculate_incentives_and_update_scores(vali):
         # Check and penalize miners that are not committed to any active leagues -- before normalization
         league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
         # Apply penalties for miners that have not responded to prediction requests -- before normalization
-        league_scores[league] = apply_no_prediction_response_penalties(vali, league_scores[league], all_uids)
+        league_scores[league] = apply_no_prediction_response_penalties(vali.metagraph, league, vali.uids_to_last_leagues, vali.uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
 
         # Apply the copycat penalty to the score -- before normalization
         for uid in final_copycat_penalties:
