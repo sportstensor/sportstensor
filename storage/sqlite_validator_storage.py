@@ -779,6 +779,35 @@ class SqliteValidatorStorage(ValidatorStorage):
                 ]
                 return matches
             
+    def get_completed_matches_count(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> int:
+        """Gets count of completed matches with predictions since the passed in date."""
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                # Convert datetime to string in 'YYYY-MM-DD HH:MM:SS' format
+                dateSince = matchDateSince.strftime("%Y-%m-%d %H:%M:%S")
+
+                cursor = connection.cursor()
+                params = [dateSince]
+                query = """
+                    SELECT COUNT(*) 
+                    FROM Matches
+                    WHERE isComplete = 1
+                    AND (SELECT COUNT(*) FROM MatchPredictions WHERE matchId = Matches.matchId AND isScored = 1 AND isArchived = 0) > 0
+                    AND homeTeamOdds IS NOT NULL
+                    AND awayTeamOdds IS NOT NULL
+                    AND matchDate > ?
+                    """
+                
+                if league:
+                    query += "AND (league = ? OR league = ?)"
+                    params.append(league.name)
+                    params.append(league.value)
+                
+                cursor.execute(query, params)
+                
+                results = cursor.fetchone()
+                return results[0] if results else 0
+            
     def update_match_prediction_request(self, matchId: str, request_time: str):
         """Updates a match prediction request with the status of the request_time."""
         with self.lock:
@@ -1127,15 +1156,31 @@ class SqliteValidatorStorage(ValidatorStorage):
                 )
                 connection.commit()
 
-    def get_total_match_predictions_by_miner(self, miner_hotkey: str, miner_uid: int) -> int:
+    def get_total_match_predictions_by_miner(self, miner_hotkey: str, miner_uid: int, matchDateSince: Optional[dt.datetime] = None, league: Optional[League] = None) -> int:
         """Gets the total number of predictions a miner has made since being registered. Must be scored and not archived."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
-                cursor.execute(
-                    "SELECT COUNT(*) FROM MatchPredictions WHERE hotkey = ? AND minerId = ? AND isScored = 1 AND isArchived = 0",
-                    [miner_hotkey, miner_uid],
-                )
+
+                query = """
+                    SELECT COUNT(*)
+                    FROM MatchPredictions
+                    WHERE hotkey = ?
+                    AND minerId = ?
+                    AND isScored = 1
+                    AND isArchived = 0
+                """
+                params = [miner_hotkey, miner_uid]
+                
+                if matchDateSince:
+                    query += " AND matchDate > ? "
+                    params.append(matchDateSince.strftime("%Y-%m-%d %H:%M:%S"))
+                
+                if league:
+                    query += " AND league = ? "
+                    params.append(league.value)
+                
+                cursor.execute(query, params)
                 result = cursor.fetchone()
                 if result is not None:
                     return result[0]

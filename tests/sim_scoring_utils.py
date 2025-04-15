@@ -50,6 +50,7 @@ from vali_utils.scoring_utils import (
     calculate_incentive_score,
     apply_gaussian_filter,
     apply_pareto,
+    apply_no_prediction_response_penalties
 )
 
 
@@ -112,8 +113,7 @@ def calculate_incentives_and_update_scores():
         print("No UID to League mapping found. Using fallback hardcoded mapping.")
         # Recreating the dictionary with UID to League mapping from the provided data
         uids_to_league = {
-            0: 'EPL',
-            3: 'MLS',
+            3: 'MLB',
             4: 'NBA',
             5: 'NBA',
             6: 'EPL',
@@ -149,15 +149,16 @@ def calculate_incentives_and_update_scores():
             41: 'EPL',
             42: 'NBA',
             43: 'NBA',
-            44: 'MLS',
+            44: 'MLB',
             45: 'EPL',
             46: 'EPL',
             47: 'EPL',
             48: 'MLB',
             49: 'MLB',
-            50: 'MLS',
-            51: 'MLS',
-            52: 'EPL',
+            50: 'MLB',
+            51: 'MLB',
+            52: 'MLB',
+            53: 'MLB',
             54: 'NBA',
             56: 'NBA',
             57: 'MLB',
@@ -170,12 +171,12 @@ def calculate_incentives_and_update_scores():
             64: 'MLS',
             65: 'NBA',
             66: 'EPL',
-            67: 'EPL',
+            67: 'MLB',
             68: 'NBA',
             69: 'EPL',
             70: 'MLB',
             71: 'MLS',
-            72: 'MLS',
+            72: 'MLB',
             73: 'MLB',
             74: 'EPL',
             75: 'NBA',
@@ -218,8 +219,9 @@ def calculate_incentives_and_update_scores():
             116: 'NBA',
             117: 'NBA',
             118: 'MLS',
-            120: 'MLS',
-            121: 'EPL',
+            119: 'MLB',
+            120: 'MLB',
+            121: 'MLB',
             122: 'NBA',
             123: 'NBA',
             124: 'NBA',
@@ -227,15 +229,15 @@ def calculate_incentives_and_update_scores():
             126: 'NBA',
             127: 'MLB',
             128: 'MLB',
-            129: 'EPL',
+            129: 'MLB',
             131: 'MLB',
             133: 'MLB',
             134: 'NBA',
             135: 'MLB',
             136: 'NBA',
             137: 'NBA',
-            138: 'NBA',
-            139: 'MLS',
+            138: 'MLB',
+            139: 'NBA',
             140: 'NBA',
             141: 'MLB',
             142: 'MLB',
@@ -246,7 +248,7 @@ def calculate_incentives_and_update_scores():
             147: 'MLB',
             148: 'NBA',
             149: 'MLB',
-            150: 'MLS',
+            150: 'MLB',
             151: 'EPL',
             152: 'NBA',
             153: 'EPL',
@@ -263,8 +265,8 @@ def calculate_incentives_and_update_scores():
             165: 'NBA',
             166: 'MLB',
             167: 'NBA',
-            168: 'MLS',
-            169: 'EPL',
+            168: 'MLB',
+            169: 'NBA',
             170: 'MLB',
             171: 'MLB',
             172: 'EPL',
@@ -282,7 +284,7 @@ def calculate_incentives_and_update_scores():
             185: 'EPL',
             186: 'MLB',
             187: 'MLB',
-            188: 'MLS',
+            188: 'NBA',
             189: 'NBA',
             190: 'NBA',
             191: 'MLB',
@@ -298,14 +300,14 @@ def calculate_incentives_and_update_scores():
             202: 'NBA',
             203: 'NBA',
             204: 'MLB',
-            206: 'MLS',
+            206: 'MLB',
             207: 'MLS',
             208: 'NBA',
-            209: 'NBA',
+            209: 'MLB',
             211: 'NBA',
             212: 'NBA',
             214: 'MLS',
-            215: 'MLS',
+            215: 'MLB',
             216: 'MLB',
             217: 'EPL',
             218: 'EPL',
@@ -316,7 +318,7 @@ def calculate_incentives_and_update_scores():
             223: 'MLB',
             224: 'MLB',
             225: 'NBA',
-            226: 'MLS',
+            226: 'NBA',
             227: 'NBA',
             230: 'NBA',
             231: 'NBA',
@@ -328,13 +330,13 @@ def calculate_incentives_and_update_scores():
             240: 'NBA',
             241: 'NBA',
             242: 'EPL',
-            243: 'MLS',
+            243: 'MLB',
             244: 'EPL',
             245: 'NBA',
             246: 'NBA',
             247: 'NBA',
             248: 'NBA',
-            250: 'MLS',
+            250: 'MLB',
             251: 'NBA',
             252: 'NBA',
             253: 'NBA',
@@ -356,7 +358,7 @@ def calculate_incentives_and_update_scores():
             if uids_to_league[uid] == league or uids_to_league[uid] == league.name:
                 league_miner_uids.append(uid)
                 uids_to_last_leagues[uid] = [league]
-                uids_to_leagues_last_updated[uid] = dt.datetime.now()
+                uids_to_leagues_last_updated[uid] = dt.datetime.now(timezone.utc)
 
         for index, uid in enumerate(all_uids):
             total_score, rho = 0, 0
@@ -488,13 +490,14 @@ def calculate_incentives_and_update_scores():
                         actual_team=pwmd.get_actual_winner(),
                         closing_odds=pwmd.get_closing_odds_for_predicted_outcome(),
                     )
+                    """
                     if sigma_preScored != sigma:
                         edge_mismatch_count += 1
                         if (sigma_preScored < 0 and sigma > 0) or (sigma_preScored > 0 and sigma < 0):
                             edge_mismatch_oppo_count += 1
                             print(f"prediction_team: {pwmd.prediction.get_predicted_team()}, prediction_prob: {pwmd.prediction.probability}, actual_team: {pwmd.get_actual_winner()}, closing_odds: {pwmd.get_closing_odds_for_predicted_outcome()}, sigma: {sigma}, sigma_preScored: {sigma_preScored}")
                         #print(f"Sigma and sigma2 are not equal for matchId {pwmd.prediction.matchId} ({pwmd.prediction.homeTeamName} vs {pwmd.prediction.awayTeamName}, {pwmd.prediction.matchDate}). prediction.closingEdge: {sigma}, calculatedEdge: {sigma2}")
-                                       
+                    """                   
                     
                     if log_prediction:
                         print(f"      • MatchId: {pwmd.prediction.matchId}")
@@ -765,7 +768,7 @@ def calculate_incentives_and_update_scores():
         # Check and penalize miners that are not committed to any active leagues -- before normalization
         #league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
         # Apply penalties for miners that have not responded to prediction requests -- before normalization
-        #league_scores[league] = apply_no_prediction_response_penalties(vali, league_scores[league], all_uids)
+        league_scores[league] = apply_no_prediction_response_penalties(metagraph, league, uids_to_last_leagues, uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
 
         # Apply the copycat penalty to the score -- before normalization
         for uid in final_copycat_penalties:

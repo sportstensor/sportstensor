@@ -40,7 +40,6 @@ from common.constants import (
     PURGE_DEREGGED_MINERS_INTERVAL_IN_MINUTES,
     MAX_BATCHSIZE_FOR_SCORING,
     SCORING_INTERVAL_IN_MINUTES,
-    NO_PREDICTION_RESPONSE_PENALTY,
     ACTIVE_LEAGUES,
     LEAGUE_COMMITMENT_INTERVAL_IN_MINUTES,
     LEAGUE_SCORING_PERCENTAGES,
@@ -128,12 +127,9 @@ class Validator(BaseValidatorNeuron):
         self.next_league_commitments_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_scoring_datetime = dt.datetime.now(dt.timezone.utc)
         self.next_app_predictions_syncing_datetime = dt.datetime.now(dt.timezone.utc)
-
         
         self.accumulated_league_commitment_penalties = {}
         self.accumulated_league_commitment_penalties_lock = threading.RLock()
-        self.accumulated_no_response_penalties = {}
-        self.accumulated_no_response_penalties_lock = threading.RLock()
 
         # Create a set of uids to corresponding leagues that miners are committed to.
         self.uids_to_leagues: Dict[int, List[League]] = {}
@@ -511,14 +507,10 @@ class Validator(BaseValidatorNeuron):
                 for uid in miner_uids:
                     if uid not in working_miner_uids:
                         not_working_miner_uids.append(uid)
-                        with self.accumulated_no_response_penalties_lock:
-                            if uid not in self.accumulated_no_response_penalties:
-                                self.accumulated_no_response_penalties[uid] = 0.0
-                            self.accumulated_no_response_penalties[uid] += NO_PREDICTION_RESPONSE_PENALTY
                         
                 if len(not_working_miner_uids) > 0:
                     bt.logging.info(
-                        f"Penalizing miners {not_working_miner_uids} that did not respond."
+                        f"Miners {not_working_miner_uids} did not respond or had invalid responses."
                     )
         else:
             bt.logging.info("No matches available to send for predictions.")
