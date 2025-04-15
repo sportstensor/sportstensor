@@ -301,7 +301,7 @@ def apply_no_prediction_response_penalties(
     storage = get_storage()
 
     # Query the database for all eligible matches within the last MINER_RELIABILITY_CUTOFF_IN_DAYS days
-    match_date_since = dt.datetime.now() - dt.timedelta(days=MINER_RELIABILITY_CUTOFF_IN_DAYS)
+    match_date_since = dt.datetime.now(timezone.utc) - dt.timedelta(days=MINER_RELIABILITY_CUTOFF_IN_DAYS)
     completed_matches_count = storage.get_completed_matches_count(matchDateSince=match_date_since, league=league)
     if completed_matches_count and completed_matches_count > 0:
         # total possible predictions are the number of matches * 4 (T-24h, T-12h, T-4h, T-10m)
