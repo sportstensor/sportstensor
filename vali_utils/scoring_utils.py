@@ -306,12 +306,12 @@ def apply_no_prediction_response_penalties(
     if completed_matches_count and completed_matches_count > 0:
         # total possible predictions are the number of matches * 4 (T-24h, T-12h, T-4h, T-10m)
         total_possible_predictions = completed_matches_count * 4
-        bt.logging.info(f"Checking miner prediction responses for league {league.name} (total possible predictions: {total_possible_predictions})")
+        print(f"Checking miner prediction responses for league {league.name} (total possible predictions: {total_possible_predictions})")
         # Check all miners committed to this league
         for uid in league_miner_uids:
             # skip miners that haven't met min rho as they are 0 already anyway
             if league_rhos[league][uid] < MIN_RHO:
-                bt.logging.info(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {MIN_RHO}. Skipping.")
+                print(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {MIN_RHO}. Skipping.")
                 continue
             miner_hotkey = metagraph.hotkeys[uid]
             get_miner_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league)
@@ -319,8 +319,8 @@ def apply_no_prediction_response_penalties(
             if get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY:
                 # Miner has not been responding to prediction requests and will score 0
                 league_scores[uid] = 0
-                bt.logging.info(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
-        bt.logging.info("-" * 50)
+                print(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
+        print("-" * 75)
     
     return league_scores
 
