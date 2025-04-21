@@ -266,11 +266,15 @@ def fetch_and_store_events_oddsapi():
                     sport_type = sport['sport_id']
                     break
             
-            if isinstance(event.get("commence_time"), (int, float)) or event.get("commence_time").isdigit():
-                # Handle Unix timestamp (seconds since epoch)
-                matchTimestamp = datetime.fromtimestamp(float(event.get("commence_time")), tz=timezone.utc)
-                matchTimestampStr = matchTimestamp.strftime("%Y-%m-%d %H:%M:%S")
-                event.update({"commence_time": matchTimestampStr})
+            # convert commence_time from YYYY-MM-DDTHH:MM:SSZ to YYYY-MM-DD HH:MM:SS in UTC
+            if isinstance(event.get("commence_time"), str):
+                try:
+                    matchTimestamp = parse_datetime_with_optional_timezone(event.get("commence_time"))
+                    matchTimestampStr = matchTimestamp.strftime("%Y-%m-%d %H:%M:%S")
+                    event.update({"commence_time": matchTimestampStr})
+                except ValueError as ve:
+                    logging.error(f"Failed to parse commence_time for event {event_id}: {ve}")
+                    continue
 
             home_team_score, away_team_score = None, None
             if event.get("scores") is not None and len(event.get("scores")) > 0:
