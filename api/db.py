@@ -566,6 +566,29 @@ def insert_match_oddsapi(match_id, event, sport_type, home_team_score, away_team
         c.close()
         conn.close()
 
+def get_match_oddsapi_by_id(match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT *
+            FROM matches_oddsapi
+            LEFT JOIN matches_lookup ON matches_oddsapi.oddsapiMatchId = matches_lookup.oddsapiMatchId
+            WHERE matches_lookup.matchId = %s
+        """
+        cursor.execute(query, (match_id,))
+        match_oddsapi = cursor.fetchone()
+
+        return match_oddsapi
+
+    except Exception as e:
+        logging.error("Failed to retrieve match from matches_oddsapi from the MySQL database", exc_info=True)
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
     try:
         conn = get_db_conn()
