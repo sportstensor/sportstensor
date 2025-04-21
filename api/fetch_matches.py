@@ -259,11 +259,12 @@ def fetch_and_store_events_oddsapi():
                 is_complete = 1
             
             sport_key = event.get("sport_key", "").lower()
-            sport_type = ODDSAPI_SPORTS_TYPES.get(
-                sport_key, {}).get('sport_id', 0)
-            if not sport_type:
-                # If sport_type is not found in the mapping, default to 0
-                sport_type = 0
+            
+            sport_type = 0
+            for sport in filtered_sports_types:
+                if sport['sport_key'] == sport_key:
+                    sport_type = sport['sport_id']
+                    break
             
             if isinstance(event.get("commence_time"), (int, float)) or event.get("commence_time").isdigit():
                 # Handle Unix timestamp (seconds since epoch)
