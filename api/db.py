@@ -64,18 +64,19 @@ GET_MATCH_QUERY = """
             m.awayTeamName,
             m.sport,
             CASE
-                WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
-                ELSE m.homeTeamScore 
+                WHEN m.isComplete = 1 THEN COALESCE(moa.homeTeamScore, m.homeTeamScore, 0)
+                ELSE COALESCE(moa.homeTeamScore, m.homeTeamScore)
             END AS homeTeamScore,
             CASE 
-                WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
-                ELSE m.awayTeamScore 
+                WHEN m.isComplete = 1 THEN COALESCE(moa.awayTeamScore, m.awayTeamScore, 0)
+                ELSE COALESCE(moa.awayTeamScore, m.awayTeamScore)
             END AS awayTeamScore,
             m.matchLeague,
             m.isComplete,
             ml.oddsapiMatchId
         FROM matches m
         LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+        LEFT JOIN matches_oddsapi moa ON ml.oddsapiMatchId = moa.oddsapiMatchId
     ) mlo
     LEFT JOIN match_odds mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.lastUpdated = (
         SELECT lastUpdated
