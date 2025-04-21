@@ -157,11 +157,37 @@ def fetch_and_store_events():
                 new_match = True
 
             status = event.get("strStatus")
-            is_complete = (
+            # Initial assessment of completion status from this data source
+            initial_is_complete = (
                 0
                 if status in ("Not Started", "NS")
                 else 1 if status in ("Match Finished", "FT", "After Over Time", "AOT") else 0
             )
+            
+            # Only do the cross-check with oddsapi if this isn't a new match
+            final_is_complete = initial_is_complete
+            if not new_match and initial_is_complete == 1:
+                # Get the match data from oddsapi
+                oddsapi_match = db.get_match_oddsapi_by_id(match_id)
+                
+                if oddsapi_match:
+                    # Check if both sources agree the match is complete
+                    if oddsapi_match.get("isComplete") != 1:
+                        final_is_complete = 0  # If oddsapi doesn't think it's complete, don't mark it complete
+                    else:
+                        # Check if scores match between the two sources
+                        sportsdb_home_score = event.get("intHomeScore")
+                        sportsdb_away_score = event.get("intAwayScore")
+                        oddsapi_home_score = oddsapi_match.get("homeTeamScore")
+                        oddsapi_away_score = oddsapi_match.get("awayTeamScore")
+                        
+                        # If either source has NULL scores or scores don't match, don't mark as complete
+                        if (sportsdb_home_score is None or oddsapi_home_score is None or
+                            sportsdb_away_score is None or oddsapi_away_score is None or
+                            int(sportsdb_home_score) != int(oddsapi_home_score) or
+                            int(sportsdb_away_score) != int(oddsapi_away_score)):
+                            final_is_complete = 0
+            
             sport_type = sport_mapping.get(
                 event.get("strSport").upper(), 0
             )  # Default to 0 if sport is unknown
@@ -172,8 +198,9 @@ def fetch_and_store_events():
                 matchTimestampStr = matchTimestamp.strftime("%Y-%m-%d %H:%M:%S")
                 event.update({"strTimestamp": matchTimestampStr})
 
+            # Use the final_is_complete value that considers both data sources
             dbresult = db.insert_match(
-                match_id, event, sport_type, is_complete, current_utc_time
+                match_id, event, sport_type, final_is_complete, current_utc_time
             )
             if dbresult and new_match:
                 dbresult2 = db.insert_sportsdb_match_lookup(match_id, event_id)
@@ -225,6 +252,7 @@ def fetch_and_store_events_oddsapi():
         api_url = f"https://api.the-odds-api.com/v4/sports/{type['sport_key']}/scores/"
         params = {
             "apiKey": ODDS_API_KEY,
+            "daysFrom": 1,
         }
         response = requests.get(api_url, params=params)
         if response.status_code == 200:
