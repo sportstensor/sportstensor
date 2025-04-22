@@ -239,7 +239,7 @@ def fetch_and_store_events_oddsapi():
         api_url = f"https://api.the-odds-api.com/v4/sports/{type['sport_key']}/scores/"
         params = {
             "apiKey": ODDS_API_KEY,
-            "daysFrom": 1,
+            "daysFrom": 3,
         }
         response = requests.get(api_url, params=params)
         if response.status_code == 200:
