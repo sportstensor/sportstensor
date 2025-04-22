@@ -166,27 +166,14 @@ def fetch_and_store_events():
             
             # Only do the cross-check with oddsapi if this isn't a new match
             final_is_complete = initial_is_complete
-            if not new_match and initial_is_complete == 1:
+            if not new_match:
                 # Get the match data from oddsapi
                 oddsapi_match = db.get_match_oddsapi_by_id(match_id)
                 
                 if oddsapi_match:
                     # Check if both sources agree the match is complete
-                    if oddsapi_match.get("isComplete") != 1:
-                        final_is_complete = 0  # If oddsapi doesn't think it's complete, don't mark it complete
-                    else:
-                        # Check if scores match between the two sources
-                        sportsdb_home_score = event.get("intHomeScore")
-                        sportsdb_away_score = event.get("intAwayScore")
-                        oddsapi_home_score = oddsapi_match.get("homeTeamScore")
-                        oddsapi_away_score = oddsapi_match.get("awayTeamScore")
-                        
-                        # If either source has NULL scores or scores don't match, don't mark as complete
-                        if (sportsdb_home_score is None or oddsapi_home_score is None or
-                            sportsdb_away_score is None or oddsapi_away_score is None or
-                            int(sportsdb_home_score) != int(oddsapi_home_score) or
-                            int(sportsdb_away_score) != int(oddsapi_away_score)):
-                            final_is_complete = 0
+                    if oddsapi_match.get("isComplete") == 1:
+                        final_is_complete = 1  # If oddsapi says it's complete, let's use it
             
             sport_type = sport_mapping.get(
                 event.get("strSport").upper(), 0
