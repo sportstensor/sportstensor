@@ -165,7 +165,9 @@ def fetch_and_store_events():
             )
             
             # Only do the cross-check with oddsapi if this isn't a new match
-            final_is_complete = initial_is_complete
+            #final_is_complete = initial_is_complete
+            # If oddsapi says match is not complete, don't mark it as such
+            final_is_complete = 0
             if not new_match:
                 # Get the match data from oddsapi
                 oddsapi_match = db.get_match_oddsapi_by_id(match_id)
@@ -232,11 +234,11 @@ def fetch_and_store_events_oddsapi():
     #end_period = current_utc_time + timedelta(hours=48)
 
     filtered_sports_types = [
-        type for type in ODDSAPI_SPORTS_TYPES if type['league'] in active_leagues
+        sports_type for sports_type in ODDSAPI_SPORTS_TYPES if sports_type['league'] in active_leagues
     ]
 
-    for type in filtered_sports_types:
-        api_url = f"https://api.the-odds-api.com/v4/sports/{type['sport_key']}/scores/"
+    for sports_type in filtered_sports_types:
+        api_url = f"https://api.the-odds-api.com/v4/sports/{sports_type['sport_key']}/scores/"
         params = {
             "apiKey": ODDS_API_KEY,
             "daysFrom": 3,
@@ -246,7 +248,7 @@ def fetch_and_store_events_oddsapi():
             data = response.json()
             all_events.extend(data)
         else:
-            logging.error(f"Failed to fetch events for sport {type['sport_key']}:", response.status_code)
+            logging.error(f"Failed to fetch events for sport {sports_type['sport_key']}:", response.status_code)
             return None
 
     if not all_events:
