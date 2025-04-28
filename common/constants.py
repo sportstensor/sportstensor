@@ -97,10 +97,10 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
-    League.MLB: 0.7,
+    League.MLB: 0.75,
     League.NBA: 0.1,
-    League.EPL: 0.15,
-    League.MLS: 0.05,
+    League.EPL: 0.05,
+    League.MLS: 0.10,
     League.NFL: 0.0
 }
 

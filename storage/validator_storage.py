@@ -70,8 +70,8 @@ class ValidatorStorage(ABC):
         raise NotImplemented
     
     @abstractmethod
-    def get_completed_matches_count(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> int:
-        """Gets count of completed matches with predictions since the passed in date."""
+    def get_total_prediction_requests_count(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> int:
+        """Gets total count of prediction requests sent to miners since the passed in date."""
         raise NotImplemented
     
     @abstractmethod

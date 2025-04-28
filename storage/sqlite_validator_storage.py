@@ -779,34 +779,41 @@ class SqliteValidatorStorage(ValidatorStorage):
                 ]
                 return matches
             
-    def get_completed_matches_count(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> int:
-        """Gets count of completed matches with predictions since the passed in date."""
+    def get_total_prediction_requests_count(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> int:
+        """Gets total count of prediction requests sent to miners since the passed in date."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
                 # Convert datetime to string in 'YYYY-MM-DD HH:MM:SS' format
                 dateSince = matchDateSince.strftime("%Y-%m-%d %H:%M:%S")
-
+                
                 cursor = connection.cursor()
                 params = [dateSince]
+                
+                # Count rows where any type of prediction was requested
                 query = """
-                    SELECT COUNT(*) 
-                    FROM Matches
-                    WHERE isComplete = 1
-                    AND (SELECT COUNT(*) FROM MatchPredictions WHERE matchId = Matches.matchId AND isScored = 1 AND isArchived = 0) > 0
-                    AND homeTeamOdds IS NOT NULL
-                    AND awayTeamOdds IS NOT NULL
-                    AND matchDate > ?
+                    SELECT SUM(
+                        CASE WHEN prediction_24_hour THEN 1 ELSE 0 END +
+                        CASE WHEN prediction_12_hour THEN 1 ELSE 0 END +
+                        CASE WHEN prediction_4_hour THEN 1 ELSE 0 END +
+                        CASE WHEN prediction_10_min THEN 1 ELSE 0 END
+                    ) as total_requests
+                    FROM MatchPredictionRequests mpr
+                    JOIN Matches m ON mpr.matchId = m.matchId
+                    WHERE m.matchDate > ?
+                    AND m.homeTeamOdds IS NOT NULL
+                    AND m.awayTeamOdds IS NOT NULL
+                    AND m.isComplete = 1
                     """
                 
                 if league:
-                    query += "AND (league = ? OR league = ?)"
+                    query += "AND (m.league = ? OR m.league = ?)"
                     params.append(league.name)
                     params.append(league.value)
                 
                 cursor.execute(query, params)
                 
                 results = cursor.fetchone()
-                return results[0] if results else 0
+                return results[0] if results and results[0] is not None else 0
             
     def update_match_prediction_request(self, matchId: str, request_time: str):
         """Updates a match prediction request with the status of the request_time."""
