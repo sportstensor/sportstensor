@@ -76,7 +76,7 @@ def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
     closing_odds = pwmd.get_closing_odds_for_predicted_outcome()
 
-    t = 1.0 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
+    t = 0.5 # Controls the spread/width of the Gaussian curve outside the plateau region. Larger t means slower decay in the exponential term
     t2 = 0.10 # Controls the spread/width of the Gaussian curve inside the plateau region. t2 is used on lay predictions
     a = 0.25 # Controls the height of the plateau boundary. More negative a means lower plateau boundary
     b = 0.3 # Controls how quickly the plateau boundary changes with odds. Larger b means faster exponential decay in plateau width
@@ -302,10 +302,8 @@ def apply_no_prediction_response_penalties(
 
     # Query the database for all eligible matches within the last MINER_RELIABILITY_CUTOFF_IN_DAYS days
     match_date_since = dt.datetime.now(timezone.utc) - dt.timedelta(days=MINER_RELIABILITY_CUTOFF_IN_DAYS)
-    completed_matches_count = storage.get_completed_matches_count(matchDateSince=match_date_since, league=league)
-    if completed_matches_count and completed_matches_count > 0:
-        # total possible predictions are the number of matches * 4 (T-24h, T-12h, T-4h, T-10m)
-        total_possible_predictions = completed_matches_count * 4
+    total_possible_predictions = storage.get_total_prediction_requests_count(matchDateSince=match_date_since, league=league)
+    if total_possible_predictions and total_possible_predictions > 0:
         print(f"Checking miner prediction responses for league {league.name} (total possible predictions: {total_possible_predictions})")
         # Check all miners committed to this league
         for uid in league_miner_uids:
