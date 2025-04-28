@@ -64,18 +64,19 @@ GET_MATCH_QUERY = """
             m.awayTeamName,
             m.sport,
             CASE
-                WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
-                ELSE m.homeTeamScore 
+                WHEN m.isComplete = 1 THEN COALESCE(moa.homeTeamScore, m.homeTeamScore, 0)
+                ELSE COALESCE(moa.homeTeamScore, m.homeTeamScore)
             END AS homeTeamScore,
             CASE 
-                WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
-                ELSE m.awayTeamScore 
+                WHEN m.isComplete = 1 THEN COALESCE(moa.awayTeamScore, m.awayTeamScore, 0)
+                ELSE COALESCE(moa.awayTeamScore, m.awayTeamScore)
             END AS awayTeamScore,
             m.matchLeague,
             m.isComplete,
             ml.oddsapiMatchId
         FROM matches m
         LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+        LEFT JOIN matches_oddsapi moa ON ml.oddsapiMatchId = moa.oddsapiMatchId
     ) mlo
     LEFT JOIN match_odds mo ON mlo.oddsapiMatchId = mo.oddsapiMatchId AND mo.lastUpdated = (
         SELECT lastUpdated
@@ -513,6 +514,79 @@ def insert_match(match_id, event, sport_type, is_complete, current_utc_time):
         return False
     finally:
         c.close()
+        conn.close()
+
+def insert_match_oddsapi(match_id, event, sport_type, home_team_score, away_team_score, is_complete, current_utc_time):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO matches_oddsapi (oddsapiMatchId, matchDate, sport, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, sport_title, isComplete, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                matchDate=VALUES(matchDate),
+                sport=VALUES(sport),
+                homeTeamName=VALUES(homeTeamName),
+                awayTeamName=VALUES(awayTeamName),
+                homeTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(homeTeamScore), 0)
+                    ELSE VALUES(homeTeamScore)
+                END,
+                awayTeamScore=CASE 
+                    WHEN VALUES(isComplete) = 1 THEN COALESCE(VALUES(awayTeamScore), 0)
+                    ELSE VALUES(awayTeamScore)
+                END,
+                sport_title=VALUES(sport_title),
+                isComplete=VALUES(isComplete),
+                lastUpdated=VALUES(lastUpdated)
+            """,
+            (
+                match_id,
+                event.get("commence_time"),
+                sport_type,
+                event.get("home_team"),
+                event.get("away_team"),
+                home_team_score,
+                away_team_score,
+                event.get("sport_title"),
+                is_complete,
+                current_utc_time,
+            ),
+        )
+
+        conn.commit()
+        logging.info("Data inserted or updated in database")
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def get_match_oddsapi_by_id(match_id):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT *
+            FROM matches_oddsapi
+            LEFT JOIN matches_lookup ON matches_oddsapi.oddsapiMatchId = matches_lookup.oddsapiMatchId
+            WHERE matches_lookup.matchId = %s
+        """
+        cursor.execute(query, (match_id,))
+        match_oddsapi = cursor.fetchone()
+
+        return match_oddsapi
+
+    except Exception as e:
+        logging.error("Failed to retrieve match from matches_oddsapi from the MySQL database", exc_info=True)
+        return False
+    finally:
+        cursor.close()
         conn.close()
 
 def insert_sportsdb_match_lookup(match_id, sportsdb_match_id):
@@ -1219,6 +1293,21 @@ def create_tables():
         )"""
         )
 
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS matches_oddsapi (
+            oddsapiMatchId VARCHAR(50) PRIMARY KEY,
+            matchDate TIMESTAMP NOT NULL,
+            sport INTEGER NOT NULL,
+            homeTeamName VARCHAR(30) NOT NULL,
+            awayTeamName VARCHAR(30) NOT NULL,
+            homeTeamScore INTEGER,
+            awayTeamScore INTEGER,
+            sport_title VARCHAR(50),
+            isComplete BOOLEAN DEFAULT FALSE,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
         c.execute(
             """
         CREATE TABLE IF NOT EXISTS match_odds (
