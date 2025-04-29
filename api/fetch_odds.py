@@ -352,12 +352,15 @@ def store_match_spread_odds(all_odds, stored_odds, inserting = True):
                 logging.info(f"Inserted spread odds data for {len(match_odds_data)} matches into the match spread odds database")
                 for match_odd in match_odds_data:
                     logging.info(f"Inserted spread odds data {match_odd[1]} (homeTeamSpread: {match_odd[2]}, awayTeamSpread: {match_odd[3]}) into the match spread odds database")
+        
+        """
         if odds_to_store:
             result = db.insert_odds_bulk(odds_to_store)
             if result:
                 logging.info(f"Inserted odds data for {len(odds_to_store)} matches into the odds database")
                 for odds in odds_to_store:
                     logging.info(f"Inserted {odds[0]} odds for a match(homeTeam: {odds[2]}, awayTeam: {odds[3]}) into the odds database")
+        """
     except Exception as e:
         logging.error("Failed inserting spread odds data into the MySQL database", exc_info=True)
 
