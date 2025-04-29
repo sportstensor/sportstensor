@@ -254,7 +254,60 @@ def get_stored_odds(lastUpdated = None):
 
     except Exception as e:
         logging.error(
-            "Failed to retrieve matches from the MySQL database", exc_info=True
+            "Failed to retrieve match odds from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_stored_spread_odds(lastUpdated = None):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        if lastUpdated:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamSpreadOdds, awayTeamSpreadOdds, lastUpdated
+                    FROM match_spread_odds
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_spread_odds
+                        WHERE lastUpdated <= %s
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query, (lastUpdated,))
+            stored_odds = cursor.fetchall()
+        else:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamSpreadOdds, awayTeamSpreadOdds, lastUpdated
+                    FROM match_spread_odds
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_spread_odds
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query)
+            stored_odds = cursor.fetchall()
+
+        return stored_odds
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve match spread odds from the MySQL database", exc_info=True
         )
         return False
     finally:
@@ -437,6 +490,75 @@ def get_live_matches():
     except Exception as e:
         logging.error(
             "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_completed_matches(start_date, end_date=None, league=None, no_spread_odds=False):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT
+                m.matchId,
+                m.matchDate,
+                m.homeTeamName,
+                m.awayTeamName,
+                m.sport,
+                CASE 
+                    WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                    ELSE m.homeTeamScore 
+                END AS homeTeamScore,
+                CASE 
+                    WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                    ELSE m.awayTeamScore 
+                END AS awayTeamScore,
+                m.matchLeague,
+                m.isComplete,
+                ml.oddsapiMatchId
+            FROM matches m
+            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+        """
+
+        if no_spread_odds:
+            query += """
+                LEFT JOIN match_spread_odds mso ON ml.oddsapiMatchId = mso.oddsapiMatchId
+            """
+
+        query += """
+            WHERE m.matchDate >= %s
+            AND m.isComplete = 1
+            AND ml.oddsapiMatchId IS NOT NULL
+        """
+
+        if no_spread_odds:
+            query += """
+                AND mso.oddsapiMatchId IS NULL
+            """
+
+        params = [start_date]
+
+        if end_date:
+            query += " AND m.matchDate <= %s"
+            params.append(end_date)
+
+        if league:
+            query += " AND m.matchLeague = %s"
+            params.append(league)
+
+        cursor.execute(query, params)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve completed matches from the MySQL database", exc_info=True
         )
         return False
     finally:
@@ -689,6 +811,28 @@ def insert_match_odds_bulk(match_data):
 
     except Exception as e:
         logging.error("Failed to insert match odds in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_match_spread_odds_bulk(match_data):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO match_spread_odds (id, oddsapiMatchId, homeTeamSpreadOdds, awayTeamSpreadOdds, pinnacle_bookmaker, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            match_data,
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match spread odds in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -1316,6 +1460,17 @@ def create_tables():
             homeTeamOdds FLOAT,
             awayTeamOdds FLOAT,
             drawOdds FLOAT,
+            pinnacle_bookmaker TINYINT(1) DEFAULT 1,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS match_spread_odds (
+            id VARCHAR(50) PRIMARY KEY,
+            oddsapiMatchId VARCHAR(50) DEFAULT NULL,
+            homeTeamSpreadOdds FLOAT,
+            awayTeamSpreadOdds FLOAT,
             pinnacle_bookmaker TINYINT(1) DEFAULT 1,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
