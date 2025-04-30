@@ -267,6 +267,24 @@ async def main():
         except Exception as e:
             logging.error(f"Error retrieving match odds by match id: {e}")
             raise HTTPException(status_code=500, detail="Internal server error.")
+        
+    @app.get("/teamRecords")
+    async def get_team_records(
+        team_name: Optional[str] = None,
+        league: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        #auth: dict = Depends(authenticate_user),
+    ):
+        try:
+            team_records = db.get_team_records(team_name, league, start_date, end_date)
+            if team_records:
+                return {"records": team_records}
+            else:
+                return {"records": []}
+        except Exception as e:
+            logging.error(f"Error retrieving team records: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error.")
 
     @app.post("/predictionEdgeResults")
     async def upload_prediction_edge_results(
