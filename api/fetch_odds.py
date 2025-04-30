@@ -204,6 +204,10 @@ def get_reduced_spread_odds(all_odds):
                     away_team_odds = round((found_away_team_odds / (1 + avg_pinnacle_vig)) * (1 + vig), 2)
                 """
 
+                if home_team_odds is None or away_team_odds is None:
+                    logging.error(f"Odds for {sport_title} match between {home_team} and {away_team} are not available.")
+                    continue
+
                 # Append the odds directly since they will not be None
                 reduced_odds.append({
                     "api_id": api_id,
