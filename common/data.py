@@ -270,6 +270,7 @@ class MatchPredictionWithMatchData(BaseModel):
     homeTeamOdds: float
     awayTeamOdds: float
     drawOdds: float
+    roi_return: Optional[float] = None
 
     def get_closing_odds_for_predicted_outcome(self) -> Optional[float]:
         """

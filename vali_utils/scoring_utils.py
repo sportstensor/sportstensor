@@ -829,3 +829,12 @@ def update_miner_scores(vali, rewards: np.ndarray, uids: List[int]):
     vali.scores = scattered_rewards
     bt.logging.debug(f"Scattered rewards. self.scores: {vali.scores}")
     bt.logging.debug(f"UIDs: {uids_array}")
+
+def calculate_sharpe_ratio(returns: list) -> float:
+    if len(returns) < 2:
+        return 0.0
+    mean_return = np.mean(returns)
+    std_return = np.std(returns)
+    if std_return == 0:
+        return 0.0
+    return mean_return / std_return

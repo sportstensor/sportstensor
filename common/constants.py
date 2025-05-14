@@ -88,11 +88,11 @@ LEAGUES_ALLOWING_DRAWS = [
 ]
 
 ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
-    League.MLB: 375,
-    League.NBA: 338,
-    League.EPL: 112,
-    League.MLS: 112,
-    League.NFL: 96
+    League.MLB: 1440,
+    League.NBA: 1284,
+    League.EPL: 425,
+    League.MLS: 425,
+    League.NFL: 364
 }
 
 # MUST ADD UP to 1.0 (100%)
@@ -124,7 +124,7 @@ EXTREMIS_BETA = 0.25
 # PARETO_MU is the minimum value for the Pareto distribution
 PARETO_MU = 1.0
 # PARETO_ALPHA is the shape of the Pareto distribution. The lower the ALPHA, the more suppressed the distribution.
-PARETO_ALPHA = 1.2
+PARETO_ALPHA = 1.01
 
 ENABLE_EMISSION_CONTROL = True
 EMISSION_CONTROL_UID = 7
