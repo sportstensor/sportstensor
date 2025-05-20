@@ -20,17 +20,17 @@ logging.basicConfig(
 )
 
 def fetch_historical_tipoff_odds():
-    league = "MLB"
-    start_date = "2025-03-27 00:00:00"
-    end_date = None
+    #league = "MLB"
+    #start_date = "2025-03-27 00:00:00"
+    #end_date = None
 
     #league = "English Premier League"
     #start_date = "2024-08-16 00:00:00"
     #end_date = None
 
-    #league = "NBA"
-    #start_date = "2024-10-21 00:00:00"
-    #end_date = None
+    league = "NBA"
+    start_date = "2024-10-21 00:00:00"
+    end_date = None
 
     #league = "American Major League Soccer"
     #start_date = "2025-02-21 00:00:00"
@@ -120,7 +120,10 @@ def fetch_tipoff_odds():
 
 if __name__ == "__main__":
     #fetch_historical_tipoff_odds()
+    records = db.get_team_records("Milwaukee Bucks", "NBA", "2024-10-21 00:00:00", "2025-04-14 00:00:00")
+    print(records)
     
+    """
     # Schedule the function to run every 15 minutes
     schedule.every(15).minutes.do(fetch_tipoff_odds)
 
@@ -131,3 +134,4 @@ if __name__ == "__main__":
     while True:
         schedule.run_pending()
         time.sleep(1)
+    """
