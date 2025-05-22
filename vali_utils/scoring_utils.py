@@ -408,7 +408,9 @@ def calculate_incentives_and_update_scores(vali):
                 
                 total_score = 0
                 for pwmd in predictions_with_match_data:
-                    log_prediction = random.random() < 0.005
+                    #log_prediction = random.random() < 0.005
+                    # turning off randomly logged prediction info for now.
+                    log_prediction = False
                     if log_prediction:
                         bt.logging.debug(f"Randomly logged prediction for miner {uid} in league {league.name}:")
                         bt.logging.debug(f"  • Number of predictions: {len(predictions_with_match_data)}")
