@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import random
 from pydantic import ValidationError
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 from common.data import (
     Match,
     MatchPrediction,
@@ -692,6 +692,49 @@ class SqliteValidatorStorage(ValidatorStorage):
                     return []
                 
                 return results
+            
+    def get_match_odds_by_batch(self, matchIds: List[str]) -> Dict[str, List[Tuple[str, float, float, float, dt.datetime]]]:
+        """Gets all the match odds for the provided matchIds in a single query."""
+        if not matchIds:
+            return {}
+        
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+                
+                # Create placeholders for IN clause
+                placeholders = ', '.join(['?' for _ in matchIds])
+                
+                query = f"""
+                SELECT matchId, homeTeamOdds, awayTeamOdds, drawOdds, lastUpdated
+                FROM MatchOdds 
+                WHERE matchId IN ({placeholders})
+                ORDER BY matchId, lastUpdated ASC
+                """
+                
+                cursor.execute(query, matchIds)
+                results = cursor.fetchall()
+                
+                if not results:
+                    return {}
+                
+                # Group odds by matchId
+                odds_by_match = {}
+                for row in results:
+                    match_id = row[0]
+                    odds_tuple = (
+                        row[0],  # matchId
+                        row[1],  # homeTeamOdds
+                        row[2],  # awayTeamOdds
+                        row[3],  # drawOdds
+                        row[4]   # lastUpdated
+                    )
+                    
+                    if match_id not in odds_by_match:
+                        odds_by_match[match_id] = []
+                    odds_by_match[match_id].append(odds_tuple)
+                
+                return odds_by_match
 
     def get_matches_to_predict(self, batchsize: Optional[int] = None) -> List[Match]:
         """Gets batchsize number of matches ready to be predicted."""
@@ -1276,6 +1319,144 @@ class SqliteValidatorStorage(ValidatorStorage):
                         bt.logging.error(f"Validation error for row {row}: {e}")
                 
                 return combined_predictions
+            
+    def get_miner_match_predictions_by_batch(
+        self, miner_data: List[tuple[str, int]], league: League=None, scored: bool=True, batch_size: int=None
+    ) -> Optional[Dict[int, List[MatchPredictionWithMatchData]]]:
+        """Gets a dictionary of miner UIDs to a list of predictions made by that miner. Include match data."""
+        if not miner_data:
+            return {}
+
+        with self.lock:
+            with contextlib.closing(self._create_connection()) as connection:
+                cursor = connection.cursor()
+
+                # Create placeholders for the IN clause
+                miner_uid_placeholders = ', '.join(['?' for _ in miner_data])
+                miner_hotkey_placeholders = ', '.join(['?' for _ in miner_data])
+                miner_pair_placeholders = ', '.join(['(?, ?)' for _ in miner_data])
+                
+                # Build the scored conditions to match your original query exactly
+                scored_conditions = ""
+                if scored:
+                    scored_conditions = """
+                        AND mp.isScored = 1
+                        AND mp.closingEdge IS NOT NULL
+                        AND m.isComplete = 1
+                        AND m.homeTeamOdds IS NOT NULL
+                        AND m.awayTeamOdds IS NOT NULL
+                    """
+                else:
+                    scored_conditions = "AND mp.isScored = 0"
+                
+                query = f"""
+                WITH RankedPredictions AS (
+                    SELECT 
+                        mp.predictionId,
+                        mp.minerId,
+                        mp.hotkey,
+                        mp.matchId,
+                        mp.matchDate,
+                        mp.sport,
+                        mp.league,
+                        mp.homeTeamName,
+                        mp.awayTeamName,
+                        mp.homeTeamScore,
+                        mp.awayTeamScore,
+                        mp.isScored,
+                        mp.scoredDate,
+                        mp.lastUpdated,
+                        mp.predictionDate,
+                        mp.probabilityChoice,
+                        mp.probability,
+                        mp.closingEdge,
+                        mp.isArchived,
+                        m.homeTeamScore as actualHomeTeamScore,
+                        m.awayTeamScore as actualAwayTeamScore,
+                        m.homeTeamOdds,
+                        m.awayTeamOdds,
+                        COALESCE(m.drawOdds, 0) as drawOdds,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY mp.minerId, mp.hotkey 
+                            ORDER BY mp.predictionDate DESC
+                        ) as rn
+                    FROM MatchPredictions mp
+                    JOIN Matches m ON (m.matchId = mp.matchId)
+                    WHERE mp.minerId IN ({miner_uid_placeholders})
+                    AND mp.hotkey IN ({miner_hotkey_placeholders})
+                    AND mp.league = ?
+                    AND mp.isArchived = 0
+                    AND (mp.minerId, mp.hotkey) IN ({miner_pair_placeholders})
+                    {scored_conditions}
+                )
+                SELECT * 
+                FROM RankedPredictions 
+                WHERE rn <= ?
+                ORDER BY minerId, predictionDate DESC
+                """
+                
+                # Prepare parameters
+                miner_uids = [uid for uid, hotkey in miner_data]
+                miner_hotkeys = [hotkey for uid, hotkey in miner_data]
+                miner_pairs = [item for uid, hotkey in miner_data for item in (uid, hotkey)]
+                
+                params = (
+                    *miner_uids,           # For miner_uid IN clause
+                    *miner_hotkeys,        # For miner_hotkey IN clause  
+                    league.value,          # For league = ?
+                    *miner_pairs,          # For (miner_uid, miner_hotkey) IN clause
+                    batch_size             # For rn <= ?
+                )
+                
+                cursor.execute(query, params)
+                results = cursor.fetchall()
+                
+                if not results:
+                    return {}
+                
+                # Group by miner_uid - use tuple indexing consistently
+                predictions_by_miner = {}
+                for row in results:
+                    prediction_data = {
+                        "predictionId": row[0],
+                        "minerId": row[1],
+                        "hotkey": row[2],
+                        "matchId": row[3],
+                        "matchDate": row[4],
+                        "sport": row[5],
+                        "league": row[6],
+                        "homeTeamName": row[7],
+                        "awayTeamName": row[8],
+                        "homeTeamScore": row[9],
+                        "awayTeamScore": row[10],
+                        "isScored": row[11],
+                        "scoredDate": row[12],
+                        "lastUpdated": row[13],
+                        "predictionDate": row[14],
+                        "probabilityChoice": row[15],
+                        "probability": round(row[16], 4),
+                        "closingEdge": row[17],
+                        "isArchived": row[18]
+                    }
+                    try:
+                        uid = row[1]  # minerId is at index 1
+                        if uid not in predictions_by_miner:
+                            predictions_by_miner[uid] = []
+
+                        predictions_by_miner[uid].append(
+                            MatchPredictionWithMatchData(
+                                prediction=MatchPrediction(**prediction_data),
+                                actualHomeTeamScore=row[19],  # actualHomeTeamScore
+                                actualAwayTeamScore=row[20],  # actualAwayTeamScore
+                                homeTeamOdds=row[21],         # homeTeamOdds
+                                awayTeamOdds=row[22],         # awayTeamOdds
+                                drawOdds=row[23],             # drawOdds
+                            )
+                        )
+                    except ValidationError as e:
+                        bt.logging.error(f"Validation error for row {row}: {e}")
+                
+                return predictions_by_miner
 
     def read_miner_last_prediction(self, miner_hotkey: str) -> Optional[dt.datetime]:
         """Gets when a specific miner last returned a prediction."""

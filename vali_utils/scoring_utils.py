@@ -24,7 +24,7 @@ from common.constants import (
     MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
     MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
     LEAGUES_ALLOWING_DRAWS,
-    MIN_RHO,
+    LEAGUE_MINIMUM_RHOS,
     MIN_EDGE_SCORE,
     MAX_MIN_EDGE_SCORE,
     ROI_BET_AMOUNT,
@@ -308,8 +308,8 @@ def apply_no_prediction_response_penalties(
         # Check all miners committed to this league
         for uid in league_miner_uids:
             # skip miners that haven't met min rho as they are 0 already anyway
-            if league_rhos[league][uid] < MIN_RHO:
-                print(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {MIN_RHO}. Skipping.")
+            if league_rhos[league][uid] < LEAGUE_MINIMUM_RHOS[league]:
+                print(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {LEAGUE_MINIMUM_RHOS[league]}. Skipping.")
                 continue
             miner_hotkey = metagraph.hotkeys[uid]
             get_miner_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league)
@@ -370,13 +370,31 @@ def calculate_incentives_and_update_scores(vali):
 
         # Get all miners committed to this league within the grace period
         league_miner_uids = []
+        league_miner_data = []
         for uid in all_uids:
             if uid not in vali.uids_to_last_leagues:
                 continue
             if league in vali.uids_to_last_leagues[uid] and vali.uids_to_leagues_last_updated[uid] >= (datetime.now(timezone.utc) - dt.timedelta(seconds=NO_LEAGUE_COMMITMENT_GRACE_PERIOD)):
                 league_miner_uids.append(uid)
+                league_miner_data.append((uid, vali.metagraph.hotkeys[uid]))
             elif league in vali.uids_to_leagues[uid] and vali.uids_to_leagues_last_updated[uid] < (datetime.now(timezone.utc) - dt.timedelta(seconds=NO_LEAGUE_COMMITMENT_GRACE_PERIOD)):
                 bt.logging.info(f"Miner {uid} has not committed to league {league.name} within the grace period. Last updated: {vali.uids_to_leagues_last_updated[uid]}. Miner's predictions will not be considered.")
+
+        # Single query for all miners in this league
+        all_predictions_by_miner = storage.get_miner_match_predictions_by_batch(
+            miner_data=league_miner_data,
+            league=league,
+            scored=True,
+            batch_size=(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
+        )
+
+        # Collect all unique match IDs for this league
+        all_match_ids = set()
+        for uid, predictions in all_predictions_by_miner.items():
+            for pwmd in predictions:
+                all_match_ids.add(pwmd.prediction.matchId)
+        # Bulk load all odds for this league
+        all_match_odds = storage.get_match_odds_by_batch(list(all_match_ids))
 
         for index, uid in enumerate(all_uids):
             total_score, rho = 0, 0
@@ -384,14 +402,8 @@ def calculate_incentives_and_update_scores(vali):
             # Only process miners that are committed to the league
             if uid in league_miner_uids:
                 hotkey = vali.metagraph.hotkeys[uid]
-
-                predictions_with_match_data = storage.get_miner_match_predictions(
-                    miner_hotkey=hotkey,
-                    miner_uid=uid,
-                    league=league,
-                    scored=True,
-                    batchSize=(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
-                )
+                # Get the predictions for this miner from the preloaded all_predictions_by_miner
+                predictions_with_match_data = all_predictions_by_miner.get(uid, [])
 
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
@@ -417,9 +429,9 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"  • League rolling threshold count: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
                         bt.logging.debug(f"  • League rho sensitivity alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}")
                         bt.logging.debug(f"  • Rho: {rho:.4f}")
-
-                    # Grab the match odds from local db
-                    match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
+                    
+                    # Grab the match odds from the preloaded all_match_odds
+                    match_odds = all_match_odds.get(pwmd.prediction.matchId, [])
                     if match_odds is None or len(match_odds) == 0:
                         bt.logging.debug(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                         continue
@@ -591,13 +603,14 @@ def calculate_incentives_and_update_scores(vali):
                     str(round(roi_incr*100, 2)) + "%", 
                     str(round(market_roi_incr*100, 2)) + "%",
                     len(predictions_with_match_data),
-                    round(rho, 4)
+                    str(round(rho, 4)) + "" if rho > LEAGUE_MINIMUM_RHOS[league] else str(round(rho, 4)) + "*",
                 ])
 
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
             bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', '# Predictions', 'Rho'], tablefmt='grid'))
+            bt.logging.info("* indicates rho is below minimum threshold and not eligible for rewards yet\n")
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
@@ -635,7 +648,7 @@ def calculate_incentives_and_update_scores(vali):
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
             ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if r > 0 and e > 0 and rho >= MIN_RHO else 0 # roi and edge must be > 0 and rho must be >= min rho
+            if r > 0 and e > 0 and rho >= LEAGUE_MINIMUM_RHOS[league] else 0 # roi and edge must be > 0 and rho must be >= min rho
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 

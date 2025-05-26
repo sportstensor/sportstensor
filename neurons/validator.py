@@ -208,30 +208,29 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
                 try:
-                    # Check if we're at a 1-hour 0-minute mark. Run this every hour. Overwrites current day's scores.
-                    if minutes == 0 and hour % 1 == 0:
-                        if (
-                            league_scores and len(league_scores) > 0 and
-                            ((self.config.subtensor.network == "test") or 
-                            (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 200_000))
-                        ):
-                            bt.logging.info("Posting league scores to API.")
-                            post_result = utils.post_prediction_edge_results(
-                                self,
-                                self.prediction_edge_results_endpoint,
-                                league_scores,
-                                league_edge_scores,
-                                league_roi_scores,
-                                league_roi_counts,
-                                league_roi_payouts,
-                                league_roi_market_payouts,
-                                league_roi_incr_counts,
-                                league_roi_incr_payouts,
-                                league_roi_incr_market_payouts,
-                                league_pred_counts,
-                                league_pred_win_counts,
-                                all_scores
-                            )
+                    # Post scores to API after scoring. Overwrites current day's scores.
+                    if (
+                        league_scores and len(league_scores) > 0 and
+                        ((self.config.subtensor.network == "test") or 
+                        (self.config.subtensor.network != "test" and self.metagraph.validator_permit[self.uid] and self.metagraph.S[self.uid] >= 200_000))
+                    ):
+                        bt.logging.info("Posting league scores to API.")
+                        post_result = utils.post_prediction_edge_results(
+                            self,
+                            self.prediction_edge_results_endpoint,
+                            league_scores,
+                            league_edge_scores,
+                            league_roi_scores,
+                            league_roi_counts,
+                            league_roi_payouts,
+                            league_roi_market_payouts,
+                            league_roi_incr_counts,
+                            league_roi_incr_payouts,
+                            league_roi_incr_market_payouts,
+                            league_pred_counts,
+                            league_pred_win_counts,
+                            all_scores
+                        )
 
                 except Exception as e:
                     bt.logging.error(f"Error posting league scores to API: {str(e)}")

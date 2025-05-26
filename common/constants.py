@@ -58,7 +58,6 @@ MINER_RELIABILITY_CUTOFF_IN_DAYS = 4
 MAX_GFILTER_FOR_WRONG_PREDICTION = 0.5
 MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION = 1.0
 MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION = 0.75
-MIN_RHO = 0.00901
 MIN_EDGE_SCORE = -20.0
 MAX_MIN_EDGE_SCORE = -20.0
 
@@ -76,7 +75,6 @@ EXACT_MATCH_PREDICTIONS_THRESHOLD = 80
 SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD = 200
 
 ACTIVE_LEAGUES = [
-    League.EPL,
     League.MLS,
     League.NBA,
     League.MLB
@@ -88,29 +86,38 @@ LEAGUES_ALLOWING_DRAWS = [
 ]
 
 ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
-    League.MLB: 1440,
-    League.NBA: 1284,
-    League.EPL: 425,
-    League.MLS: 425,
-    League.NFL: 364
+    League.MLB: 1150,
+    League.NBA: 710,
+    League.EPL: 256,
+    League.MLS: 256,
+    League.NFL: 200
 }
 
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
-    League.MLB: 0.75,
-    League.NBA: 0.1,
-    League.EPL: 0.05,
+    League.MLB: 0.85,
+    League.NBA: 0.05,
+    League.EPL: 0.0,
     League.MLS: 0.10,
     League.NFL: 0.0
 }
 
 # ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the less predictions needed.
 LEAGUE_SENSITIVITY_ALPHAS = {
-    League.MLB: 0.005,
-    League.NBA: 0.006,
-    League.EPL: 0.02,
-    League.MLS: 0.02,
-    League.NFL: 0.1
+    League.MLB: 0.008,
+    League.NBA: 0.013,
+    League.EPL: 0.036,
+    League.MLS: 0.036,
+    League.NFL: 0.046
+}
+
+# Minimum rho controls how many predictions are needed to start getting rewards. Higher the RHO, the less predictions needed.
+LEAGUE_MINIMUM_RHOS = {
+    League.MLB: 0.0065,
+    League.NBA: 0.025,
+    League.EPL: 0.009,
+    League.MLS: 0.009,
+    League.NFL: 0.04
 }
 
 # Single sensitivity alpha depcrecated for league-specific sensitivity alphas
