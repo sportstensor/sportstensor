@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 import datetime as dt
 
 from common.data import League, Match, MatchPrediction, MatchPredictionWithMatchData
@@ -57,6 +57,11 @@ class ValidatorStorage(ABC):
     @abstractmethod
     def get_match_odds(self, matchId: str):
         """Gets all the match odds for the provided matchId."""
+        return NotImplemented
+    
+    @abstractmethod
+    def get_match_odds_by_batch(self, matchIds: List[str]) -> Dict[str, List[Tuple[str, float, float, float, dt.datetime]]]:
+        """Gets all the match odds for the provided matchIds in a single query."""
         return NotImplemented
 
     @abstractmethod
@@ -127,6 +132,11 @@ class ValidatorStorage(ABC):
     @abstractmethod
     def get_miner_match_predictions(self, miner_hotkey: str, miner_uid: int, league: League=None, scored: bool=False, batchSize: int=None) -> Optional[List[MatchPredictionWithMatchData]]:
         """Gets a list of all predictions made by a miner. Include match data."""
+        raise NotImplemented
+    
+    @abstractmethod
+    def get_miner_match_predictions_by_batch(self, miner_data: List[tuple[str, int]], league: League=None, scored: bool=True, batch_size: int=None) -> Optional[Dict[int, List[MatchPredictionWithMatchData]]]:
+        """Gets a dictionary of miner UIDs to a list of predictions made by that miner. Include match data."""
         raise NotImplemented
 
     @abstractmethod

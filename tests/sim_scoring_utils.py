@@ -26,7 +26,7 @@ from common.constants import (
     ROI_BET_AMOUNT,
     ROI_INCR_PRED_COUNT_PERCENTAGE,
     MAX_INCR_ROI_DIFF_PERCENTAGE,
-    MIN_RHO,
+    LEAGUE_MINIMUM_RHOS,
     MIN_EDGE_SCORE,
     MAX_MIN_EDGE_SCORE,
     ROI_SCORING_WEIGHT,
@@ -41,7 +41,8 @@ from common.constants import (
     PARETO_ALPHA
 )
 
-from vali_utils.copycat_controller import CopycatDetectionController
+#from vali_utils.copycat_controller import CopycatDetectionController
+#from vali_utils.copycat_controller_v2 import CopycatDetectionControllerV2
 
 from vali_utils.scoring_utils import (
     calculate_edge,
@@ -68,6 +69,10 @@ def calculate_incentives_and_update_scores():
 
     :param vali: Validator, the validator object
     """
+    # Start time tracking
+    start_time = dt.datetime.now()
+    print(f"Started scoring at {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+
     # Initialize our subtensor and metagraph
     NETWORK = None # "test" or None
     NETUID = 41
@@ -82,7 +87,8 @@ def calculate_incentives_and_update_scores():
     #all_uids = metagraph.uids.tolist()[:10]
 
     # Initialize Copycat Detection Controller
-    copycat_controller = CopycatDetectionController()
+    #copycat_controller = CopycatDetectionController()
+    #copycat_controller_v2 = CopycatDetectionControllerV2()
     final_suspicious_miners = set()
     final_copycat_penalties = set()
     final_exact_matches = set()
@@ -113,252 +119,281 @@ def calculate_incentives_and_update_scores():
         print("No UID to League mapping found. Using fallback hardcoded mapping.")
         # Recreating the dictionary with UID to League mapping from the provided data
         uids_to_league = {
+            0: 'MLB',
             3: 'MLB',
-            4: 'NBA',
-            5: 'NBA',
-            6: 'EPL',
-            8: 'MLB',
-            9: 'NBA',
+            4: 'MLB',
+            5: 'MLB',
+            6: 'MLB',
+            8: 'MLS',
+            9: 'MLB',
             10: 'MLB',
             11: 'MLB',
             12: 'MLB',
             13: 'NBA',
-            14: 'NBA',
-            16: 'NBA',
+            14: 'MLB',
+            15: 'MLB',
+            16: 'MLB',
             17: 'MLB',
-            18: 'EPL',
-            19: 'MLS',
+            19: 'MLB',
             20: 'NBA',
-            21: 'NBA',
+            21: 'MLB',
             22: 'MLB',
+            23: 'MLB',
             24: 'MLB',
-            25: 'NBA',
-            26: 'NBA',
-            27: 'EPL',
+            25: 'MLB',
+            26: 'MLB',
+            27: 'MLB',
             28: 'MLB',
-            29: 'NBA',
+            29: 'MLB',
             30: 'MLB',
-            31: 'EPL',
-            32: 'MLS',
-            33: 'NBA',
+            31: 'MLB',
+            32: 'MLB',
+            33: 'MLB',
+            34: 'MLB',
             35: 'NBA',
-            36: 'EPL',
+            36: 'MLB',
             37: 'MLB',
-            38: 'EPL',
+            38: 'MLB',
+            39: 'MLB',
             40: 'MLB',
-            41: 'EPL',
-            42: 'NBA',
-            43: 'NBA',
+            41: 'MLB',
+            42: 'MLB',
             44: 'MLB',
-            45: 'EPL',
-            46: 'EPL',
-            47: 'EPL',
+            45: 'MLB',
+            46: 'MLB',
+            47: 'MLB',
             48: 'MLB',
             49: 'MLB',
             50: 'MLB',
             51: 'MLB',
             52: 'MLB',
             53: 'MLB',
-            54: 'NBA',
-            56: 'NBA',
+            54: 'MLB',
+            56: 'MLB',
             57: 'MLB',
-            58: 'NBA',
-            59: 'NBA',
-            60: 'EPL',
+            58: 'MLB',
+            59: 'MLS',
+            60: 'MLB',
             61: 'MLB',
-            62: 'EPL',
-            63: 'MLS',
-            64: 'MLS',
-            65: 'NBA',
-            66: 'EPL',
+            62: 'MLB',
+            63: 'MLB',
+            64: 'MLB',
+            65: 'MLB',
+            66: 'MLB',
             67: 'MLB',
-            68: 'NBA',
-            69: 'EPL',
+            68: 'MLB',
+            69: 'MLB',
             70: 'MLB',
             71: 'MLS',
             72: 'MLB',
             73: 'MLB',
-            74: 'EPL',
-            75: 'NBA',
-            76: 'EPL',
+            74: 'MLB',
+            75: 'MLB',
+            76: 'MLB',
             77: 'MLB',
-            78: 'EPL',
-            80: 'NBA',
-            82: 'EPL',
-            83: 'NBA',
-            84: 'EPL',
-            85: 'EPL',
-            86: 'NBA',
-            87: 'EPL',
-            88: 'EPL',
-            89: 'NBA',
-            90: 'NBA',
-            91: 'MLS',
-            92: 'NBA',
+            78: 'MLB',
+            79: 'MLB',
+            80: 'MLB',
+            81: 'MLB',
+            82: 'MLB',
+            83: 'MLB',
+            85: 'MLB',
+            86: 'MLB',
+            87: 'MLB',
+            88: 'MLB',
+            89: 'MLB',
+            90: 'MLB',
+            91: 'MLB',
+            92: 'MLB',
             93: 'MLB',
             94: 'MLB',
-            97: 'MLS',
-            98: 'MLS',
-            99: 'NBA',
+            95: 'MLB',
+            97: 'MLB',
+            98: 'MLB',
+            99: 'MLB',
             100: 'MLB',
-            101: 'NBA',
-            102: 'NBA',
-            103: 'EPL',
+            101: 'MLB',
+            102: 'MLB',
+            103: 'MLB',
             104: 'MLB',
             105: 'MLB',
             106: 'NBA',
-            107: 'MLS',
-            108: 'NBA',
+            107: 'MLB',
+            108: 'MLB',
             109: 'MLB',
             110: 'MLB',
-            111: 'MLS',
-            112: 'NBA',
-            113: 'NBA',
-            114: 'NBA',
-            115: 'EPL',
-            116: 'NBA',
-            117: 'NBA',
-            118: 'MLS',
+            111: 'MLB',
+            112: 'MLB',
+            113: 'MLB',
+            114: 'MLB',
+            115: 'MLB',
+            116: 'MLB',
+            117: 'MLB',
+            118: 'MLB',
             119: 'MLB',
             120: 'MLB',
             121: 'MLB',
-            122: 'NBA',
+            122: 'MLB',
             123: 'NBA',
-            124: 'NBA',
-            125: 'NBA',
-            126: 'NBA',
+            124: 'MLB',
+            125: 'MLB',
+            126: 'MLB',
             127: 'MLB',
             128: 'MLB',
             129: 'MLB',
+            130: 'MLB',
             131: 'MLB',
+            132: 'MLB',
             133: 'MLB',
-            134: 'NBA',
+            134: 'MLS',
             135: 'MLB',
-            136: 'NBA',
-            137: 'NBA',
+            136: 'MLB',
+            137: 'MLB',
             138: 'MLB',
-            139: 'NBA',
+            139: 'MLB',
             140: 'NBA',
             141: 'MLB',
             142: 'MLB',
-            143: 'NBA',
+            143: 'MLB',
             144: 'MLS',
-            145: 'NBA',
-            146: 'NBA',
+            145: 'MLB',
+            146: 'MLB',
             147: 'MLB',
-            148: 'NBA',
+            148: 'MLS',
             149: 'MLB',
             150: 'MLB',
-            151: 'EPL',
-            152: 'NBA',
-            153: 'EPL',
-            154: 'NBA',
-            155: 'NBA',
-            156: 'NBA',
-            157: 'NBA',
+            151: 'MLB',
+            152: 'MLB',
+            153: 'MLB',
+            154: 'MLB',
+            155: 'MLB',
+            156: 'MLB',
+            157: 'MLB',
             158: 'MLB',
-            159: 'MLS',
-            160: 'NBA',
+            159: 'MLB',
+            160: 'MLB',
             161: 'MLB',
             162: 'MLB',
             163: 'MLB',
-            165: 'NBA',
+            164: 'MLB',
+            165: 'MLB',
             166: 'MLB',
-            167: 'NBA',
+            167: 'MLB',
             168: 'MLB',
-            169: 'NBA',
+            169: 'MLB',
             170: 'MLB',
             171: 'MLB',
-            172: 'EPL',
-            173: 'NBA',
+            172: 'MLB',
+            173: 'MLB',
             174: 'MLB',
             175: 'MLB',
-            176: 'NBA',
+            176: 'MLB',
             177: 'MLB',
             178: 'MLB',
-            180: 'NBA',
+            179: 'MLB',
+            180: 'MLB',
             181: 'MLB',
             182: 'MLB',
             183: 'MLB',
-            184: 'NBA',
-            185: 'EPL',
+            184: 'MLS',
+            185: 'MLB',
             186: 'MLB',
             187: 'MLB',
-            188: 'NBA',
-            189: 'NBA',
-            190: 'NBA',
+            188: 'MLB',
+            189: 'MLB',
+            190: 'MLB',
             191: 'MLB',
-            192: 'EPL',
+            192: 'MLB',
             193: 'MLB',
             194: 'MLB',
             195: 'MLB',
-            196: 'EPL',
+            196: 'MLB',
             197: 'MLB',
-            198: 'NBA',
-            199: 'EPL',
-            200: 'MLS',
-            202: 'NBA',
-            203: 'NBA',
+            198: 'MLB',
+            199: 'MLB',
+            200: 'MLB',
+            202: 'MLB',
+            203: 'MLB',
             204: 'MLB',
+            205: 'MLB',
             206: 'MLB',
-            207: 'MLS',
-            208: 'NBA',
+            207: 'MLB',
+            208: 'MLB',
             209: 'MLB',
-            211: 'NBA',
-            212: 'NBA',
-            214: 'MLS',
+            211: 'MLB',
+            212: 'MLB',
+            213: 'MLB',
+            214: 'MLB',
             215: 'MLB',
             216: 'MLB',
-            217: 'EPL',
-            218: 'EPL',
-            219: 'NBA',
-            220: 'MLS',
-            221: 'NBA',
+            217: 'MLB',
+            218: 'MLB',
+            219: 'MLB',
+            220: 'MLB',
+            221: 'MLB',
             222: 'MLB',
             223: 'MLB',
             224: 'MLB',
-            225: 'NBA',
-            226: 'NBA',
-            227: 'NBA',
-            230: 'NBA',
-            231: 'NBA',
-            232: 'NBA',
-            234: 'EPL',
-            236: 'NBA',
+            226: 'MLB',
+            227: 'MLB',
+            229: 'MLB',
+            230: 'MLB',
+            231: 'MLB',
+            232: 'MLB',
+            234: 'MLB',
+            236: 'MLB',
             237: 'MLB',
-            238: 'NBA',
-            240: 'NBA',
-            241: 'NBA',
-            242: 'EPL',
+            238: 'MLB',
+            240: 'MLB',
+            241: 'MLB',
+            242: 'MLB',
             243: 'MLB',
-            244: 'EPL',
-            245: 'NBA',
-            246: 'NBA',
+            244: 'MLB',
+            245: 'MLB',
+            246: 'MLB',
             247: 'NBA',
-            248: 'NBA',
+            249: 'MLB',
             250: 'MLB',
             251: 'NBA',
-            252: 'NBA',
-            253: 'NBA',
-            254: 'MLS',
-            255: 'NBA',
+            252: 'MLB',
+            253: 'MLB',
+            254: 'MLB',
+            255: 'MLB',
         }
 
     for league in leagues_to_analyze:
-        print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
+        print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}, Rho Min: {LEAGUE_MINIMUM_RHOS[league]:.4f})")
         league_table_data = []
         predictions_for_copycat_analysis = []
         matches_without_odds = []
 
         # Get all miners committed to this league within the grace period
         league_miner_uids = []
+        league_miner_data = []
         for uid in all_uids:
             if uid not in uids_to_league:
                 continue
             if uids_to_league[uid] == league or uids_to_league[uid] == league.name:
                 league_miner_uids.append(uid)
+                league_miner_data.append((uid, metagraph.hotkeys[uid]))
                 uids_to_last_leagues[uid] = [league]
                 uids_to_leagues_last_updated[uid] = dt.datetime.now(timezone.utc)
+
+        # Single query for all miners in this league
+        all_predictions_by_miner = storage.get_miner_match_predictions_by_batch(
+            miner_data=league_miner_data,
+            league=league,
+            scored=True,
+            batch_size=(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
+        )
+
+        # Collect all unique match IDs for this league
+        all_match_ids = set()
+        for uid, predictions in all_predictions_by_miner.items():
+            for pwmd in predictions:
+                all_match_ids.add(pwmd.prediction.matchId)
+        # Bulk load all odds for this league
+        all_match_odds = storage.get_match_odds_by_batch(list(all_match_ids))
 
         for index, uid in enumerate(all_uids):
             total_score, rho = 0, 0
@@ -367,14 +402,8 @@ def calculate_incentives_and_update_scores():
             # Only process miners that are committed to the league
             if uid in league_miner_uids:
                 hotkey = metagraph.hotkeys[uid]
-
-                predictions_with_match_data = storage.get_miner_match_predictions(
-                    miner_hotkey=hotkey,
-                    miner_uid=uid,
-                    league=league,
-                    scored=True,
-                    batchSize=(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
-                )
+                # Get the predictions for this miner from the preloaded all_predictions_by_miner
+                predictions_with_match_data = all_predictions_by_miner.get(uid, [])
 
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
@@ -401,9 +430,9 @@ def calculate_incentives_and_update_scores():
                         print(f"  • Number of predictions: {len(predictions_with_match_data)}")
                         print(f"  • League rolling threshold count: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}")
                         print(f"  • Rho: {rho:.4f}")
-
-                    # Grab the match odds from local db
-                    match_odds = storage.get_match_odds(matchId=pwmd.prediction.matchId)
+                    
+                    # Grab the match odds from the preloaded all_match_odds
+                    match_odds = all_match_odds.get(pwmd.prediction.matchId, [])
                     if match_odds is None or len(match_odds) == 0:
                         print(f"Odds were not found for matchId {pwmd.prediction.matchId}. Skipping calculation of this prediction.")
                         continue
@@ -587,6 +616,7 @@ def calculate_incentives_and_update_scores():
             
             roi_incr = roi
             market_roi_incr = market_roi
+            roi_incr_diff = 0
             max_possible_roi_incr = 0
             # Calculate incremental ROI score for miner and market. Penalize if too similar.
             if league_roi_incr_counts[league][index] == round(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0) and final_roi_score > 0:
@@ -619,11 +649,12 @@ def calculate_incentives_and_update_scores():
                     str(round(roi*100, 2)) + "%", 
                     str(round(market_roi*100, 2)) + "%", 
                     str(round(roi_diff*100, 2)) + "%", 
-                    str(round(roi_incr*100, 2)) + "%", 
+                    str(round(roi_incr*100, 2)) + "%",
                     str(round(market_roi_incr*100, 2)) + "%",
+                    str(round(abs(roi_incr_diff)*100, 2)) + "%",
                     str(round(max_possible_roi_incr*100, 2)) + "%",
                     len(predictions_with_match_data),
-                    round(rho, 4), 
+                    str(round(rho, 4)) + "" if rho > LEAGUE_MINIMUM_RHOS[league] else str(round(rho, 4)) + "*",
                     str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), 
                     total_underdog_preds, 
                     round(raw_edge, 4)
@@ -638,7 +669,8 @@ def calculate_incentives_and_update_scores():
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print(tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'Max ROI Incr', '# Preds', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
+            print(tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'ROI Incr Diff', 'Max ROI Incr', '# Preds', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
+            print("* indicates rho is below minimum threshold and not eligible for rewards yet\n")
         else:
             print(f"No non-zero scores for {league.name}")
 
@@ -685,7 +717,7 @@ def calculate_incentives_and_update_scores():
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
             ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if r > 0 and e > 0 and rho >= MIN_RHO else 0 # roi and edge must be > 0 and rho must be >= min rho
+            if r > 0 and e > 0 and rho >= LEAGUE_MINIMUM_RHOS[league] else 0 # roi and edge must be > 0 and rho must be >= min rho
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
@@ -713,21 +745,23 @@ def calculate_incentives_and_update_scores():
         ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
         ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
         #suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
-        suspicious_miners, penalties, exact_matches = [], [], []
+        #suspicious_miners, penalties, exact_matches = [], [], []
+        #suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis)
+        suspicious_miners, penalties = [], []
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
 
-        print(f"\nTotal miners with exact matches in {league.name}: {len(exact_matches)}")
-        print(f"Miners: {', '.join(str(m) for m in sorted(exact_matches))}")
+        #print(f"\nTotal miners with exact matches in {league.name}: {len(exact_matches)}")
+        #print(f"Miners: {', '.join(str(m) for m in sorted(exact_matches))}")
         
         print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
         print(f"==============================================================================")
         final_suspicious_miners.update(suspicious_miners)
         final_copycat_penalties.update(penalties)
-        final_exact_matches.update(exact_matches)
+        #final_exact_matches.update(exact_matches)
 
     # Log final copycat results
     print(f"********************* Copycat Controller Findings  *********************")
@@ -748,9 +782,9 @@ def calculate_incentives_and_update_scores():
     if len(final_suspicious_miners) > 0:
         print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")
 
-    print(f"\nTotal miners with exact matches across all leagues: {len(final_exact_matches)}")
-    if len(final_exact_matches) > 0:
-        print(f"Miners: {', '.join(str(m) for m in sorted(final_exact_matches))}")
+    #print(f"\nTotal miners with exact matches across all leagues: {len(final_exact_matches)}")
+    #if len(final_exact_matches) > 0:
+        #print(f"Miners: {', '.join(str(m) for m in sorted(final_exact_matches))}")
 
     print(f"\nTotal miners to penalize across all leagues: {len(final_copycat_penalties)}")
     if len(final_copycat_penalties) > 0:
@@ -912,6 +946,11 @@ def calculate_incentives_and_update_scores():
         print(f"Lowest non-zero score: {min(non_zero_scores):.6f}")
     else:
         print("\nNo non-zero scores recorded.")
+
+    # End time tracking
+    end_time = dt.datetime.now()
+    print(f"\nEnded scoring at: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Total time taken for scoring: {(end_time - start_time).total_seconds() / 60:.2f} minutes")
 
     # Generate graph of Pre-Pareto vs Final Pareto Scores
     graph_results(all_uids, all_scores, final_scores, uids_to_league)
