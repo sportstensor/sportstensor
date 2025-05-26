@@ -113,11 +113,11 @@ LEAGUE_SENSITIVITY_ALPHAS = {
 
 # Minimum rho controls how many predictions are needed to start getting rewards. Higher the RHO, the less predictions needed.
 LEAGUE_MINIMUM_RHOS = {
-    League.MLB: 0.0065,
-    League.NBA: 0.025,
-    League.EPL: 0.009,
-    League.MLS: 0.009,
-    League.NFL: 0.04
+    League.MLB: 0.00032,
+    League.NBA: 0.00035,
+    League.EPL: 0.000210,
+    League.MLS: 0.000210,
+    League.NFL: 0.00035
 }
 
 # Single sensitivity alpha depcrecated for league-specific sensitivity alphas
