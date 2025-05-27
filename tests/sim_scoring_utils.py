@@ -42,7 +42,7 @@ from common.constants import (
 )
 
 #from vali_utils.copycat_controller import CopycatDetectionController
-#from vali_utils.copycat_controller_v2 import CopycatDetectionControllerV2
+from vali_utils.copycat_controller_v2 import CopycatDetectionControllerV2
 
 from vali_utils.scoring_utils import (
     calculate_edge,
@@ -88,7 +88,7 @@ def calculate_incentives_and_update_scores():
 
     # Initialize Copycat Detection Controller
     #copycat_controller = CopycatDetectionController()
-    #copycat_controller_v2 = CopycatDetectionControllerV2()
+    copycat_controller_v2 = CopycatDetectionControllerV2()
     final_suspicious_miners = set()
     final_copycat_penalties = set()
     final_exact_matches = set()
@@ -746,8 +746,8 @@ def calculate_incentives_and_update_scores():
         ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
         #suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
         #suspicious_miners, penalties, exact_matches = [], [], []
-        #suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis)
-        suspicious_miners, penalties = [], []
+        suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis)
+        #suspicious_miners, penalties = [], []
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
