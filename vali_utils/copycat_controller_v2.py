@@ -15,7 +15,6 @@ from common.constants import (
 class CopycatDetectionControllerV2:
     def __init__(
         self,
-        min_sample_size: int = 100,
         prob_correlation_weight: float = 0.4,
         choice_agreement_weight: float = 0.6,
     ):
@@ -23,13 +22,20 @@ class CopycatDetectionControllerV2:
         Initialize the copycat detection controller.
         
         Args:
-            min_sample_size: Minimum number of shared predictions required for analysis
             prob_correlation_weight: Weight for probability correlation in similarity score
             choice_agreement_weight: Weight for choice agreement in similarity score
         """
-        self.min_sample_size = min_sample_size
         self.prob_correlation_weight = prob_correlation_weight
         self.choice_agreement_weight = choice_agreement_weight
+
+    def _get_min_sample_size_for_league(self, league: League) -> int:
+        return {
+            League.MLB: 150,
+            League.NBA: 120,
+            League.EPL: 75,
+            League.MLS: 75,
+            League.NFL: 75,
+        }.get(league, 100)
 
     def analyze_league(
         self,
@@ -71,7 +77,7 @@ class CopycatDetectionControllerV2:
         bt.logging.info(f"Found predictions for {len(miner_predictions)} unique miners")
 
         # Calculate correlation matrix
-        correlation_matrix = self._calculate_correlation_matrix(miner_predictions, max_sample_size=max_sample_size)
+        correlation_matrix = self._calculate_correlation_matrix(miner_predictions, min_sample_size=self._get_min_sample_size_for_league(league), max_sample_size=max_sample_size)
         bt.logging.info(f"Calculated correlation matrix with {len(correlation_matrix)} miner pairs")
 
         # Generate penalties based on correlation scores
@@ -85,6 +91,7 @@ class CopycatDetectionControllerV2:
     def _calculate_correlation_matrix(
         self,
         miner_predictions: Dict[int, List[MatchPredictionWithMatchData]],
+        min_sample_size: int = 100,
         max_sample_size: int = 100
     ) -> Dict[Tuple[int, int], Dict]:
         """
@@ -110,7 +117,7 @@ class CopycatDetectionControllerV2:
                     miner_predictions[miner_j]
                 )
 
-                if len(shared_predictions) < self.min_sample_size:
+                if len(shared_predictions) < min_sample_size:
                     continue
 
                 # Limit to max sample size
@@ -121,7 +128,7 @@ class CopycatDetectionControllerV2:
                 shared_predictions = sorted(shared_predictions, key=lambda x: x[0].prediction.matchId)
 
                 # Calculate similarity score
-                similarity_score, score_components = self._calculate_similarity_score(shared_predictions)
+                similarity_score, score_components = self._calculate_similarity_score(shared_predictions, min_sample_size=min_sample_size)
 
                 if similarity_score is not None:
                     correlation_matrix[(miner_i, miner_j)] = {
@@ -204,7 +211,8 @@ class CopycatDetectionControllerV2:
 
     def _calculate_similarity_score(
         self,
-        shared_predictions: List[Tuple[MatchPredictionWithMatchData, MatchPredictionWithMatchData]]
+        shared_predictions: List[Tuple[MatchPredictionWithMatchData, MatchPredictionWithMatchData]],
+        min_sample_size: int = 100
     ) -> Tuple[float, Dict[str, float]]:
         """
         Calculate similarity score between two miners based on their shared predictions.
@@ -267,7 +275,7 @@ class CopycatDetectionControllerV2:
             probs_j.append(pred_j.prediction.probability)
             
 
-        if len(probs_i) < self.min_sample_size:
+        if len(probs_i) < min_sample_size:
             return None, None
 
         # Calculate Spearman correlation on probabilities (ranks-based)
