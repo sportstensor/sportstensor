@@ -10,7 +10,7 @@ import random
 
 import bittensor as bt
 from storage.sqlite_validator_storage import get_storage
-from vali_utils.copycat_controller import CopycatDetectionController
+from vali_utils.copycat_controller_v2 import CopycatDetectionControllerV2
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
@@ -19,7 +19,6 @@ from common.constants import (
     MINER_RELIABILITY_CUTOFF_IN_DAYS,
     MIN_MINER_RELIABILITY,
     COPYCAT_PENALTY_SCORE,
-    COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
     MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
@@ -340,10 +339,9 @@ def calculate_incentives_and_update_scores(vali):
     all_uids = vali.metagraph.uids.tolist()
 
     # Initialize Copycat Detection Controller
-    copycat_controller = CopycatDetectionController()
+    copycat_controller_v2 = CopycatDetectionControllerV2()
     final_suspicious_miners = set()
     final_copycat_penalties = set()
-    final_exact_matches = set()
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -409,7 +407,7 @@ def calculate_incentives_and_update_scores(vali):
                     continue  # No predictions for this league, keep score as 0
 
                 # Add eligible predictions to predictions_for_copycat_analysis
-                predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data if p.prediction.predictionDate.replace(tzinfo=timezone.utc) >= COPYCAT_PUNISHMENT_START_DATE])
+                predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data])
 
                 # Calculate rho
                 rho = compute_significance_score(
@@ -669,28 +667,17 @@ def calculate_incentives_and_update_scores(vali):
             print(f"==============================================================================")
 
         # Analyze league for copycat patterns
-        earliest_match_date = min([p.prediction.matchDate for p in predictions_for_copycat_analysis], default=None)
-        pred_matches = []
-        if earliest_match_date is not None:
-            pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
-        ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
-        ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
-        suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
+        suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis, vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league])
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
-
-        print(f"\nTotal miners with exact matches in {league.name}: {len(exact_matches)}")
-        print(f"Miners: {', '.join(str(m) for m in sorted(exact_matches))}")
         
         print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
         print(f"==============================================================================")
         final_suspicious_miners.update(suspicious_miners)
         final_copycat_penalties.update(penalties)
-        final_exact_matches.update(exact_matches)
-
 
     # Update all_scores with weighted sum of league scores for each miner
     bt.logging.info("************ Normalizing and applying penalties and leagues scoring percentages to scores ************")
