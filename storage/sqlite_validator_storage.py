@@ -583,6 +583,8 @@ class SqliteValidatorStorage(ValidatorStorage):
             values.append(
                 [
                     match.matchDate,
+                    match.homeTeamName,
+                    match.awayTeamName,
                     match.homeTeamScore,
                     match.awayTeamScore,
                     match.homeTeamOdds,
@@ -598,7 +600,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 cursor.executemany(
-                    """UPDATE Matches SET matchDate = ?, homeTeamScore = ?, awayTeamScore = ?, homeTeamOdds = ?, awayTeamOdds = ?, drawOdds = ?, isComplete = ?, lastUpdated = ? WHERE matchId = ?""",
+                    """UPDATE Matches SET matchDate = ?, homeTeamName = ?, awayTeamName = ?, homeTeamScore = ?, awayTeamScore = ?, homeTeamOdds = ?, awayTeamOdds = ?, drawOdds = ?, isComplete = ?, lastUpdated = ? WHERE matchId = ?""",
                     values,
                 )
                 connection.commit()
