@@ -8,6 +8,7 @@ from tabulate import tabulate
 from common.data import League, MatchPredictionWithMatchData
 from common.constants import (
     LEAGUES_ALLOWING_DRAWS,
+    LEAGUE_MINIMUM_COPYCAT_PREDICTIONS,
     COPYCAT_CHOICE_AGREEMENT_THRESHOLD,
     COPYCAT_PROB_CORRELATION_THRESHOLD,
 )
@@ -27,15 +28,6 @@ class CopycatDetectionControllerV2:
         """
         self.prob_correlation_weight = prob_correlation_weight
         self.choice_agreement_weight = choice_agreement_weight
-
-    def _get_min_sample_size_for_league(self, league: League) -> int:
-        return {
-            League.MLB: 150,
-            League.NBA: 120,
-            League.EPL: 75,
-            League.MLS: 75,
-            League.NFL: 75,
-        }.get(league, 100)
 
     def analyze_league(
         self,
@@ -77,11 +69,11 @@ class CopycatDetectionControllerV2:
         bt.logging.info(f"Found predictions for {len(miner_predictions)} unique miners")
 
         # Calculate correlation matrix
-        correlation_matrix = self._calculate_correlation_matrix(miner_predictions, min_sample_size=self._get_min_sample_size_for_league(league), max_sample_size=max_sample_size)
+        correlation_matrix = self._calculate_correlation_matrix(miner_predictions, min_sample_size=LEAGUE_MINIMUM_COPYCAT_PREDICTIONS.get(league, 100), max_sample_size=max_sample_size)
         bt.logging.info(f"Calculated correlation matrix with {len(correlation_matrix)} miner pairs")
 
         # Generate penalties based on correlation scores
-        suspicious_miners, miners_to_penalize = self._generate_penalties(correlation_matrix)
+        suspicious_miners, miners_to_penalize = self._generate_penalties(correlation_matrix, league)
 
         # Print analysis results
         self._print_analysis_results(correlation_matrix, suspicious_miners, miners_to_penalize, league)
@@ -246,7 +238,7 @@ class CopycatDetectionControllerV2:
                 no_bet_count += 1
                 continue
 
-            # Skip if market odds are too low (e.g., equal/under our obviousness threshold)
+            # Skip if market odds are too low (e.g., equal/under our obviousness threshold). Inactive for now.
             #if odds <= self.obviousness_threshold:
                 #continue
 
@@ -267,9 +259,9 @@ class CopycatDetectionControllerV2:
                 print(f"Match: {pred_i.prediction.matchId}, Miner {pred_i.prediction.minerId} Prob: {pred_i.prediction.probability} ({pred_i.prediction.probabilityChoice} - {pred_i.prediction.predictionDate}), Miner {pred_j.prediction.minerId} Prob: {pred_j.prediction.probability} ({pred_j.prediction.probabilityChoice} - {pred_j.prediction.predictionDate}){isDiff}")
             """
 
-            # Only compare predictions with same choice
-            #if pred_i.prediction.probabilityChoice != pred_j.prediction.probabilityChoice:
-                #continue
+            # Only compare predictions with same choice for our probability correlation
+            if pred_i.prediction.probabilityChoice != pred_j.prediction.probabilityChoice:
+                continue
                 
             probs_i.append(pred_i.prediction.probability)
             probs_j.append(pred_j.prediction.probability)
@@ -280,6 +272,7 @@ class CopycatDetectionControllerV2:
 
         # Calculate Spearman correlation on probabilities (ranks-based)
         prob_correlation, _ = spearmanr(probs_i, probs_j)
+        prob_correlation_count = len(probs_i)
         
         # Handle NaN correlation (happens when all values are identical)
         if np.isnan(prob_correlation):
@@ -301,6 +294,7 @@ class CopycatDetectionControllerV2:
         # Store score components
         score_components = {
             'prob_correlation': prob_correlation,
+            'prob_correlation_count': prob_correlation_count,
             'choice_agreement': choice_agreement,
             'miner_a_fav_percentage': miner_a_fav_percentage,
             'miner_b_fav_percentage': miner_b_fav_percentage,
@@ -312,7 +306,8 @@ class CopycatDetectionControllerV2:
 
     def _generate_penalties(
         self,
-        correlation_matrix: Dict[Tuple[int, int], Dict]
+        correlation_matrix: Dict[Tuple[int, int], Dict],
+        league: League
     ) -> Tuple[Set[int], Set[int]]:
         """
         Generate penalties based on correlation scores.
@@ -339,8 +334,16 @@ class CopycatDetectionControllerV2:
                 
                 # Penalize if they have a very high percentage of exact choices
                 if components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_THRESHOLD or components['prob_correlation'] >= COPYCAT_PROB_CORRELATION_THRESHOLD:
-                    miners_to_penalize.add(miner_i)
-                    miners_to_penalize.add(miner_j)
+                    # If they have a high probability correlation and low choice agreement, make sure they have enough shared predictions for probability correlation to be valid
+                    if components['prob_correlation'] >= COPYCAT_PROB_CORRELATION_THRESHOLD and \
+                        components['choice_agreement'] < COPYCAT_CHOICE_AGREEMENT_THRESHOLD and \
+                        components['prob_correlation_count'] >= LEAGUE_MINIMUM_COPYCAT_PREDICTIONS.get(league, 100):
+                        miners_to_penalize.add(miner_i)
+                        miners_to_penalize.add(miner_j)
+                    # Always penalize if choice agreement is high
+                    elif components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_THRESHOLD:
+                        miners_to_penalize.add(miner_i)
+                        miners_to_penalize.add(miner_j)
 
         return suspicious_miners, miners_to_penalize
 
@@ -389,12 +392,21 @@ class CopycatDetectionControllerV2:
                     miner_relationships[miner_j].add(miner_i)
 
                     penalty_check = ""
+                    # Penalize if they have a very high percentage of exact choices
                     if components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_THRESHOLD or components['prob_correlation'] >= COPYCAT_PROB_CORRELATION_THRESHOLD:
-                        penalty_check = " ✔"
+                        # If they have a high probability correlation and low choice agreement, make sure they have enough shared predictions for probability correlation to be valid
+                        if components['prob_correlation'] >= COPYCAT_PROB_CORRELATION_THRESHOLD and \
+                            components['choice_agreement'] < COPYCAT_CHOICE_AGREEMENT_THRESHOLD and \
+                            components['prob_correlation_count'] >= LEAGUE_MINIMUM_COPYCAT_PREDICTIONS.get(league, 100):
+                            penalty_check = " ✔"
+                        # Always penalize if choice agreement is high
+                        elif components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_THRESHOLD:
+                            penalty_check = " ✔"
                     
                     table_data.append([
                         f"{miner_i}, {miner_j}",
                         metrics['num_shared_predictions'],
+                        components['prob_correlation_count'],
                         f"{components['prob_correlation']:.3f}",
                         f"{components['choice_agreement']:.3f}",
                         f"{components['miner_a_fav_percentage']:.3f}",
@@ -409,6 +421,7 @@ class CopycatDetectionControllerV2:
                 headers = [
                     "Miner Pair",
                     "Shared Preds",
+                    "Corr Count",
                     "Spearman Corr",
                     "Choice Agree",
                     "Miner A Fav %",

@@ -118,6 +118,15 @@ LEAGUE_MINIMUM_RHOS = {
     League.NFL: 0.00035
 }
 
+# The minimum number of shared predictions a miner pair must have to be considered for copycat analysis.
+LEAGUE_MINIMUM_COPYCAT_PREDICTIONS = {
+    League.MLB: 150,
+    League.NBA: 120,
+    League.EPL: 75,
+    League.MLS: 75,
+    League.NFL: 75,
+}
+
 # Single sensitivity alpha depcrecated for league-specific sensitivity alphas
 SENSITIVITY_ALPHA = 0.025
 # GAMMA controls the time decay of CLV. Higher the GAMMA, the faster the decay.
