@@ -10,6 +10,8 @@ from common.constants import (
     LEAGUES_ALLOWING_DRAWS,
     LEAGUE_MINIMUM_COPYCAT_PREDICTIONS,
     COPYCAT_CHOICE_AGREEMENT_THRESHOLD,
+    COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW,
+    COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH,
     COPYCAT_PROB_CORRELATION_THRESHOLD,
 )
 
@@ -319,7 +321,8 @@ class CopycatDetectionControllerV2:
             Tuple of (suspicious_miners, miners_to_penalize)
         """
         suspicious_miners = set()
-        miners_to_penalize = set()
+        # Dictionary to track miners and how much to penalize them, percentage wise. 1.0 = 100% penalty
+        miners_to_penalize = {}
 
         for (miner_i, miner_j), metrics in correlation_matrix.items():
             components = metrics['score_components']
@@ -338,12 +341,21 @@ class CopycatDetectionControllerV2:
                     if components['prob_correlation'] >= COPYCAT_PROB_CORRELATION_THRESHOLD and \
                         components['choice_agreement'] < COPYCAT_CHOICE_AGREEMENT_THRESHOLD and \
                         components['prob_correlation_count'] >= LEAGUE_MINIMUM_COPYCAT_PREDICTIONS.get(league, 100):
-                        miners_to_penalize.add(miner_i)
-                        miners_to_penalize.add(miner_j)
+                        miners_to_penalize[miner_i] = 1
+                        miners_to_penalize[miner_j] = 1
                     # Always penalize if choice agreement is high
                     elif components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_THRESHOLD:
-                        miners_to_penalize.add(miner_i)
-                        miners_to_penalize.add(miner_j)
+                        miners_to_penalize[miner_i] = 1
+                        miners_to_penalize[miner_j] = 1
+                elif components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW and components['choice_agreement'] < COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH:
+                    # Gradually penalize based on choice agreement gradient
+                    penalty_percentage = (components['choice_agreement'] - COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW) / (COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH - COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW)
+                    # Make sure we don't overwrite existing penalties
+                    miner_i_penalty = max(miners_to_penalize.get(miner_i, 0.0), penalty_percentage)
+                    miner_j_penalty = max(miners_to_penalize.get(miner_j, 0.0), penalty_percentage)
+                    # Add to miners to penalize with the calculated percentage
+                    miners_to_penalize[miner_i] = miner_i_penalty
+                    miners_to_penalize[miner_j] = miner_j_penalty
 
         return suspicious_miners, miners_to_penalize
 
@@ -351,7 +363,7 @@ class CopycatDetectionControllerV2:
         self,
         correlation_matrix: Dict[Tuple[int, int], Dict],
         suspicious_miners: Set[int],
-        miners_to_penalize: Set[int],
+        miners_to_penalize: Dict[int, float],
         league: League
     ) -> None:
         """
@@ -360,7 +372,7 @@ class CopycatDetectionControllerV2:
         Args:
             correlation_matrix: Dictionary mapping miner pairs to correlation metrics
             suspicious_miners: Set of suspicious miner IDs
-            miners_to_penalize: Set of miners to penalize
+            miners_to_penalize: Dict of miners to penalize, with penalty percentages
             league: League being analyzed
         """
         print(f"\nAnalysis Results for {league.name}:")
@@ -370,7 +382,7 @@ class CopycatDetectionControllerV2:
         if correlation_matrix:
             # Show all pairs above similarity threshold
             prob_correlation_threshold = 0.8
-            choice_agreement_threshold = 0.8
+            choice_agreement_threshold = 0.7
 
             print(f"\nMiner pairs with spearman probability correlation score > {prob_correlation_threshold} and/or choice agreement > {choice_agreement_threshold}:")
             sorted_pairs = sorted(
@@ -402,6 +414,8 @@ class CopycatDetectionControllerV2:
                         # Always penalize if choice agreement is high
                         elif components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_THRESHOLD:
                             penalty_check = " ✔"
+                    elif components['choice_agreement'] >= COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW and components['choice_agreement'] < COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH:
+                        penalty_check = " ✔"
                     
                     table_data.append([
                         f"{miner_i}, {miner_j}",

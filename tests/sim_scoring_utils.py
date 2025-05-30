@@ -35,7 +35,6 @@ from common.constants import (
     TRANSITION_KAPPA,
     EXTREMIS_BETA,
     LEAGUE_SCORING_PERCENTAGES,
-    COPYCAT_PENALTY_SCORE,
     PARETO_MU,
     PARETO_ALPHA
 )
@@ -87,7 +86,7 @@ def calculate_incentives_and_update_scores():
     # Initialize Copycat Detection Controller
     copycat_controller_v2 = CopycatDetectionControllerV2()
     final_suspicious_miners = set()
-    final_copycat_penalties = set()
+    final_copycat_penalties = {}
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
@@ -740,16 +739,14 @@ def calculate_incentives_and_update_scores():
 
         # Analyze league for copycat patterns
         suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis, ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league])
-        #suspicious_miners, penalties = [], []
+        #suspicious_miners, penalties = [], {}
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
-
-        #print(f"\nTotal miners with exact matches in {league.name}: {len(exact_matches)}")
-        #print(f"Miners: {', '.join(str(m) for m in sorted(exact_matches))}")
         
         print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
+        # penalties is a dict of {miner_uid: penalty_score}
         print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
         print(f"==============================================================================")
         final_suspicious_miners.update(suspicious_miners)
@@ -763,7 +760,8 @@ def calculate_incentives_and_update_scores():
         uids_for_coldkey = []
         for miner_uid in final_suspicious_miners:
             if metagraph.coldkeys[miner_uid] == coldkey:
-                if miner_uid in final_copycat_penalties:
+                #if miner_uid in final_copycat_penalties:
+                if final_copycat_penalties.get(miner_uid) is not None and final_copycat_penalties[miner_uid] == 1.0:
                     miner_uid = f"{miner_uid} 💀"
                 uids_for_coldkey.append(str(miner_uid))
         if len(uids_for_coldkey) > 0:
@@ -776,7 +774,11 @@ def calculate_incentives_and_update_scores():
 
     print(f"\nTotal miners to penalize across all leagues: {len(final_copycat_penalties)}")
     if len(final_copycat_penalties) > 0:
-        print(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_penalties))}")
+        # Print a table of miners to penalize
+        penalized_table = []
+        for uid, penalty_percentage in final_copycat_penalties.items():
+            penalized_table.append([uid, f"{penalty_percentage*100:.2f}%"])
+        print(tabulate(penalized_table, headers=['UID', 'Penalty %'], tablefmt='grid'))
     print(f"************************************************************************")
 
     # Update all_scores with weighted sum of league scores for each miner
@@ -793,8 +795,9 @@ def calculate_incentives_and_update_scores():
         league_scores[league] = apply_no_prediction_response_penalties(metagraph, league, uids_to_last_leagues, uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
 
         # Apply the copycat penalty to the score -- before normalization
-        for uid in final_copycat_penalties:
-            league_scores[league][uid] = COPYCAT_PENALTY_SCORE
+        for uid, penalty_percentage in final_copycat_penalties.items():
+            score_after_penalty = league_scores[league][uid] * (1 - penalty_percentage)
+            league_scores[league][uid] = score_after_penalty
     
     # Initialize total scores array
     all_scores = [0.0] * len(all_uids)

@@ -18,7 +18,6 @@ from common.constants import (
     NO_LEAGUE_COMMITMENT_GRACE_PERIOD,
     MINER_RELIABILITY_CUTOFF_IN_DAYS,
     MIN_MINER_RELIABILITY,
-    COPYCAT_PENALTY_SCORE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
     MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
@@ -679,6 +678,15 @@ def calculate_incentives_and_update_scores(vali):
         final_suspicious_miners.update(suspicious_miners)
         final_copycat_penalties.update(penalties)
 
+    print(f"\nTotal miners to penalize across all leagues: {len(final_copycat_penalties)}")
+    if len(final_copycat_penalties) > 0:
+        # Print a table of miners to penalize
+        penalized_table = []
+        for uid, penalty_percentage in final_copycat_penalties.items():
+            penalized_table.append([uid, f"{penalty_percentage*100:.2f}%"])
+        print(tabulate(penalized_table, headers=['UID', 'Penalty %'], tablefmt='grid'))
+    print(f"************************************************************************")
+
     # Update all_scores with weighted sum of league scores for each miner
     bt.logging.info("************ Normalizing and applying penalties and leagues scoring percentages to scores ************")
     for league, percentage in vali.LEAGUE_SCORING_PERCENTAGES.items():
@@ -693,8 +701,9 @@ def calculate_incentives_and_update_scores(vali):
         league_scores[league] = apply_no_prediction_response_penalties(vali.metagraph, league, vali.uids_to_last_leagues, vali.uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
 
         # Apply the copycat penalty to the score -- before normalization
-        for uid in final_copycat_penalties:
-            league_scores[league][uid] = COPYCAT_PENALTY_SCORE
+        for uid, penalty_percentage in final_copycat_penalties.items():
+            score_after_penalty = league_scores[league][uid] * (1 - penalty_percentage)
+            league_scores[league][uid] = score_after_penalty
     
     # Initialize total scores array
     all_scores = [0.0] * len(all_uids)
