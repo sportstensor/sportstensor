@@ -39,7 +39,7 @@ from common.constants import (
     PARETO_ALPHA
 )
 
-from vali_utils.copycat_controller_v2 import CopycatDetectionControllerV2
+from vali_utils.prediction_integrity_controller import PredictionIntegrityController
 
 from vali_utils.scoring_utils import (
     calculate_edge,
@@ -83,10 +83,10 @@ def calculate_incentives_and_update_scores():
     all_uids = metagraph.uids.tolist()
     #all_uids = metagraph.uids.tolist()[:10]
 
-    # Initialize Copycat Detection Controller
-    copycat_controller_v2 = CopycatDetectionControllerV2()
+    # Initialize Prediction Integrity Controller
+    prediction_integrity_controller = PredictionIntegrityController()
     final_suspicious_miners = set()
-    final_copycat_penalties = {}
+    final_integrity_penalties = {}
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
@@ -364,7 +364,7 @@ def calculate_incentives_and_update_scores():
     for league in leagues_to_analyze:
         print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}, Rho Min: {LEAGUE_MINIMUM_RHOS[league]:.4f})")
         league_table_data = []
-        predictions_for_copycat_analysis = []
+        predictions_for_integrity_analysis = []
         matches_without_odds = []
 
         # Get all miners committed to this league within the grace period
@@ -408,8 +408,8 @@ def calculate_incentives_and_update_scores():
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
 
-                # Add eligible predictions to predictions_for_copycat_analysis
-                predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data])
+                # Add eligible predictions to predictions_for_integrity_analysis
+                predictions_for_integrity_analysis.extend([p for p in predictions_with_match_data])
 
                 # Calculate rho
                 rho = compute_significance_score(
@@ -737,8 +737,8 @@ def calculate_incentives_and_update_scores():
                 print(f"{mwo[0]} - {mwo[1]}")
             print(f"==============================================================================")
 
-        # Analyze league for copycat patterns
-        suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis, ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league])
+        # Analyze league for prediction integrity
+        suspicious_miners, penalties = prediction_integrity_controller.analyze_league(league, predictions_for_integrity_analysis, ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league])
         #suspicious_miners, penalties = [], {}
         # Print league results
         print(f"\n==============================================================================")
@@ -750,18 +750,18 @@ def calculate_incentives_and_update_scores():
         print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
         print(f"==============================================================================")
         final_suspicious_miners.update(suspicious_miners)
-        final_copycat_penalties.update(penalties)
+        final_integrity_penalties.update(penalties)
 
-    # Log final copycat results
-    print(f"********************* Copycat Controller Findings  *********************")
+    # Log final integrity results
+    print(f"********************* Prediction Integrity Controller Findings  *********************")
     # Get a unique list of coldkeys from metagraph
     coldkeys = list(set(metagraph.coldkeys))
     for coldkey in coldkeys:
         uids_for_coldkey = []
         for miner_uid in final_suspicious_miners:
             if metagraph.coldkeys[miner_uid] == coldkey:
-                #if miner_uid in final_copycat_penalties:
-                if final_copycat_penalties.get(miner_uid) is not None and final_copycat_penalties[miner_uid] == 1.0:
+                #if miner_uid in final_integrity_penalties:
+                if final_integrity_penalties.get(miner_uid) is not None and final_integrity_penalties[miner_uid] == 1.0:
                     miner_uid = f"{miner_uid} 💀"
                 uids_for_coldkey.append(str(miner_uid))
         if len(uids_for_coldkey) > 0:
@@ -772,11 +772,11 @@ def calculate_incentives_and_update_scores():
     if len(final_suspicious_miners) > 0:
         print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")
 
-    print(f"\nTotal miners to penalize across all leagues: {len(final_copycat_penalties)}")
-    if len(final_copycat_penalties) > 0:
+    print(f"\nTotal miners to penalize across all leagues: {len(final_integrity_penalties)}")
+    if len(final_integrity_penalties) > 0:
         # Print a table of miners to penalize
         penalized_table = []
-        for uid, penalty_percentage in final_copycat_penalties.items():
+        for uid, penalty_percentage in final_integrity_penalties.items():
             penalized_table.append([uid, f"{penalty_percentage*100:.2f}%"])
         print(tabulate(penalized_table, headers=['UID', 'Penalty %'], tablefmt='grid'))
     print(f"************************************************************************")
@@ -787,15 +787,15 @@ def calculate_incentives_and_update_scores():
         print(f"  • {league}: {percentage*100}%")
     print("*************************************************************")
 
-    # Apply penalties for copycat miners and no prediction responses
+    # Apply integrity penalties for miners and no prediction responses
     for league in ACTIVE_LEAGUES:
         # Check and penalize miners that are not committed to any active leagues -- before normalization
         #league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
         # Apply penalties for miners that have not responded to prediction requests -- before normalization
         league_scores[league] = apply_no_prediction_response_penalties(metagraph, league, uids_to_last_leagues, uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
 
-        # Apply the copycat penalty to the score -- before normalization
-        for uid, penalty_percentage in final_copycat_penalties.items():
+        # Apply the integrity penalty to the score -- before normalization
+        for uid, penalty_percentage in final_integrity_penalties.items():
             score_after_penalty = league_scores[league][uid] * (1 - penalty_percentage)
             league_scores[league][uid] = score_after_penalty
     

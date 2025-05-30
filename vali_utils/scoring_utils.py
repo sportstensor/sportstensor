@@ -10,7 +10,7 @@ import random
 
 import bittensor as bt
 from storage.sqlite_validator_storage import get_storage
-from vali_utils.copycat_controller_v2 import CopycatDetectionControllerV2
+from vali_utils.prediction_integrity_controller import PredictionIntegrityController
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
@@ -337,10 +337,10 @@ def calculate_incentives_and_update_scores(vali):
     storage = get_storage()
     all_uids = vali.metagraph.uids.tolist()
 
-    # Initialize Copycat Detection Controller
-    copycat_controller_v2 = CopycatDetectionControllerV2()
+    # Initialize Prediction Integrity Controller
+    prediction_integrity_controller = PredictionIntegrityController()
     final_suspicious_miners = set()
-    final_copycat_penalties = set()
+    final_integrity_penalties = set()
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
@@ -362,7 +362,7 @@ def calculate_incentives_and_update_scores(vali):
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name} (Rolling Pred Threshold: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
         league_table_data = []
-        predictions_for_copycat_analysis = []
+        predictions_for_integrity_analysis = []
         matches_without_odds = []
 
         # Get all miners committed to this league within the grace period
@@ -405,8 +405,8 @@ def calculate_incentives_and_update_scores(vali):
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
 
-                # Add eligible predictions to predictions_for_copycat_analysis
-                predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data])
+                # Add eligible predictions to predictions_for_integrity_analysis
+                predictions_for_integrity_analysis.extend([p for p in predictions_with_match_data])
 
                 # Calculate rho
                 rho = compute_significance_score(
@@ -665,8 +665,8 @@ def calculate_incentives_and_update_scores(vali):
                 print(f"{mwo[0]} - {mwo[1]}")
             print(f"==============================================================================")
 
-        # Analyze league for copycat patterns
-        suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis, vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league])
+        # Analyze league for integrity patterns
+        suspicious_miners, penalties = prediction_integrity_controller.analyze_league(league, predictions_for_integrity_analysis, vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league])
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
@@ -676,13 +676,13 @@ def calculate_incentives_and_update_scores(vali):
         print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
         print(f"==============================================================================")
         final_suspicious_miners.update(suspicious_miners)
-        final_copycat_penalties.update(penalties)
+        final_integrity_penalties.update(penalties)
 
-    print(f"\nTotal miners to penalize across all leagues: {len(final_copycat_penalties)}")
-    if len(final_copycat_penalties) > 0:
+    print(f"\nTotal miners to penalize across all leagues: {len(final_integrity_penalties)}")
+    if len(final_integrity_penalties) > 0:
         # Print a table of miners to penalize
         penalized_table = []
-        for uid, penalty_percentage in final_copycat_penalties.items():
+        for uid, penalty_percentage in final_integrity_penalties.items():
             penalized_table.append([uid, f"{penalty_percentage*100:.2f}%"])
         print(tabulate(penalized_table, headers=['UID', 'Penalty %'], tablefmt='grid'))
     print(f"************************************************************************")
@@ -693,15 +693,15 @@ def calculate_incentives_and_update_scores(vali):
         bt.logging.info(f"  • {league}: {percentage*100}%")
     bt.logging.info("*************************************************************")
 
-    # Apply penalties for copycat miners and no prediction responses
+    # Apply penalties for integrity miners and no prediction responses
     for league in vali.ACTIVE_LEAGUES:
         # Check and penalize miners that are not committed to any active leagues -- before normalization
         league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
         # Apply penalties for miners that have not responded to prediction requests -- before normalization
         league_scores[league] = apply_no_prediction_response_penalties(vali.metagraph, league, vali.uids_to_last_leagues, vali.uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
 
-        # Apply the copycat penalty to the score -- before normalization
-        for uid, penalty_percentage in final_copycat_penalties.items():
+        # Apply the integrity penalty to the score -- before normalization
+        for uid, penalty_percentage in final_integrity_penalties.items():
             score_after_penalty = league_scores[league][uid] * (1 - penalty_percentage)
             league_scores[league][uid] = score_after_penalty
     

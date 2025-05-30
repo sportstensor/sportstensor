@@ -113,14 +113,14 @@ LEAGUE_MINIMUM_RHOS = {
     League.NFL: 0.00035
 }
 
-# Copycat punishment constants
-COPYCAT_CHOICE_AGREEMENT_THRESHOLD = 0.9
-COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW = 0.75
-COPYCAT_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH = 0.9
-COPYCAT_PROB_CORRELATION_THRESHOLD = 0.9
+# Prediction integrity punishment constants
+INTEGRITY_CHOICE_AGREEMENT_THRESHOLD = 0.9
+INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW = 0.75
+INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH = 0.9
+INTEGRITY_PROB_CORRELATION_THRESHOLD = 0.9
 
-# The minimum number of shared predictions a miner pair must have to be considered for copycat analysis.
-LEAGUE_MINIMUM_COPYCAT_PREDICTIONS = {
+# The minimum number of shared predictions a miner pair must have to be considered for prediction integrity analysis.
+LEAGUE_MINIMUM_INTEGRITY_PREDICTIONS = {
     League.MLB: 150,
     League.NBA: 120,
     League.EPL: 75,
