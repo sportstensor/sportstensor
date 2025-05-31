@@ -166,6 +166,14 @@ wandb/
 
 SportsTensor.db
 SportsTensorEdge.db
+SportsTensorEdge_preArchive.db
+storage/archives/*
+
+neurons/miner.env
+
+tests/*.csv
+tests/*.txt
+tests/imgs/*
 
 .api-json/
 HOTFIX_*_MARKER_FILE.txt
