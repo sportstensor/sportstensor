@@ -340,7 +340,7 @@ def calculate_incentives_and_update_scores(vali):
     # Initialize Prediction Integrity Controller
     prediction_integrity_controller = PredictionIntegrityController()
     final_suspicious_miners = set()
-    final_integrity_penalties = set()
+    final_integrity_penalties = {}
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}

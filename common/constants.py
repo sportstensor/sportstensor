@@ -115,17 +115,17 @@ LEAGUE_MINIMUM_RHOS = {
 
 # Prediction integrity punishment constants
 INTEGRITY_CHOICE_AGREEMENT_THRESHOLD = 0.9
-INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW = 0.75
+INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW = 0.8
 INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH = 0.9
 INTEGRITY_PROB_CORRELATION_THRESHOLD = 0.9
 
 # The minimum number of shared predictions a miner pair must have to be considered for prediction integrity analysis.
 LEAGUE_MINIMUM_INTEGRITY_PREDICTIONS = {
-    League.MLB: 150,
-    League.NBA: 120,
-    League.EPL: 75,
-    League.MLS: 75,
-    League.NFL: 75,
+    League.MLB: 400,
+    League.NBA: 300,
+    League.EPL: 80,
+    League.MLS: 80,
+    League.NFL: 195,
 }
 
 # Single sensitivity alpha depcrecated for league-specific sensitivity alphas
