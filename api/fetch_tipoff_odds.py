@@ -120,10 +120,9 @@ def fetch_tipoff_odds():
 
 if __name__ == "__main__":
     #fetch_historical_tipoff_odds()
-    records = db.get_team_records("Milwaukee Bucks", "NBA", "2024-10-21 00:00:00", "2025-04-14 00:00:00")
-    print(records)
+    #records = db.get_team_records("Milwaukee Bucks", "NBA", "2024-10-21 00:00:00", "2025-04-14 00:00:00")
+    #print(records)
     
-    """
     # Schedule the function to run every 15 minutes
     schedule.every(15).minutes.do(fetch_tipoff_odds)
 
@@ -134,4 +133,3 @@ if __name__ == "__main__":
     while True:
         schedule.run_pending()
         time.sleep(1)
-    """
