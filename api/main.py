@@ -334,11 +334,12 @@ async def main():
         miner_id: Optional[int] = None,
         league: Optional[str] = None,
         date: Optional[str] = None,
+        end_date: Optional[str] = None,
         include_deregistered: Optional[bool] = None,
         count: Optional[int] = None,
     ):
         try:
-            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey, miner_id, league, date, include_deregistered, count)
+            results = db.get_prediction_edge_results(vali_hotkey, miner_hotkey, miner_id, league, date, end_date, include_deregistered, count)
 
             if results:
                 return {"results": results}

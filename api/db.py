@@ -1306,7 +1306,7 @@ def upload_prediction_edge_results(prediction_results):
         conn.close()
 
 
-def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, league=None, date=None, include_deregistered=False, count=10):
+def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, league=None, date=None, end_date=None, include_deregistered=False, count=10):
     try:
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
@@ -1352,6 +1352,11 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
             params.append(date)
             if not count:
                 count = 1
+
+        if end_date:
+            query += " AND DATE(mpr.lastUpdated) <= %s"
+            end_date = dt.datetime.strptime(end_date, "%Y-%m-%d")
+            params.append(end_date)
 
         query += """
             ORDER BY mpr.lastUpdated DESC
