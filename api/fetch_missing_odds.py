@@ -4,6 +4,7 @@ import logging
 from api.config import ODDS_API_KEY
 import json
 from datetime import timedelta, datetime
+import time
 from collections import defaultdict
 import api.fetch_odds as fo
 
@@ -143,6 +144,7 @@ def fetch_missing_odds():
         api_url = f"https://api.the-odds-api.com/v4/historical/sports/{league_sports_types_mapping.get(league, league)}/odds/"
         start, end = intervals[0]
         fetch_odds(api_url, start, intervals)
+        time.sleep(1)
 
 if __name__ == "__main__":
     fetch_missing_odds()

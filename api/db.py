@@ -254,7 +254,7 @@ def get_stored_odds(lastUpdated = None):
 
     except Exception as e:
         logging.error(
-            "Failed to retrieve matches from the MySQL database", exc_info=True
+            "Failed to retrieve match odds from the MySQL database", exc_info=True
         )
         return False
     finally:
@@ -262,6 +262,241 @@ def get_stored_odds(lastUpdated = None):
             cursor.close()
         if conn is not None:
             conn.close()
+
+def get_stored_spread_odds(lastUpdated = None):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        if lastUpdated:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamSpreadOdds, awayTeamSpreadOdds, lastUpdated
+                    FROM match_spread_odds
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_spread_odds
+                        WHERE lastUpdated <= %s
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query, (lastUpdated,))
+            stored_odds = cursor.fetchall()
+        else:
+            query = """
+                SELECT mo.*, o.homeTeamName, o.awayTeamName, o.commence_time, o.league
+                FROM (
+                    SELECT id, oddsapiMatchId, homeTeamSpreadOdds, awayTeamSpreadOdds, lastUpdated
+                    FROM match_spread_odds
+                    WHERE (oddsapiMatchId, lastUpdated) IN (
+                        SELECT oddsapiMatchId, MAX(lastUpdated)
+                        FROM match_spread_odds
+                        GROUP BY oddsapiMatchId 
+                    )
+                ) mo
+                INNER JOIN odds o
+                ON mo.oddsapiMatchId = o.oddsapiMatchId
+            """
+            cursor.execute(query)
+            stored_odds = cursor.fetchall()
+
+        return stored_odds
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve match spread odds from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_team_records(team_name, league, start_date=None, end_date=None):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        query = """
+            WITH MatchesWithSpread AS (
+                SELECT 
+                    m.*,
+                    mso.homeTeamSpreadOdds,
+                    mso.awayTeamSpreadOdds
+                FROM 
+                    matches m
+                JOIN 
+                    matches_lookup ml ON m.matchId = ml.matchId
+                LEFT JOIN 
+                    match_spread_odds mso ON ml.oddsapiMatchId = mso.oddsapiMatchId
+                WHERE 
+                    m.isComplete = 1
+                    AND m.matchLeague = %s
+                    AND (m.matchLeague != 'MLB' OR (m.matchLeague = 'MLB' AND m.matchDate >= '2025-03-27'))
+            ),
+            TeamMatches AS (
+                SELECT 
+                    m.*,
+                    CASE 
+                        WHEN m.homeTeamName = %s THEN 'home'
+                        WHEN m.awayTeamName = %s THEN 'away'
+                    END AS teamSide,
+                    CASE 
+                        WHEN m.homeTeamName = %s AND m.homeTeamScore > m.awayTeamScore THEN 1
+                        WHEN m.awayTeamName = %s AND m.awayTeamScore > m.homeTeamScore THEN 1
+                        ELSE 0
+                    END AS isWin,
+                    CASE 
+                        WHEN m.homeTeamName = %s AND m.homeTeamScore < m.awayTeamScore THEN 1
+                        WHEN m.awayTeamName = %s AND m.awayTeamScore < m.homeTeamScore THEN 1
+                        ELSE 0
+                    END AS isLoss,
+                    CASE 
+                        WHEN m.homeTeamScore = m.awayTeamScore THEN 1
+                        ELSE 0
+                    END AS isDraw,
+                    CASE 
+                        WHEN m.homeTeamName = %s AND m.homeTeamSpreadOdds < 0 THEN 1
+                        WHEN m.awayTeamName = %s AND m.awayTeamSpreadOdds < 0 THEN 1
+                        ELSE 0
+                    END AS isFavorite,
+                    -- Determine if team covered the spread
+                    CASE
+                        -- When team is home
+                        WHEN m.homeTeamName = %s THEN
+                            CASE
+                                -- Home team is favored (negative spread typically means favorite)
+                                WHEN m.homeTeamSpreadOdds < 0 AND (m.homeTeamScore - m.awayTeamScore) > ABS(m.homeTeamSpreadOdds) THEN 1
+                                -- Home team is underdog (positive spread)
+                                WHEN m.homeTeamSpreadOdds > 0 AND (m.homeTeamScore >= m.awayTeamScore OR (m.awayTeamScore - m.homeTeamScore) < m.homeTeamSpreadOdds) THEN 1
+                                -- Push (team exactly meets the spread)
+                                WHEN m.homeTeamSpreadOdds < 0 AND (m.homeTeamScore - m.awayTeamScore) = ABS(m.homeTeamSpreadOdds) THEN 0.5
+                                WHEN m.homeTeamSpreadOdds > 0 AND (m.awayTeamScore - m.homeTeamScore) = m.homeTeamSpreadOdds THEN 0.5
+                                ELSE 0
+                            END
+                        -- When team is away
+                        WHEN m.awayTeamName = %s THEN
+                            CASE
+                                -- Away team is favored (negative spread)
+                                WHEN m.awayTeamSpreadOdds < 0 AND (m.awayTeamScore - m.homeTeamScore) > ABS(m.awayTeamSpreadOdds) THEN 1
+                                -- Away team is underdog (positive spread)
+                                WHEN m.awayTeamSpreadOdds > 0 AND (m.awayTeamScore >= m.homeTeamScore OR (m.homeTeamScore - m.awayTeamScore) < m.awayTeamSpreadOdds) THEN 1
+                                -- Push (team exactly meets the spread)
+                                WHEN m.awayTeamSpreadOdds < 0 AND (m.awayTeamScore - m.homeTeamScore) = ABS(m.awayTeamSpreadOdds) THEN 0.5
+                                WHEN m.awayTeamSpreadOdds > 0 AND (m.homeTeamScore - m.awayTeamScore) = m.awayTeamSpreadOdds THEN 0.5
+                                ELSE 0
+                            END
+                        ELSE 0
+                    END AS coveredSpread,
+                    -- Determine if team pushed on the spread (exact)
+                    CASE
+                        WHEN m.homeTeamName = %s AND m.homeTeamSpreadOdds < 0 AND (m.homeTeamScore - m.awayTeamScore) = ABS(m.homeTeamSpreadOdds) THEN 1
+                        WHEN m.homeTeamName = %s AND m.homeTeamSpreadOdds > 0 AND (m.awayTeamScore - m.homeTeamScore) = m.homeTeamSpreadOdds THEN 1
+                        WHEN m.awayTeamName = %s AND m.awayTeamSpreadOdds < 0 AND (m.awayTeamScore - m.homeTeamScore) = ABS(m.awayTeamSpreadOdds) THEN 1
+                        WHEN m.awayTeamName = %s AND m.awayTeamSpreadOdds > 0 AND (m.homeTeamScore - m.awayTeamScore) = m.awayTeamSpreadOdds THEN 1
+                        ELSE 0
+                    END AS isPush
+                FROM 
+                    MatchesWithSpread m
+                WHERE 
+                    (m.homeTeamName = %s OR m.awayTeamName = %s)
+                    AND m.homeTeamSpreadOdds IS NOT NULL
+                    AND m.awayTeamSpreadOdds IS NOT NULL
+            )
+            SELECT 
+                %s AS teamName,
+                -- Overall Record
+                SUM(isWin) AS wins,
+                SUM(isLoss) AS losses,
+                SUM(isDraw) AS draws,
+                COUNT(*) AS totalMatches,
+                
+                -- Home Record
+                SUM(CASE WHEN teamSide = 'home' AND isWin = 1 THEN 1 ELSE 0 END) AS homeWins,
+                SUM(CASE WHEN teamSide = 'home' AND isLoss = 1 THEN 1 ELSE 0 END) AS homeLosses,
+                SUM(CASE WHEN teamSide = 'home' AND isDraw = 1 THEN 1 ELSE 0 END) AS homeDraws,
+                SUM(CASE WHEN teamSide = 'home' THEN 1 ELSE 0 END) AS totalHomeMatches,
+                
+                -- Away Record
+                SUM(CASE WHEN teamSide = 'away' AND isWin = 1 THEN 1 ELSE 0 END) AS awayWins,
+                SUM(CASE WHEN teamSide = 'away' AND isLoss = 1 THEN 1 ELSE 0 END) AS awayLosses,
+                SUM(CASE WHEN teamSide = 'away' AND isDraw = 1 THEN 1 ELSE 0 END) AS awayDraws,
+                SUM(CASE WHEN teamSide = 'away' THEN 1 ELSE 0 END) AS totalAwayMatches,
+                
+                -- Favorite Record
+                SUM(CASE WHEN isFavorite = 1 AND isWin = 1 THEN 1 ELSE 0 END) AS favoriteWins,
+                SUM(CASE WHEN isFavorite = 1 AND isLoss = 1 THEN 1 ELSE 0 END) AS favoriteLosses,
+                SUM(CASE WHEN isFavorite = 1 AND isDraw = 1 THEN 1 ELSE 0 END) AS favoriteDraws,
+                SUM(CASE WHEN isFavorite = 1 THEN 1 ELSE 0 END) AS totalFavoriteMatches,
+                
+                -- Underdog Record
+                SUM(CASE WHEN isFavorite = 0 AND isWin = 1 THEN 1 ELSE 0 END) AS underdogWins,
+                SUM(CASE WHEN isFavorite = 0 AND isLoss = 1 THEN 1 ELSE 0 END) AS underdogLosses,
+                SUM(CASE WHEN isFavorite = 0 AND isDraw = 1 THEN 1 ELSE 0 END) AS underdogDraws,
+                SUM(CASE WHEN isFavorite = 0 THEN 1 ELSE 0 END) AS totalUnderdogMatches,
+                
+                -- ATS (Against The Spread) Record
+                SUM(CASE WHEN coveredSpread = 1 THEN 1 ELSE 0 END) AS atsWins,
+                SUM(CASE WHEN coveredSpread = 0 AND isPush = 0 THEN 1 ELSE 0 END) AS atsLosses,
+                SUM(CASE WHEN isPush = 1 THEN 1 ELSE 0 END) AS atsPushes,
+                COUNT(*) AS totalATSMatches,
+                
+                -- Home ATS Record
+                SUM(CASE WHEN teamSide = 'home' AND coveredSpread = 1 THEN 1 ELSE 0 END) AS homeATSWins,
+                SUM(CASE WHEN teamSide = 'home' AND coveredSpread = 0 AND isPush = 0 THEN 1 ELSE 0 END) AS homeATSLosses,
+                SUM(CASE WHEN teamSide = 'home' AND isPush = 1 THEN 1 ELSE 0 END) AS homeATSPushes,
+                SUM(CASE WHEN teamSide = 'home' THEN 1 ELSE 0 END) AS totalHomeATSMatches,
+                
+                -- Away ATS Record
+                SUM(CASE WHEN teamSide = 'away' AND coveredSpread = 1 THEN 1 ELSE 0 END) AS awayATSWins,
+                SUM(CASE WHEN teamSide = 'away' AND coveredSpread = 0 AND isPush = 0 THEN 1 ELSE 0 END) AS awayATSLosses,
+                SUM(CASE WHEN teamSide = 'away' AND isPush = 1 THEN 1 ELSE 0 END) AS awayATSPushes,
+                SUM(CASE WHEN teamSide = 'away' THEN 1 ELSE 0 END) AS totalAwayATSMatches,
+                
+                -- Favorite ATS Record
+                SUM(CASE WHEN isFavorite = 1 AND coveredSpread = 1 THEN 1 ELSE 0 END) AS favoriteATSWins,
+                SUM(CASE WHEN isFavorite = 1 AND coveredSpread = 0 AND isPush = 0 THEN 1 ELSE 0 END) AS favoriteATSLosses,
+                SUM(CASE WHEN isFavorite = 1 AND isPush = 1 THEN 1 ELSE 0 END) AS favoriteATSPushes,
+                SUM(CASE WHEN isFavorite = 1 THEN 1 ELSE 0 END) AS totalFavoriteATSMatches,
+                
+                -- Underdog ATS Record
+                SUM(CASE WHEN isFavorite = 0 AND coveredSpread = 1 THEN 1 ELSE 0 END) AS underdogATSWins,
+                SUM(CASE WHEN isFavorite = 0 AND coveredSpread = 0 AND isPush = 0 THEN 1 ELSE 0 END) AS underdogATSLosses,
+                SUM(CASE WHEN isFavorite = 0 AND isPush = 1 THEN 1 ELSE 0 END) AS underdogATSPushes,
+                SUM(CASE WHEN isFavorite = 0 THEN 1 ELSE 0 END) AS totalUnderdogATSMatches
+            FROM 
+                TeamMatches
+            WHERE 1=1
+        """
+        params = [league, team_name, team_name, team_name, team_name, team_name, team_name, 
+                    team_name, team_name, team_name, team_name, team_name, team_name,
+                    team_name, team_name, team_name, team_name, team_name]
+   
+        if start_date:
+            query += " AND matchDate >= %s"
+            params.append(start_date)
+        if end_date:
+            query += " AND matchDate <= %s"
+            params.append(end_date)
+
+        cursor.execute(query, params)
+        team_records = cursor.fetchone()
+
+        return team_records
+    
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve team records against the spread from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()    
 
 def get_match_odds_by_id(match_id):
     try:
@@ -437,6 +672,75 @@ def get_live_matches():
     except Exception as e:
         logging.error(
             "Failed to retrieve matches from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+def get_completed_matches(start_date, end_date=None, league=None, no_spread_odds=False):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT
+                m.matchId,
+                m.matchDate,
+                m.homeTeamName,
+                m.awayTeamName,
+                m.sport,
+                CASE 
+                    WHEN m.isComplete = 1 THEN COALESCE(m.homeTeamScore, 0)
+                    ELSE m.homeTeamScore 
+                END AS homeTeamScore,
+                CASE 
+                    WHEN m.isComplete = 1 THEN COALESCE(m.awayTeamScore, 0)
+                    ELSE m.awayTeamScore 
+                END AS awayTeamScore,
+                m.matchLeague,
+                m.isComplete,
+                ml.oddsapiMatchId
+            FROM matches m
+            LEFT JOIN matches_lookup ml ON m.matchId = ml.matchId
+        """
+
+        if no_spread_odds:
+            query += """
+                LEFT JOIN match_spread_odds mso ON ml.oddsapiMatchId = mso.oddsapiMatchId
+            """
+
+        query += """
+            WHERE m.matchDate >= %s
+            AND m.isComplete = 1
+            AND ml.oddsapiMatchId IS NOT NULL
+        """
+
+        if no_spread_odds:
+            query += """
+                AND mso.oddsapiMatchId IS NULL
+            """
+
+        params = [start_date]
+
+        if end_date:
+            query += " AND m.matchDate <= %s"
+            params.append(end_date)
+
+        if league:
+            query += " AND m.matchLeague = %s"
+            params.append(league)
+
+        cursor.execute(query, params)
+        matches = cursor.fetchall()
+
+        return matches
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve completed matches from the MySQL database", exc_info=True
         )
         return False
     finally:
@@ -689,6 +993,28 @@ def insert_match_odds_bulk(match_data):
 
     except Exception as e:
         logging.error("Failed to insert match odds in MySQL database", exc_info=True)
+        return False
+    finally:
+        c.close()
+        conn.close()
+
+def insert_match_spread_odds_bulk(match_data):
+    try:
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.executemany(
+            """
+            INSERT IGNORE INTO match_spread_odds (id, oddsapiMatchId, homeTeamSpreadOdds, awayTeamSpreadOdds, pinnacle_bookmaker, lastUpdated) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            match_data,
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logging.error("Failed to insert match spread odds in MySQL database", exc_info=True)
         return False
     finally:
         c.close()
@@ -1316,6 +1642,17 @@ def create_tables():
             homeTeamOdds FLOAT,
             awayTeamOdds FLOAT,
             drawOdds FLOAT,
+            pinnacle_bookmaker TINYINT(1) DEFAULT 1,
+            lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )"""
+        )
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS match_spread_odds (
+            id VARCHAR(50) PRIMARY KEY,
+            oddsapiMatchId VARCHAR(50) DEFAULT NULL,
+            homeTeamSpreadOdds FLOAT,
+            awayTeamSpreadOdds FLOAT,
             pinnacle_bookmaker TINYINT(1) DEFAULT 1,
             lastUpdated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )"""
