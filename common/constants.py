@@ -123,8 +123,8 @@ INTEGRITY_PROB_CORRELATION_THRESHOLD = 0.9
 LEAGUE_MINIMUM_INTEGRITY_PREDICTIONS = {
     League.MLB: 400,
     League.NBA: 300,
-    League.EPL: 80,
-    League.MLS: 80,
+    League.EPL: 100,
+    League.MLS: 100,
     League.NFL: 195,
 }
 
