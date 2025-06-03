@@ -4,6 +4,7 @@ from scipy.stats import spearmanr
 from collections import defaultdict
 import bittensor as bt
 from tabulate import tabulate
+import datetime as dt
 
 from common.data import League, MatchPredictionWithMatchData
 from common.constants import (
@@ -165,6 +166,14 @@ class PredictionIntegrityController:
             if prediction_date is None or match_date is None:
                 return None
                 
+            # Ensure match_date is offset-aware
+            if match_date.tzinfo is None:
+                match_date = match_date.replace(tzinfo=dt.timezone.utc)
+            
+            # Ensure prediction_date is offset-aware
+            if prediction_date.tzinfo is None:
+                prediction_date = prediction_date.replace(tzinfo=dt.timezone.utc)
+            
             # Calculate time difference in minutes (positive = before match)
             time_diff_minutes = (match_date - prediction_date).total_seconds() / 60
             
