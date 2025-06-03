@@ -67,13 +67,6 @@ ROI_INCR_PRED_COUNT_PERCENTAGE = 0.05
 MAX_INCR_ROI_DIFF_PERCENTAGE = 0.10
 ROI_SCORING_WEIGHT = 0.50
 
-# Copycat punishment constants
-COPYCAT_PUNISHMENT_START_DATE = datetime.datetime(2024, 9, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
-COPYCAT_PENALTY_SCORE = 0
-COPYCAT_VARIANCE_THRESHOLD = 0.50
-EXACT_MATCH_PREDICTIONS_THRESHOLD = 80
-SUSPICIOUS_CONSECUTIVE_MATCHES_THRESHOLD = 200
-
 ACTIVE_LEAGUES = [
     League.MLS,
     League.NBA,
@@ -118,6 +111,21 @@ LEAGUE_MINIMUM_RHOS = {
     League.EPL: 0.000210,
     League.MLS: 0.000210,
     League.NFL: 0.00035
+}
+
+# Prediction integrity punishment constants
+INTEGRITY_CHOICE_AGREEMENT_THRESHOLD = 0.9
+INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW = 0.8
+INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_HIGH = 0.9
+INTEGRITY_PROB_CORRELATION_THRESHOLD = 0.9
+
+# The minimum number of shared predictions a miner pair must have to be considered for prediction integrity analysis.
+LEAGUE_MINIMUM_INTEGRITY_PREDICTIONS = {
+    League.MLB: 400,
+    League.NBA: 300,
+    League.EPL: 100,
+    League.MLS: 100,
+    League.NFL: 195,
 }
 
 # Single sensitivity alpha depcrecated for league-specific sensitivity alphas

@@ -13,13 +13,12 @@ from tabulate import tabulate
 import bittensor
 from storage.sqlite_validator_storage import get_storage
 
-from common.data import Match, League, MatchPrediction, MatchPredictionWithMatchData
+from common.data import League
 from common.constants import (
     ACTIVE_LEAGUES,
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     LEAGUE_SENSITIVITY_ALPHAS,
-    COPYCAT_PUNISHMENT_START_DATE,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
     MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
@@ -36,13 +35,11 @@ from common.constants import (
     TRANSITION_KAPPA,
     EXTREMIS_BETA,
     LEAGUE_SCORING_PERCENTAGES,
-    COPYCAT_PENALTY_SCORE,
     PARETO_MU,
     PARETO_ALPHA
 )
 
-#from vali_utils.copycat_controller import CopycatDetectionController
-#from vali_utils.copycat_controller_v2 import CopycatDetectionControllerV2
+from vali_utils.prediction_integrity_controller import PredictionIntegrityController
 
 from vali_utils.scoring_utils import (
     calculate_edge,
@@ -86,12 +83,10 @@ def calculate_incentives_and_update_scores():
     all_uids = metagraph.uids.tolist()
     #all_uids = metagraph.uids.tolist()[:10]
 
-    # Initialize Copycat Detection Controller
-    #copycat_controller = CopycatDetectionController()
-    #copycat_controller_v2 = CopycatDetectionControllerV2()
+    # Initialize Prediction Integrity Controller
+    prediction_integrity_controller = PredictionIntegrityController()
     final_suspicious_miners = set()
-    final_copycat_penalties = set()
-    final_exact_matches = set()
+    final_integrity_penalties = {}
     
     # Initialize league_scores dictionary
     league_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
@@ -123,7 +118,7 @@ def calculate_incentives_and_update_scores():
             3: 'MLB',
             4: 'MLB',
             5: 'MLB',
-            6: 'MLB',
+            6: 'MLS',
             8: 'MLS',
             9: 'MLB',
             10: 'MLB',
@@ -134,6 +129,7 @@ def calculate_incentives_and_update_scores():
             15: 'MLB',
             16: 'MLB',
             17: 'MLB',
+            18: 'MLB',
             19: 'MLB',
             20: 'NBA',
             21: 'MLB',
@@ -151,13 +147,14 @@ def calculate_incentives_and_update_scores():
             33: 'MLB',
             34: 'MLB',
             35: 'NBA',
-            36: 'MLB',
+            36: 'MLS',
             37: 'MLB',
             38: 'MLB',
             39: 'MLB',
             40: 'MLB',
             41: 'MLB',
             42: 'MLB',
+            43: 'MLB',
             44: 'MLB',
             45: 'MLB',
             46: 'MLB',
@@ -180,33 +177,34 @@ def calculate_incentives_and_update_scores():
             64: 'MLB',
             65: 'MLB',
             66: 'MLB',
-            67: 'MLB',
+            67: 'MLS',
             68: 'MLB',
             69: 'MLB',
             70: 'MLB',
             71: 'MLS',
-            72: 'MLB',
+            72: 'MLS',
             73: 'MLB',
             74: 'MLB',
             75: 'MLB',
             76: 'MLB',
-            77: 'MLB',
-            78: 'MLB',
+            77: 'MLS',
+            78: 'MLS',
             79: 'MLB',
             80: 'MLB',
             81: 'MLB',
             82: 'MLB',
             83: 'MLB',
+            84: 'MLB',
             85: 'MLB',
             86: 'MLB',
             87: 'MLB',
-            88: 'MLB',
+            88: 'MLS',
             89: 'MLB',
             90: 'MLB',
             91: 'MLB',
             92: 'MLB',
             93: 'MLB',
-            94: 'MLB',
+            94: 'MLS',
             95: 'MLB',
             97: 'MLB',
             98: 'MLB',
@@ -231,7 +229,7 @@ def calculate_incentives_and_update_scores():
             117: 'MLB',
             118: 'MLB',
             119: 'MLB',
-            120: 'MLB',
+            120: 'MLS',
             121: 'MLB',
             122: 'MLB',
             123: 'NBA',
@@ -244,7 +242,7 @@ def calculate_incentives_and_update_scores():
             130: 'MLB',
             131: 'MLB',
             132: 'MLB',
-            133: 'MLB',
+            133: 'MLS',
             134: 'MLS',
             135: 'MLB',
             136: 'MLB',
@@ -252,7 +250,7 @@ def calculate_incentives_and_update_scores():
             138: 'MLB',
             139: 'MLB',
             140: 'NBA',
-            141: 'MLB',
+            141: 'MLS',
             142: 'MLB',
             143: 'MLB',
             144: 'MLS',
@@ -276,7 +274,7 @@ def calculate_incentives_and_update_scores():
             162: 'MLB',
             163: 'MLB',
             164: 'MLB',
-            165: 'MLB',
+            165: 'MLS',
             166: 'MLB',
             167: 'MLB',
             168: 'MLB',
@@ -285,18 +283,18 @@ def calculate_incentives_and_update_scores():
             171: 'MLB',
             172: 'MLB',
             173: 'MLB',
-            174: 'MLB',
+            174: 'MLS',
             175: 'MLB',
             176: 'MLB',
             177: 'MLB',
-            178: 'MLB',
+            178: 'MLS',
             179: 'MLB',
-            180: 'MLB',
+            180: 'MLS',
             181: 'MLB',
-            182: 'MLB',
+            182: 'MLS',
             183: 'MLB',
             184: 'MLS',
-            185: 'MLB',
+            185: 'MLS',
             186: 'MLB',
             187: 'MLB',
             188: 'MLB',
@@ -304,7 +302,7 @@ def calculate_incentives_and_update_scores():
             190: 'MLB',
             191: 'MLB',
             192: 'MLB',
-            193: 'MLB',
+            193: 'MLS',
             194: 'MLB',
             195: 'MLB',
             196: 'MLB',
@@ -316,7 +314,7 @@ def calculate_incentives_and_update_scores():
             203: 'MLB',
             204: 'MLB',
             205: 'MLB',
-            206: 'MLB',
+            206: 'MLS',
             207: 'MLB',
             208: 'MLB',
             209: 'MLB',
@@ -324,7 +322,7 @@ def calculate_incentives_and_update_scores():
             212: 'MLB',
             213: 'MLB',
             214: 'MLB',
-            215: 'MLB',
+            215: 'MLS',
             216: 'MLB',
             217: 'MLB',
             218: 'MLB',
@@ -334,26 +332,28 @@ def calculate_incentives_and_update_scores():
             222: 'MLB',
             223: 'MLB',
             224: 'MLB',
+            225: 'MLB',
             226: 'MLB',
-            227: 'MLB',
+            227: 'MLS',
             229: 'MLB',
             230: 'MLB',
             231: 'MLB',
             232: 'MLB',
-            234: 'MLB',
+            234: 'MLS',
             236: 'MLB',
             237: 'MLB',
             238: 'MLB',
             240: 'MLB',
             241: 'MLB',
-            242: 'MLB',
+            242: 'MLS',
             243: 'MLB',
             244: 'MLB',
             245: 'MLB',
             246: 'MLB',
             247: 'NBA',
+            248: 'MLB',
             249: 'MLB',
-            250: 'MLB',
+            250: 'MLS',
             251: 'NBA',
             252: 'MLB',
             253: 'MLB',
@@ -364,7 +364,7 @@ def calculate_incentives_and_update_scores():
     for league in leagues_to_analyze:
         print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}, Rho Min: {LEAGUE_MINIMUM_RHOS[league]:.4f})")
         league_table_data = []
-        predictions_for_copycat_analysis = []
+        predictions_for_integrity_analysis = []
         matches_without_odds = []
 
         # Get all miners committed to this league within the grace period
@@ -408,8 +408,8 @@ def calculate_incentives_and_update_scores():
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
 
-                # Add eligible predictions to predictions_for_copycat_analysis
-                predictions_for_copycat_analysis.extend([p for p in predictions_with_match_data if p.prediction.predictionDate.replace(tzinfo=timezone.utc) >= COPYCAT_PUNISHMENT_START_DATE])
+                # Add eligible predictions to predictions_for_integrity_analysis
+                predictions_for_integrity_analysis.extend([p for p in predictions_with_match_data])
 
                 # Calculate rho
                 rho = compute_significance_score(
@@ -737,41 +737,31 @@ def calculate_incentives_and_update_scores():
                 print(f"{mwo[0]} - {mwo[1]}")
             print(f"==============================================================================")
 
-        # Analyze league for copycat patterns
-        earliest_match_date = min([p.prediction.matchDate for p in predictions_for_copycat_analysis], default=None)
-        pred_matches = []
-        if earliest_match_date is not None:
-            pred_matches = storage.get_recently_completed_matches(earliest_match_date, league)
-        ordered_matches = [(match.matchId, match.matchDate) for match in pred_matches]
-        ordered_matches.sort(key=lambda x: x[1])  # Ensure chronological order
-        #suspicious_miners, penalties, exact_matches = copycat_controller.analyze_league(league, predictions_for_copycat_analysis, ordered_matches)
-        #suspicious_miners, penalties, exact_matches = [], [], []
-        #suspicious_miners, penalties = copycat_controller_v2.analyze_league(league, predictions_for_copycat_analysis)
-        suspicious_miners, penalties = [], []
+        # Analyze league for prediction integrity
+        suspicious_miners, penalties = prediction_integrity_controller.analyze_league(league, predictions_for_integrity_analysis, ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league])
+        #suspicious_miners, penalties = [], {}
         # Print league results
         print(f"\n==============================================================================")
         print(f"Total suspicious miners in {league.name}: {len(suspicious_miners)}")
         print(f"Miners: {', '.join(str(m) for m in sorted(suspicious_miners))}")
-
-        #print(f"\nTotal miners with exact matches in {league.name}: {len(exact_matches)}")
-        #print(f"Miners: {', '.join(str(m) for m in sorted(exact_matches))}")
         
         print(f"\nTotal miners to penalize in {league.name}: {len(penalties)}")
+        # penalties is a dict of {miner_uid: penalty_score}
         print(f"Miners: {', '.join(str(m) for m in sorted(penalties))}")
         print(f"==============================================================================")
         final_suspicious_miners.update(suspicious_miners)
-        final_copycat_penalties.update(penalties)
-        #final_exact_matches.update(exact_matches)
+        final_integrity_penalties.update(penalties)
 
-    # Log final copycat results
-    print(f"********************* Copycat Controller Findings  *********************")
+    # Log final integrity results
+    print(f"********************* Prediction Integrity Controller Findings  *********************")
     # Get a unique list of coldkeys from metagraph
     coldkeys = list(set(metagraph.coldkeys))
     for coldkey in coldkeys:
         uids_for_coldkey = []
         for miner_uid in final_suspicious_miners:
             if metagraph.coldkeys[miner_uid] == coldkey:
-                if miner_uid in final_copycat_penalties:
+                #if miner_uid in final_integrity_penalties:
+                if final_integrity_penalties.get(miner_uid) is not None and final_integrity_penalties[miner_uid] == 1.0:
                     miner_uid = f"{miner_uid} 💀"
                 uids_for_coldkey.append(str(miner_uid))
         if len(uids_for_coldkey) > 0:
@@ -782,13 +772,13 @@ def calculate_incentives_and_update_scores():
     if len(final_suspicious_miners) > 0:
         print(f"Miners: {', '.join(str(m) for m in sorted(final_suspicious_miners))}")
 
-    #print(f"\nTotal miners with exact matches across all leagues: {len(final_exact_matches)}")
-    #if len(final_exact_matches) > 0:
-        #print(f"Miners: {', '.join(str(m) for m in sorted(final_exact_matches))}")
-
-    print(f"\nTotal miners to penalize across all leagues: {len(final_copycat_penalties)}")
-    if len(final_copycat_penalties) > 0:
-        print(f"Miners: {', '.join(str(m) for m in sorted(final_copycat_penalties))}")
+    print(f"\nTotal miners to penalize across all leagues: {len(final_integrity_penalties)}")
+    if len(final_integrity_penalties) > 0:
+        # Print a table of miners to penalize
+        penalized_table = []
+        for uid, penalty_percentage in final_integrity_penalties.items():
+            penalized_table.append([uid, f"{penalty_percentage*100:.2f}%"])
+        print(tabulate(penalized_table, headers=['UID', 'Penalty %'], tablefmt='grid'))
     print(f"************************************************************************")
 
     # Update all_scores with weighted sum of league scores for each miner
@@ -797,16 +787,17 @@ def calculate_incentives_and_update_scores():
         print(f"  • {league}: {percentage*100}%")
     print("*************************************************************")
 
-    # Apply penalties for copycat miners and no prediction responses
+    # Apply integrity penalties for miners and no prediction responses
     for league in ACTIVE_LEAGUES:
         # Check and penalize miners that are not committed to any active leagues -- before normalization
         #league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
         # Apply penalties for miners that have not responded to prediction requests -- before normalization
         league_scores[league] = apply_no_prediction_response_penalties(metagraph, league, uids_to_last_leagues, uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
 
-        # Apply the copycat penalty to the score -- before normalization
-        for uid in final_copycat_penalties:
-            league_scores[league][uid] = COPYCAT_PENALTY_SCORE
+        # Apply the integrity penalty to the score -- before normalization
+        for uid, penalty_percentage in final_integrity_penalties.items():
+            score_after_penalty = league_scores[league][uid] * (1 - penalty_percentage)
+            league_scores[league][uid] = score_after_penalty
     
     # Initialize total scores array
     all_scores = [0.0] * len(all_uids)
