@@ -65,11 +65,12 @@ MAX_MIN_EDGE_SCORE = -20.0
 ROI_BET_AMOUNT = 1
 ROI_INCR_PRED_COUNT_PERCENTAGE = 0.05
 MAX_INCR_ROI_DIFF_PERCENTAGE = 0.10
-ROI_SCORING_WEIGHT = 0.50
+MIN_ROI = -0.03
+MIN_ROI_SCORE = 0.05
+ROI_SCORING_WEIGHT = 0.5
 
 ACTIVE_LEAGUES = [
     League.MLS,
-    League.NBA,
     League.MLB
 ]
 
@@ -88,8 +89,8 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
-    League.MLB: 0.85,
-    League.NBA: 0.05,
+    League.MLB: 0.90,
+    League.NBA: 0.0,
     League.EPL: 0.0,
     League.MLS: 0.10,
     League.NFL: 0.0
@@ -121,8 +122,8 @@ INTEGRITY_PROB_CORRELATION_THRESHOLD = 0.9
 
 # The minimum number of shared predictions a miner pair must have to be considered for prediction integrity analysis.
 LEAGUE_MINIMUM_INTEGRITY_PREDICTIONS = {
-    League.MLB: 400,
-    League.NBA: 300,
+    League.MLB: 200,
+    League.NBA: 200,
     League.EPL: 100,
     League.MLS: 100,
     League.NFL: 195,
