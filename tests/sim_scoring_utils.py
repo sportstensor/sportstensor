@@ -2,6 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import itertools
 import numpy as np
+import math
 
 import datetime as dt
 from datetime import timezone
@@ -28,6 +29,8 @@ from common.constants import (
     LEAGUE_MINIMUM_RHOS,
     MIN_EDGE_SCORE,
     MAX_MIN_EDGE_SCORE,
+    MIN_ROI,
+    MIN_ROI_SCORE,
     ROI_SCORING_WEIGHT,
     LEAGUES_ALLOWING_DRAWS,
     SENSITIVITY_ALPHA,
@@ -119,20 +122,20 @@ def calculate_incentives_and_update_scores():
             4: 'MLB',
             5: 'MLB',
             6: 'MLS',
-            8: 'MLS',
+            8: 'MLB',
             9: 'MLB',
-            10: 'MLB',
+            10: 'MLS',
             11: 'MLB',
             12: 'MLB',
-            13: 'NBA',
+            13: 'MLB',
             14: 'MLB',
             15: 'MLB',
             16: 'MLB',
             17: 'MLB',
             18: 'MLB',
-            19: 'MLB',
-            20: 'NBA',
-            21: 'MLB',
+            19: 'MLS',
+            20: 'MLB',
+            21: 'MLS',
             22: 'MLB',
             23: 'MLB',
             24: 'MLB',
@@ -146,14 +149,14 @@ def calculate_incentives_and_update_scores():
             32: 'MLB',
             33: 'MLB',
             34: 'MLB',
-            35: 'NBA',
+            35: 'MLS',
             36: 'MLS',
             37: 'MLB',
             38: 'MLB',
-            39: 'MLB',
+            39: 'MLS',
             40: 'MLB',
             41: 'MLB',
-            42: 'MLB',
+            42: 'MLS',
             43: 'MLB',
             44: 'MLB',
             45: 'MLB',
@@ -169,57 +172,56 @@ def calculate_incentives_and_update_scores():
             56: 'MLB',
             57: 'MLB',
             58: 'MLB',
-            59: 'MLS',
+            59: 'MLB',
             60: 'MLB',
-            61: 'MLB',
+            61: 'MLS',
             62: 'MLB',
             63: 'MLB',
             64: 'MLB',
             65: 'MLB',
             66: 'MLB',
-            67: 'MLS',
+            67: 'MLB',
             68: 'MLB',
             69: 'MLB',
             70: 'MLB',
-            71: 'MLS',
-            72: 'MLS',
+            71: 'MLB',
+            72: 'MLB',
             73: 'MLB',
             74: 'MLB',
             75: 'MLB',
             76: 'MLB',
-            77: 'MLS',
+            77: 'MLB',
             78: 'MLS',
             79: 'MLB',
             80: 'MLB',
             81: 'MLB',
-            82: 'MLB',
+            82: 'MLS',
             83: 'MLB',
             84: 'MLB',
             85: 'MLB',
             86: 'MLB',
             87: 'MLB',
-            88: 'MLS',
-            89: 'MLB',
+            88: 'MLB',
+            89: 'MLS',
             90: 'MLB',
-            91: 'MLB',
+            91: 'MLS',
             92: 'MLB',
             93: 'MLB',
-            94: 'MLS',
+            94: 'MLB',
             95: 'MLB',
             97: 'MLB',
             98: 'MLB',
             99: 'MLB',
-            100: 'MLB',
             101: 'MLB',
             102: 'MLB',
             103: 'MLB',
             104: 'MLB',
             105: 'MLB',
-            106: 'NBA',
+            106: 'MLB',
             107: 'MLB',
             108: 'MLB',
             109: 'MLB',
-            110: 'MLB',
+            110: 'MLS',
             111: 'MLB',
             112: 'MLB',
             113: 'MLB',
@@ -231,10 +233,9 @@ def calculate_incentives_and_update_scores():
             119: 'MLB',
             120: 'MLS',
             121: 'MLB',
-            122: 'MLB',
-            123: 'NBA',
+            122: 'MLS',
+            123: 'MLB',
             124: 'MLB',
-            125: 'MLB',
             126: 'MLB',
             127: 'MLB',
             128: 'MLB',
@@ -242,61 +243,59 @@ def calculate_incentives_and_update_scores():
             130: 'MLB',
             131: 'MLB',
             132: 'MLB',
-            133: 'MLS',
+            133: 'MLB',
             134: 'MLS',
-            135: 'MLB',
-            136: 'MLB',
+            135: 'MLS',
+            136: 'MLS',
             137: 'MLB',
             138: 'MLB',
             139: 'MLB',
-            140: 'NBA',
-            141: 'MLS',
+            140: 'MLB',
+            141: 'MLB',
             142: 'MLB',
             143: 'MLB',
-            144: 'MLS',
+            144: 'MLB',
             145: 'MLB',
             146: 'MLB',
-            147: 'MLB',
-            148: 'MLS',
+            147: 'MLS',
+            148: 'MLB',
             149: 'MLB',
-            150: 'MLB',
+            150: 'MLS',
             151: 'MLB',
             152: 'MLB',
             153: 'MLB',
-            154: 'MLB',
+            154: 'MLS',
             155: 'MLB',
             156: 'MLB',
             157: 'MLB',
             158: 'MLB',
-            159: 'MLB',
+            159: 'MLS',
             160: 'MLB',
-            161: 'MLB',
+            161: 'MLS',
             162: 'MLB',
-            163: 'MLB',
+            163: 'MLS',
             164: 'MLB',
-            165: 'MLS',
+            165: 'MLB',
             166: 'MLB',
-            167: 'MLB',
+            167: 'MLS',
             168: 'MLB',
             169: 'MLB',
-            170: 'MLB',
-            171: 'MLB',
+            171: 'MLS',
             172: 'MLB',
             173: 'MLB',
-            174: 'MLS',
-            175: 'MLB',
+            174: 'MLB',
+            175: 'MLS',
             176: 'MLB',
             177: 'MLB',
-            178: 'MLS',
+            178: 'MLB',
             179: 'MLB',
-            180: 'MLS',
-            181: 'MLB',
-            182: 'MLS',
+            180: 'MLB',
+            181: 'MLS',
+            182: 'MLB',
             183: 'MLB',
-            184: 'MLS',
-            185: 'MLS',
-            186: 'MLB',
-            187: 'MLB',
+            184: 'MLB',
+            185: 'MLB',
+            186: 'MLS',
             188: 'MLB',
             189: 'MLB',
             190: 'MLB',
@@ -304,59 +303,60 @@ def calculate_incentives_and_update_scores():
             192: 'MLB',
             193: 'MLS',
             194: 'MLB',
-            195: 'MLB',
+            195: 'MLS',
             196: 'MLB',
-            197: 'MLB',
+            197: 'MLS',
             198: 'MLB',
             199: 'MLB',
-            200: 'MLB',
+            200: 'MLS',
+            201: 'MLB',
             202: 'MLB',
             203: 'MLB',
             204: 'MLB',
             205: 'MLB',
-            206: 'MLS',
+            206: 'MLB',
             207: 'MLB',
             208: 'MLB',
             209: 'MLB',
-            211: 'MLB',
+            211: 'MLS',
             212: 'MLB',
             213: 'MLB',
             214: 'MLB',
-            215: 'MLS',
+            215: 'MLB',
             216: 'MLB',
             217: 'MLB',
-            218: 'MLB',
+            218: 'MLS',
             219: 'MLB',
             220: 'MLB',
-            221: 'MLB',
+            221: 'MLS',
             222: 'MLB',
             223: 'MLB',
             224: 'MLB',
             225: 'MLB',
             226: 'MLB',
-            227: 'MLS',
-            229: 'MLB',
+            227: 'MLB',
+            229: 'MLS',
             230: 'MLB',
             231: 'MLB',
             232: 'MLB',
-            234: 'MLS',
-            236: 'MLB',
+            234: 'MLB',
+            236: 'MLS',
             237: 'MLB',
-            238: 'MLB',
+            238: 'MLS',
             240: 'MLB',
             241: 'MLB',
-            242: 'MLS',
+            242: 'MLB',
             243: 'MLB',
             244: 'MLB',
-            245: 'MLB',
+            245: 'MLS',
             246: 'MLB',
-            247: 'NBA',
+            247: 'MLB',
             248: 'MLB',
             249: 'MLB',
-            250: 'MLS',
+            250: 'MLB',
             251: 'NBA',
             252: 'MLB',
-            253: 'MLB',
+            253: 'MLS',
             254: 'MLB',
             255: 'MLB',
         }
@@ -598,21 +598,35 @@ def calculate_incentives_and_update_scores():
             market_roi = league_roi_market_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             roi_diff = roi - market_roi
-
+            
             # Base ROI score requires the miner is beating the market
-            final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
+            if roi_diff > 0:
+                if roi < MIN_ROI:
+                    # If ROI is less than the minimum ROI, set final_roi_score to 0.0
+                    print(f"Minimum ROI of {MIN_ROI*100} not met for miner {uid} in league {league.name}: {roi*100:.2f}%")
+                    final_roi_score = 0.0
+                elif roi >= MIN_ROI and roi < 0:
+                    # Normalize ROI to 0-1 scale
+                    normalized_roi = roi / MIN_ROI
+                    # k is a constant to control the steepness of the sigmoid curve
+                    k = 12
+                    # Apply inverted sigmoid function
+                    sigmoid_input = k * (normalized_roi - 0.5)
+                    sigmoid_score = 1 / (1 + math.exp(sigmoid_input))
+                    # Scale to final score
+                    final_roi_score = sigmoid_score * MIN_ROI_SCORE
+                    # Finally, scale the final ROI score by rho
+                    final_roi_score = final_roi_score * rho
+                    print(f"Negative ROI for miner {uid} in league {league.name}: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_roi_score:.4f}")
+                else:
+                    # If market_roi is less than 0, update roi_diff to be distance from 0, or just roi
+                    if market_roi < 0:
+                        roi_diff = roi
 
-            # If ROI is less than 0, but greater than market ROI, penalize the ROI score by distance from 0
-            if roi < 0 and roi_diff > 0:
-                print(f"Penalizing ROI score for miner {uid} in league {league.name} by {roi:.4f} ({final_roi_score * roi:.4f}): {final_roi_score:.4f} -> {final_roi_score + (final_roi_score * roi):.4f}")
-                final_roi_score = final_roi_score + (final_roi_score * roi)
-
-            """
-            # If roi_diff is less than 0, but rho is greater than our threshold and roi is still above 0, give small score. this is for leniency of long-standing miners
-            if roi_diff <= 0 and rho > 0.5 and roi > 0:
-                print(f"Giving leniency to miner {uid} in league {league.name} with rho {rho:.4f} and roi_diff {roi_diff:.4f}: {final_roi_score:.4f} -> {round((roi * rho) * 50, 4):.4f}")
-                final_roi_score = round((roi * rho) * 50, 4)
-            """
+                    # ROI score is miner's difference from market ROI, scaled by rho
+                    final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
+            else:
+                final_roi_score = 0.0
             
             roi_incr = roi
             market_roi_incr = market_roi
@@ -988,14 +1002,22 @@ def graph_results(all_uids, all_scores, final_scores, uids_to_league):
     color_cycle = itertools.cycle(["#FF5733", "#33FF57", "#5733FF", "#FFC300", "#33FFF5"])  # Expandable color list
     league_colors = {league: next(color_cycle) for league in unique_leagues}
 
+    # Count miners per league (from filtered data)
+    league_counts = {}
+    for uid in sorted_uids:
+        league = uids_to_league.get(uid)
+        if league:
+            league_counts[league] = league_counts.get(league, 0) + 1
+
     # Plot each league separately
     plt.figure(figsize=(12, 6))
     for league in unique_leagues:
         league_indices = [i for i, uid in enumerate(sorted_uids) if uids_to_league.get(uid) == league]
+        count = league_counts.get(league, 0)
         plt.scatter(
             np.array(x_axis)[league_indices], 
             np.array(sorted_final_pareto_scores)[league_indices], 
-            label=league, 
+            label=f"{league} ({count} UIDs)", 
             color=league_colors[league], 
             s=10, 
             alpha=0.8

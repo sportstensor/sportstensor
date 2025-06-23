@@ -25,6 +25,8 @@ from common.constants import (
     LEAGUE_MINIMUM_RHOS,
     MIN_EDGE_SCORE,
     MAX_MIN_EDGE_SCORE,
+    MIN_ROI,
+    MIN_ROI_SCORE,
     ROI_BET_AMOUNT,
     ROI_INCR_PRED_COUNT_PERCENTAGE,
     MAX_INCR_ROI_DIFF_PERCENTAGE,
@@ -49,7 +51,12 @@ def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: st
         return 0.0, 0
 
     edge = closing_odds - (1 / prediction_prob)
-    return reward_punishment * edge, 1 if model_prediction_correct else 0
+    if edge < 0 and not model_prediction_correct:
+        final_edge = edge
+    else:
+        final_edge = edge * reward_punishment
+    
+    return final_edge, 1 if model_prediction_correct else 0
 
 def compute_significance_score(num_miner_predictions: int, num_threshold_predictions: int, alpha: float) -> float:
     """
@@ -561,13 +568,35 @@ def calculate_incentives_and_update_scores(vali):
             roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             # Calculate the difference between the miner's ROI and the market ROI
             roi_diff = roi - market_roi
-            # Base ROI score requires the miner is beating the market
-            final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
 
-            # If ROI is less than 0, but greater than market ROI, penalize the ROI score by distance from 0
-            if roi < 0 and roi_diff > 0:
-                bt.logging.info(f"Penalizing ROI score for miner {uid} in league {league.name} by {roi:.4f} ({final_roi_score * roi:.4f}): {final_roi_score:.4f} -> {final_roi_score + (final_roi_score * roi):.4f}")
-                final_roi_score = final_roi_score + (final_roi_score * roi)
+            # Base ROI score requires the miner is beating the market
+            if roi_diff > 0:
+                if roi < MIN_ROI:
+                    # If ROI is less than the minimum ROI, set final_roi_score to 0.0
+                    bt.logging.info(f"Minimum ROI of {MIN_ROI*100} not met for miner {uid} in league {league.name}: {roi*100:.2f}%")
+                    final_roi_score = 0.0
+                elif roi >= MIN_ROI and roi < 0:
+                    # Normalize ROI to 0-1 scale
+                    normalized_roi = roi / MIN_ROI
+                    # k is a constant to control the steepness of the sigmoid curve
+                    k = 12
+                    # Apply inverted sigmoid function
+                    sigmoid_input = k * (normalized_roi - 0.5)
+                    sigmoid_score = 1 / (1 + math.exp(sigmoid_input))
+                    # Scale to final score
+                    final_roi_score = sigmoid_score * MIN_ROI_SCORE
+                    # Finally, scale the final ROI score by rho
+                    final_roi_score = final_roi_score * rho
+                    bt.logging.info(f"Negative ROI for miner {uid} in league {league.name}: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_roi_score:.4f}")
+                else:
+                    # If market_roi is less than 0, update roi_diff to be distance from 0, or just roi
+                    if market_roi < 0:
+                        roi_diff = roi
+
+                    # ROI score is miner's difference from market ROI, scaled by rho
+                    final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
+            else:
+                final_roi_score = 0.0
             
             roi_incr = roi
             market_roi_incr = market_roi
