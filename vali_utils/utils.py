@@ -529,6 +529,9 @@ async def send_predictions_to_miners(
                     response.match_prediction.predictionDate = dt.datetime.now(dt.timezone.utc)
                     # round the probability to 4 decimal places
                     response.match_prediction.probability = round(response.match_prediction.probability, 4)
+                    # if response match prediction noConfidence is None, set it to False
+                    if response.match_prediction.noConfidence is None:
+                        response.match_prediction.noConfidence = False
                     finished_responses.append(response)
 
             return finished_responses, working_miner_uids

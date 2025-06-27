@@ -131,7 +131,7 @@ def calculate_incentives_and_update_scores():
             14: 'MLB',
             15: 'MLB',
             16: 'MLB',
-            17: 'MLB',
+            17: 'MLS',
             18: 'MLB',
             19: 'MLS',
             20: 'MLB',
@@ -139,7 +139,7 @@ def calculate_incentives_and_update_scores():
             22: 'MLB',
             23: 'MLB',
             24: 'MLB',
-            25: 'MLB',
+            25: 'MLS',
             26: 'MLB',
             27: 'MLB',
             28: 'MLB',
@@ -148,24 +148,24 @@ def calculate_incentives_and_update_scores():
             31: 'MLB',
             32: 'MLB',
             33: 'MLB',
-            34: 'MLB',
+            34: 'MLS',
             35: 'MLS',
             36: 'MLS',
             37: 'MLB',
             38: 'MLB',
             39: 'MLS',
-            40: 'MLB',
+            40: 'MLS',
             41: 'MLB',
             42: 'MLS',
             43: 'MLB',
             44: 'MLB',
-            45: 'MLB',
+            45: 'MLS',
             46: 'MLB',
             47: 'MLB',
             48: 'MLB',
             49: 'MLB',
-            50: 'MLB',
-            51: 'MLB',
+            50: 'MLS',
+            51: 'MLS',
             52: 'MLB',
             53: 'MLB',
             54: 'MLB',
@@ -176,22 +176,22 @@ def calculate_incentives_and_update_scores():
             60: 'MLB',
             61: 'MLS',
             62: 'MLB',
-            63: 'MLB',
+            63: 'MLS',
             64: 'MLB',
             65: 'MLB',
             66: 'MLB',
             67: 'MLB',
             68: 'MLB',
             69: 'MLB',
-            70: 'MLB',
+            70: 'MLS',
             71: 'MLB',
-            72: 'MLB',
+            72: 'MLS',
             73: 'MLB',
             74: 'MLB',
             75: 'MLB',
             76: 'MLB',
             77: 'MLB',
-            78: 'MLS',
+            78: 'MLB',
             79: 'MLB',
             80: 'MLB',
             81: 'MLB',
@@ -210,11 +210,11 @@ def calculate_incentives_and_update_scores():
             94: 'MLB',
             95: 'MLB',
             97: 'MLB',
-            98: 'MLB',
+            98: 'MLS',
             99: 'MLB',
             101: 'MLB',
-            102: 'MLB',
-            103: 'MLB',
+            102: 'MLS',
+            103: 'MLS',
             104: 'MLB',
             105: 'MLB',
             106: 'MLB',
@@ -223,23 +223,24 @@ def calculate_incentives_and_update_scores():
             109: 'MLB',
             110: 'MLS',
             111: 'MLB',
-            112: 'MLB',
+            112: 'MLS',
             113: 'MLB',
             114: 'MLB',
             115: 'MLB',
-            116: 'MLB',
-            117: 'MLB',
+            116: 'MLS',
+            117: 'MLS',
             118: 'MLB',
             119: 'MLB',
             120: 'MLS',
-            121: 'MLB',
+            121: 'MLS',
             122: 'MLS',
-            123: 'MLB',
+            123: 'MLS',
             124: 'MLB',
-            126: 'MLB',
-            127: 'MLB',
+            125: 'MLB',
+            126: 'MLS',
+            127: 'MLS',
             128: 'MLB',
-            129: 'MLB',
+            129: 'MLS',
             130: 'MLB',
             131: 'MLB',
             132: 'MLB',
@@ -250,10 +251,10 @@ def calculate_incentives_and_update_scores():
             137: 'MLB',
             138: 'MLB',
             139: 'MLB',
-            140: 'MLB',
+            140: 'MLS',
             141: 'MLB',
             142: 'MLB',
-            143: 'MLB',
+            143: 'MLS',
             144: 'MLB',
             145: 'MLB',
             146: 'MLB',
@@ -267,11 +268,11 @@ def calculate_incentives_and_update_scores():
             154: 'MLS',
             155: 'MLB',
             156: 'MLB',
-            157: 'MLB',
+            157: 'MLS',
             158: 'MLB',
-            159: 'MLS',
-            160: 'MLB',
-            161: 'MLS',
+            159: 'MLB',
+            160: 'MLS',
+            161: 'MLB',
             162: 'MLB',
             163: 'MLS',
             164: 'MLB',
@@ -279,27 +280,27 @@ def calculate_incentives_and_update_scores():
             166: 'MLB',
             167: 'MLS',
             168: 'MLB',
-            169: 'MLB',
+            169: 'MLS',
             171: 'MLS',
             172: 'MLB',
-            173: 'MLB',
+            173: 'MLS',
             174: 'MLB',
             175: 'MLS',
             176: 'MLB',
             177: 'MLB',
             178: 'MLB',
             179: 'MLB',
-            180: 'MLB',
-            181: 'MLS',
+            180: 'MLS',
+            181: 'MLB',
             182: 'MLB',
             183: 'MLB',
             184: 'MLB',
             185: 'MLB',
             186: 'MLS',
-            188: 'MLB',
+            188: 'MLS',
             189: 'MLB',
-            190: 'MLB',
-            191: 'MLB',
+            190: 'MLS',
+            191: 'MLS',
             192: 'MLB',
             193: 'MLS',
             194: 'MLB',
@@ -311,34 +312,34 @@ def calculate_incentives_and_update_scores():
             200: 'MLS',
             201: 'MLB',
             202: 'MLB',
-            203: 'MLB',
+            203: 'MLS',
             204: 'MLB',
             205: 'MLB',
-            206: 'MLB',
+            206: 'MLS',
             207: 'MLB',
             208: 'MLB',
             209: 'MLB',
             211: 'MLS',
-            212: 'MLB',
+            212: 'MLS',
             213: 'MLB',
-            214: 'MLB',
-            215: 'MLB',
+            214: 'MLS',
+            215: 'MLS',
             216: 'MLB',
-            217: 'MLB',
+            217: 'MLS',
             218: 'MLS',
             219: 'MLB',
             220: 'MLB',
             221: 'MLS',
             222: 'MLB',
-            223: 'MLB',
-            224: 'MLB',
+            223: 'MLS',
+            224: 'MLS',
             225: 'MLB',
             226: 'MLB',
             227: 'MLB',
             229: 'MLS',
-            230: 'MLB',
+            230: 'MLS',
             231: 'MLB',
-            232: 'MLB',
+            232: 'MLS',
             234: 'MLB',
             236: 'MLS',
             237: 'MLB',
@@ -347,14 +348,13 @@ def calculate_incentives_and_update_scores():
             241: 'MLB',
             242: 'MLB',
             243: 'MLB',
-            244: 'MLB',
+            244: 'MLS',
             245: 'MLS',
             246: 'MLB',
             247: 'MLB',
             248: 'MLB',
-            249: 'MLB',
-            250: 'MLB',
-            251: 'NBA',
+            249: 'MLS',
+            250: 'MLS',
             252: 'MLB',
             253: 'MLS',
             254: 'MLB',
@@ -384,7 +384,8 @@ def calculate_incentives_and_update_scores():
             miner_data=league_miner_data,
             league=league,
             scored=True,
-            batch_size=(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
+            # typically we would do ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2, but we need more because we are filtering out noConfidence predictions
+            batch_size=(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2.5)
         )
 
         # Collect all unique match IDs for this league
@@ -407,6 +408,30 @@ def calculate_incentives_and_update_scores():
 
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
+                
+                # Check the percentage of predictions that are noConfidence over last ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE predictions
+                noConfidence_count = 0
+                noConfidence_eligible_count = 0
+                for pwmd in predictions_with_match_data:
+                    if pwmd.prediction.noConfidence:
+                        noConfidence_count += 1
+                    noConfidence_eligible_count += 1
+                    if noConfidence_eligible_count >= (ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]):
+                        break
+                noConfidence_percentage = noConfidence_count / noConfidence_eligible_count if noConfidence_eligible_count > 0 else 0.0
+
+                # If the noConfidence percentage is within the acceptable range, filter out those predictions. Otherwise, we use all the predictions as the penalty.
+                NO_CONFIDENCE_THRESHOLD = 0.25
+                noConfidence_eligible = False
+                if noConfidence_percentage <= NO_CONFIDENCE_THRESHOLD:
+                    noConfidence_eligible = True
+                    predictions_with_match_data = [
+                        pwmd for pwmd in predictions_with_match_data
+                        if not pwmd.prediction.noConfidence
+                    ]
+
+                # Make sure we only use the first ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]*2 predictions for scoring
+                predictions_with_match_data = predictions_with_match_data[:(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)]
 
                 # Add eligible predictions to predictions_for_integrity_analysis
                 predictions_for_integrity_analysis.extend([p for p in predictions_with_match_data])
@@ -667,6 +692,7 @@ def calculate_incentives_and_update_scores():
                     str(round(market_roi_incr*100, 2)) + "%",
                     str(round(abs(roi_incr_diff)*100, 2)) + "%",
                     str(round(max_possible_roi_incr*100, 2)) + "%",
+                    str(noConfidence_count) + "/" + str(noConfidence_eligible_count) + " (" + str(round(noConfidence_percentage*100, 2)) + "%)" + ("" if noConfidence_eligible else "**"),
                     len(predictions_with_match_data),
                     str(round(rho, 4)) + "" if rho > LEAGUE_MINIMUM_RHOS[league] else str(round(rho, 4)) + "*",
                     str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), 
@@ -683,8 +709,9 @@ def calculate_incentives_and_update_scores():
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print(tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'ROI Incr Diff', 'Max ROI Incr', '# Preds', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
-            print("* indicates rho is below minimum threshold and not eligible for rewards yet\n")
+            print(tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'ROI Incr Diff', 'Max ROI Incr', 'NoConf Preds', '# Preds', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
+            print("* indicates rho is below minimum threshold and not eligible for rewards yet")
+            print("** indicates miner has submitted too many noConfidence predictions, rendering those predictions as scorable\n")
         else:
             print(f"No non-zero scores for {league.name}")
 
@@ -736,13 +763,24 @@ def calculate_incentives_and_update_scores():
         ]
 
         # Create top 10 scores table
+        # Create a lookup dictionary from league_table_data
+        league_data_lookup = {row[0]: row for row in league_table_data}
         top_scores_table = []
         # Sort the final scores in descending order. We need to sort the uids as well so they match
         top_scores, top_uids = zip(*sorted(zip(league_scores[league], all_uids), reverse=True))
         for i in range(10):
-            top_scores_table.append([i+1, top_uids[i], top_scores[i]])
+            if top_uids[i] in league_data_lookup:
+                league_row = league_data_lookup[top_uids[i]]
+                final_edge_score = league_row[1]
+                final_roi_score = league_row[2]
+                roi = league_row[3]
+                noConfidence_preds = league_row[10]
+                total_preds = league_row[11]
+                raw_edge = league_row[15]
+                top_scores_table.append([i+1, top_uids[i], top_scores[i], final_edge_score, final_roi_score, roi, noConfidence_preds, total_preds, raw_edge])
         print(f"\nTop 10 Scores for {league.name}:")
-        print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score'], tablefmt='grid'))
+        print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'Edge Score', 'ROI Score', 'ROI', 'NoConf Preds', '# Preds', 'Raw Edge'], tablefmt='grid'))
+        print("** indicates miner has submitted too many noConfidence predictions, rendering those predictions as scorable\n")
 
         if len(matches_without_odds) > 0:
             print(f"\n==============================================================================")

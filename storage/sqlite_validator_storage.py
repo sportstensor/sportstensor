@@ -99,9 +99,12 @@ class SqliteValidatorStorage(ValidatorStorage):
                             probabilityChoice   VARCHAR(10)     NULL,
                             probability         FLOAT           NULL,
                             closingEdge         FLOAT           NULL,
-                            isArchived          INTEGER         DEFAULT 0
+                            isArchived          INTEGER         DEFAULT 0,
+                            noConfidence        BOOLEAN         DEFAULT FALSE,
                             )"""
-    
+
+    MATCHPREDICTIONS_NOCONFIDENCE_TABLE_UPDATE = """ALTER TABLE MatchPredictions ADD COLUMN noConfidence BOOLEAN DEFAULT FALSE"""
+
     HOTFIX_MLB_20250410_MARKER_FILE = "HOTFIX_MLB_20250410_MARKER_FILE.txt"
 
     def __init__(self):
@@ -140,8 +143,14 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Create the MatchPredictions table (if it does not already exist).
                 cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
+                # Check if the noConfidence column exists in MatchPredictions table
+                cursor.execute("PRAGMA table_info(MatchPredictions)")
+                columns = [column[1] for column in cursor.fetchall()]
+                if "noConfidence" not in columns:
+                    cursor.execute(self.MATCHPREDICTIONS_NOCONFIDENCE_TABLE_UPDATE)
+
                 # Execute db hotfixes
-                self.execute_db_hotfixes()
+                # self.execute_db_hotfixes()
 
                 # Commit the changes and close the connection
                 connection.commit()
@@ -997,6 +1006,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     prediction.match_prediction.awayTeamScore,
                     prediction.match_prediction.probabilityChoice,
                     prediction.match_prediction.probability,
+                    prediction.match_prediction.noConfidence,
                     prediction.match_prediction.predictionDate,
                     now_str,
                 ]
@@ -1007,8 +1017,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                 cursor = connection.cursor()
                 cursor.executemany(
                     """
-                        INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, probabilityChoice, probability, predictionDate, lastUpdated) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, probabilityChoice, probability, noConfidence, predictionDate, lastUpdated) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     values,
                 )
@@ -1371,6 +1381,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                         mp.predictionDate,
                         mp.probabilityChoice,
                         mp.probability,
+                        mp.noConfidence,
                         mp.closingEdge,
                         mp.isArchived,
                         m.homeTeamScore as actualHomeTeamScore,
@@ -1437,8 +1448,9 @@ class SqliteValidatorStorage(ValidatorStorage):
                         "predictionDate": row[14],
                         "probabilityChoice": row[15],
                         "probability": round(row[16], 4),
-                        "closingEdge": row[17],
-                        "isArchived": row[18]
+                        "noConfidence": row[17],
+                        "closingEdge": row[18],
+                        "isArchived": row[19]
                     }
                     try:
                         uid = row[1]  # minerId is at index 1
@@ -1448,11 +1460,11 @@ class SqliteValidatorStorage(ValidatorStorage):
                         predictions_by_miner[uid].append(
                             MatchPredictionWithMatchData(
                                 prediction=MatchPrediction(**prediction_data),
-                                actualHomeTeamScore=row[19],  # actualHomeTeamScore
-                                actualAwayTeamScore=row[20],  # actualAwayTeamScore
-                                homeTeamOdds=row[21],         # homeTeamOdds
-                                awayTeamOdds=row[22],         # awayTeamOdds
-                                drawOdds=row[23],             # drawOdds
+                                actualHomeTeamScore=row[20],  # actualHomeTeamScore
+                                actualAwayTeamScore=row[21],  # actualAwayTeamScore
+                                homeTeamOdds=row[22],         # homeTeamOdds
+                                awayTeamOdds=row[23],         # awayTeamOdds
+                                drawOdds=row[24],             # drawOdds
                             )
                         )
                     except ValidationError as e:

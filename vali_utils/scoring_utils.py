@@ -69,7 +69,7 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     """
     exponent = -alpha * (num_miner_predictions - num_threshold_predictions)
     denominator = 1 + math.exp(exponent)
-    return 1 / denominator
+    return round(1 / denominator, 2)
 
 def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
