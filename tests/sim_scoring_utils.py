@@ -20,6 +20,7 @@ from common.constants import (
     MAX_PREDICTION_DAYS_THRESHOLD,
     ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE,
     LEAGUE_SENSITIVITY_ALPHAS,
+    NO_CONFIDENCE_THRESHOLD,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
     MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
@@ -385,7 +386,7 @@ def calculate_incentives_and_update_scores():
             league=league,
             scored=True,
             # typically we would do ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2, but we need more because we are filtering out noConfidence predictions
-            batch_size=(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2.5)
+            batch_size = ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2 * (1 + NO_CONFIDENCE_THRESHOLD)
         )
 
         # Collect all unique match IDs for this league
@@ -409,19 +410,15 @@ def calculate_incentives_and_update_scores():
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
                 
-                # Check the percentage of predictions that are noConfidence over last ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE predictions
+                # Check the percentage of predictions that are noConfidence over last ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2 (max rolling window) predictions
                 noConfidence_count = 0
-                noConfidence_eligible_count = 0
+                noConfidence_eligible_count = len(predictions_with_match_data)
                 for pwmd in predictions_with_match_data:
                     if pwmd.prediction.noConfidence:
                         noConfidence_count += 1
-                    noConfidence_eligible_count += 1
-                    if noConfidence_eligible_count >= (ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]):
-                        break
                 noConfidence_percentage = noConfidence_count / noConfidence_eligible_count if noConfidence_eligible_count > 0 else 0.0
 
                 # If the noConfidence percentage is within the acceptable range, filter out those predictions. Otherwise, we use all the predictions as the penalty.
-                NO_CONFIDENCE_THRESHOLD = 0.25
                 noConfidence_eligible = False
                 if noConfidence_percentage <= NO_CONFIDENCE_THRESHOLD:
                     noConfidence_eligible = True

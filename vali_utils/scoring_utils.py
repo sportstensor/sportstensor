@@ -13,6 +13,7 @@ from storage.sqlite_validator_storage import get_storage
 from vali_utils.prediction_integrity_controller import PredictionIntegrityController
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
+    NO_CONFIDENCE_THRESHOLD,
     MAX_PREDICTION_DAYS_THRESHOLD,
     NO_LEAGUE_COMMITMENT_PENALTY,
     NO_LEAGUE_COMMITMENT_GRACE_PERIOD,
@@ -389,7 +390,8 @@ def calculate_incentives_and_update_scores(vali):
             miner_data=league_miner_data,
             league=league,
             scored=True,
-            batch_size=(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)
+            # typically we would do ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2, but we need more because we are filtering out noConfidence predictions
+            batch_size = vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2 * (1 + NO_CONFIDENCE_THRESHOLD)
         )
 
         # Collect all unique match IDs for this league
@@ -411,6 +413,23 @@ def calculate_incentives_and_update_scores(vali):
 
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
+
+                # Check the percentage of predictions that are noConfidence over last ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] predictions
+                noConfidence_count = 0
+                noConfidence_eligible_count = len(predictions_with_match_data)
+                for pwmd in predictions_with_match_data:
+                    if pwmd.prediction.noConfidence:
+                        noConfidence_count += 1
+                noConfidence_percentage = noConfidence_count / noConfidence_eligible_count if noConfidence_eligible_count > 0 else 0.0
+
+                # If the noConfidence percentage is within the acceptable range, filter out those predictions. Otherwise, we use all the predictions as the penalty.
+                noConfidence_eligible = False
+                if noConfidence_percentage <= NO_CONFIDENCE_THRESHOLD:
+                    noConfidence_eligible = True
+                    predictions_with_match_data = [
+                        pwmd for pwmd in predictions_with_match_data
+                        if not pwmd.prediction.noConfidence
+                    ]
 
                 # Add eligible predictions to predictions_for_integrity_analysis
                 predictions_for_integrity_analysis.extend([p for p in predictions_with_match_data])
@@ -628,6 +647,7 @@ def calculate_incentives_and_update_scores(vali):
                     str(round(roi_diff*100, 2)) + "%", 
                     str(round(roi_incr*100, 2)) + "%", 
                     str(round(market_roi_incr*100, 2)) + "%",
+                    str(noConfidence_count) + "/" + str(noConfidence_eligible_count) + " (" + str(round(noConfidence_percentage*100, 2)) + "%)" + ("" if noConfidence_eligible else "**"),
                     len(predictions_with_match_data),
                     str(round(rho, 4)) + "" if rho > LEAGUE_MINIMUM_RHOS[league] else str(round(rho, 4)) + "*",
                 ])
@@ -635,8 +655,9 @@ def calculate_incentives_and_update_scores(vali):
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', '# Predictions', 'Rho'], tablefmt='grid'))
-            bt.logging.info("* indicates rho is below minimum threshold and not eligible for rewards yet\n")
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'NoConf Preds', '# Predictions', 'Rho'], tablefmt='grid'))
+            bt.logging.info("* indicates rho is below minimum threshold and not eligible for rewards yet")
+            bt.logging.info("** indicates miner has submitted too many noConfidence predictions, rendering those predictions as scorable\n")
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
