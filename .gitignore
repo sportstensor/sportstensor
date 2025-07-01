@@ -177,3 +177,6 @@ tests/imgs/*
 
 .api-json/
 HOTFIX_*_MARKER_FILE.txt
+
+#Data Dir
+data/*
