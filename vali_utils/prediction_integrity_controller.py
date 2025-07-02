@@ -343,9 +343,12 @@ class PredictionIntegrityController:
                 # Add miners to suspicious miners set
                 suspicious_miners.add(miner_i)
                 suspicious_miners.add(miner_j)
-                
+
+                # If choice agreement is low, don't check further
+                if components['choice_agreement'] < INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW:
+                    continue
                 # Penalize if they have a very high percentage of exact choices
-                if components['choice_agreement'] >= INTEGRITY_CHOICE_AGREEMENT_THRESHOLD or components['prob_correlation'] >= INTEGRITY_PROB_CORRELATION_THRESHOLD:
+                elif components['choice_agreement'] >= INTEGRITY_CHOICE_AGREEMENT_THRESHOLD or components['prob_correlation'] >= INTEGRITY_PROB_CORRELATION_THRESHOLD:
                     # If they have a high probability correlation and low choice agreement, make sure they have enough shared predictions for probability correlation to be valid
                     if components['prob_correlation'] >= INTEGRITY_PROB_CORRELATION_THRESHOLD and \
                         components['choice_agreement'] < INTEGRITY_CHOICE_AGREEMENT_THRESHOLD and \
@@ -413,8 +416,11 @@ class PredictionIntegrityController:
                     miner_relationships[miner_j].add(miner_i)
 
                     penalty_check = ""
+                    # If choice agreement is low, don't check further
+                    if components['choice_agreement'] < INTEGRITY_CHOICE_AGREEMENT_GRADIENT_THRESHOLD_LOW:
+                        pass
                     # Penalize if they have a very high percentage of exact choices
-                    if components['choice_agreement'] >= INTEGRITY_CHOICE_AGREEMENT_THRESHOLD or components['prob_correlation'] >= INTEGRITY_PROB_CORRELATION_THRESHOLD:
+                    elif components['choice_agreement'] >= INTEGRITY_CHOICE_AGREEMENT_THRESHOLD or components['prob_correlation'] >= INTEGRITY_PROB_CORRELATION_THRESHOLD:
                         # If they have a high probability correlation and low choice agreement, make sure they have enough shared predictions for probability correlation to be valid
                         if components['prob_correlation'] >= INTEGRITY_PROB_CORRELATION_THRESHOLD and \
                             components['choice_agreement'] < INTEGRITY_CHOICE_AGREEMENT_THRESHOLD and \
