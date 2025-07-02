@@ -206,7 +206,7 @@ class MatchPrediction(Prediction):
 
     probabilityChoice: Optional[ProbabilityChoice] = Field(default=None)
     probability: Optional[float] = Field(default=None)
-    noConfidence: Optional[bool] = Field(default=None)
+    skip: Optional[bool] = Field(default=None)
     
     closingEdge: Optional[float] = Field(default=None)
 
@@ -248,7 +248,7 @@ class MatchPrediction(Prediction):
             f"{base_str[:-1]}, "  # Remove the closing parenthesis from the base string
             f"homeTeamName={self.homeTeamName}, awayTeamName={self.awayTeamName}, "
             #f"homeTeamScore={self.homeTeamScore}, awayTeamScore={self.awayTeamScore}, "
-            f"probabilityChoice={self.probabilityChoice}, probability={self.probability}, noConfidence={self.noConfidence})"
+            f"probabilityChoice={self.probabilityChoice}, probability={self.probability}, skip={self.skip})"
         )
     
     def pretty_print(self):
@@ -260,7 +260,7 @@ class MatchPrediction(Prediction):
         return (
             f"Prediction for {league_name} match between {self.homeTeamName} and {self.awayTeamName}.\n"
             f"Predicted winner: {self.get_predicted_team()} with a probability of {self.probability:.2f}.\n"
-            f"No confidence: {self.noConfidence}.\n"
+            f"Skip: {self.skip}.\n"
             f"Match date: {self.matchDate.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 

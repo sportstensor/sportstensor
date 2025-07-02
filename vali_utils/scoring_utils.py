@@ -13,12 +13,14 @@ from storage.sqlite_validator_storage import get_storage
 from vali_utils.prediction_integrity_controller import PredictionIntegrityController
 from common.data import League, MatchPredictionWithMatchData, ProbabilityChoice
 from common.constants import (
-    NO_CONFIDENCE_THRESHOLD,
+    PRED_SKIP_THRESHOLD,
     MAX_PREDICTION_DAYS_THRESHOLD,
     NO_LEAGUE_COMMITMENT_PENALTY,
     NO_LEAGUE_COMMITMENT_GRACE_PERIOD,
     MINER_RELIABILITY_CUTOFF_IN_DAYS,
     MIN_MINER_RELIABILITY,
+    MIN_MINER_RELIABILITY_FLOOR,
+    MINER_RELIABILITY_PENALTY,
     MAX_GFILTER_FOR_WRONG_PREDICTION,
     MIN_GFILTER_FOR_CORRECT_UNDERDOG_PREDICTION,
     MIN_GFILTER_FOR_WRONG_UNDERDOG_PREDICTION,
@@ -70,7 +72,7 @@ def compute_significance_score(num_miner_predictions: int, num_threshold_predict
     """
     exponent = -alpha * (num_miner_predictions - num_threshold_predictions)
     denominator = 1 + math.exp(exponent)
-    return round(1 / denominator, 2)
+    return 1 / denominator
 
 def apply_gaussian_filter(pwmd: MatchPredictionWithMatchData) -> float:
     """
@@ -320,10 +322,15 @@ def apply_no_prediction_response_penalties(
             miner_hotkey = metagraph.hotkeys[uid]
             get_miner_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league)
             # Check if miner predictions count is within MIN_MINER_RELIABILITY % of total possible predictions
-            if get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY:
-                # Miner has not been responding to prediction requests and will score 0
+            if get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY_FLOOR:
+                # Miner has not been responding to the floor amount of prediction requests and will score 0
                 league_scores[uid] = 0
                 print(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
+            
+            elif get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY:
+                # Miner has not been responding to enough prediction requests and will be penalized
+                league_scores[uid] = league_scores[uid] * MINER_RELIABILITY_PENALTY
+                print(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Penalizing score by {MINER_RELIABILITY_PENALTY*100}%.")
         print("-" * 75)
     
     return league_scores
@@ -390,8 +397,8 @@ def calculate_incentives_and_update_scores(vali):
             miner_data=league_miner_data,
             league=league,
             scored=True,
-            # typically we would do ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2, but we need more because we are filtering out noConfidence predictions
-            batch_size = vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2 * (1 + NO_CONFIDENCE_THRESHOLD)
+            # typically we would do ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2, but we need more because we are filtering out skip predictions
+            batch_size = vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2 * (1 + PRED_SKIP_THRESHOLD)
         )
 
         # Collect all unique match IDs for this league
@@ -414,21 +421,21 @@ def calculate_incentives_and_update_scores(vali):
                 if not predictions_with_match_data:
                     continue  # No predictions for this league, keep score as 0
 
-                # Check the percentage of predictions that are noConfidence over last ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] predictions
-                noConfidence_count = 0
-                noConfidence_eligible_count = len(predictions_with_match_data)
+                # Check the percentage of predictions that are marked 'skip' over last ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] predictions
+                skip_count = 0
+                skip_eligible_count = len(predictions_with_match_data)
                 for pwmd in predictions_with_match_data:
-                    if pwmd.prediction.noConfidence:
-                        noConfidence_count += 1
-                noConfidence_percentage = noConfidence_count / noConfidence_eligible_count if noConfidence_eligible_count > 0 else 0.0
+                    if pwmd.prediction.skip:
+                        skip_count += 1
+                skip_percentage = skip_count / skip_eligible_count if skip_eligible_count > 0 else 0.0
 
-                # If the noConfidence percentage is within the acceptable range, filter out those predictions. Otherwise, we use all the predictions as the penalty.
-                noConfidence_eligible = False
-                if noConfidence_percentage <= NO_CONFIDENCE_THRESHOLD:
-                    noConfidence_eligible = True
+                # If the skip percentage is within the acceptable range, filter out those predictions. Otherwise, we use all the predictions as the penalty.
+                skip_eligible = False
+                if skip_percentage <= PRED_SKIP_THRESHOLD:
+                    skip_eligible = True
                     predictions_with_match_data = [
                         pwmd for pwmd in predictions_with_match_data
-                        if not pwmd.prediction.noConfidence
+                        if not pwmd.prediction.skip
                     ]
 
                 # Add eligible predictions to predictions_for_integrity_analysis
@@ -647,7 +654,7 @@ def calculate_incentives_and_update_scores(vali):
                     str(round(roi_diff*100, 2)) + "%", 
                     str(round(roi_incr*100, 2)) + "%", 
                     str(round(market_roi_incr*100, 2)) + "%",
-                    str(noConfidence_count) + "/" + str(noConfidence_eligible_count) + " (" + str(round(noConfidence_percentage*100, 2)) + "%)" + ("" if noConfidence_eligible else "**"),
+                    str(skip_count) + "/" + str(skip_eligible_count) + " (" + str(round(skip_percentage*100, 2)) + "%)" + ("" if skip_eligible else "**"),
                     len(predictions_with_match_data),
                     str(round(rho, 4)) + "" if rho > LEAGUE_MINIMUM_RHOS[league] else str(round(rho, 4)) + "*",
                 ])
@@ -655,9 +662,9 @@ def calculate_incentives_and_update_scores(vali):
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'NoConf Preds', '# Predictions', 'Rho'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'Skip Preds', '# Predictions', 'Rho'], tablefmt='grid'))
             bt.logging.info("* indicates rho is below minimum threshold and not eligible for rewards yet")
-            bt.logging.info("** indicates miner has submitted too many noConfidence predictions, rendering those predictions as scorable\n")
+            bt.logging.info("** indicates miner has submitted too many skip predictions, rendering those predictions as scorable\n")
         else:
             bt.logging.info(f"No non-zero scores for {league.name}")
 
