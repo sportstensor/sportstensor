@@ -100,7 +100,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                             probability         FLOAT           NULL,
                             closingEdge         FLOAT           NULL,
                             isArchived          INTEGER         DEFAULT 0,
-                            skip        BOOLEAN         DEFAULT FALSE,
+                            skip                BOOLEAN         DEFAULT FALSE
                             )"""
 
     MATCHPREDICTIONS_SKIP_TABLE_UPDATE = """ALTER TABLE MatchPredictions ADD COLUMN skip BOOLEAN DEFAULT FALSE"""
