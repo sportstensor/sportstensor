@@ -26,6 +26,27 @@ from common.constants import (
 from storage.validator_storage import ValidatorStorage
 
 
+# ============================================================
+# Database location customization
+#
+# The data directory can be overridden by setting the environment variable
+# `SPORTSTENSOR_DATA_DIR` **before** `SqliteValidatorStorage` is imported/initialised.
+# If the variable is not set, we fall back to the current working directory –
+# the existing (back-compatible) behaviour.
+# ============================================================
+DATA_DIR: str = os.getenv("SPORTSTENSOR_DATA_DIR", ".")
+
+
+def _build_path(filename: str) -> str:
+    """Helper to build an absolute path inside the configured data dir."""
+    return os.path.join(DATA_DIR, filename)
+
+
+# Canonical filenames – centralised so that other filenames can build on them
+MAIN_DB_PATH = _build_path("SportsTensorEdge.db")
+PREARCHIVE_DB_PATH = _build_path("SportsTensorEdge_preArchive.db")
+
+
 class SqliteValidatorStorage(ValidatorStorage):
     _instance: Optional['SqliteValidatorStorage'] = None
     _lock = threading.Lock()
@@ -158,7 +179,7 @@ class SqliteValidatorStorage(ValidatorStorage):
         # Create the database if it doesn't exist, defaulting to the local directory.
         # Use PARSE_DECLTYPES to convert accessed values into the appropriate type.
         connection = sqlite3.connect(
-            "SportsTensorEdge.db",
+            MAIN_DB_PATH,
             uri=True,
             detect_types=sqlite3.PARSE_DECLTYPES,
             timeout=120.0,
@@ -205,7 +226,7 @@ class SqliteValidatorStorage(ValidatorStorage):
             with contextlib.closing(self._create_connection()) as connection:
                 cursor = connection.cursor()
                 
-                db_size_bytes = os.path.getsize("SportsTensorEdge.db")
+                db_size_bytes = os.path.getsize(MAIN_DB_PATH)
                 db_size_gb = db_size_bytes / (1024 ** 3)
                 db_size_mb = db_size_bytes / (1024 ** 2)
                 print(f"SportsTensorEdge.db size: {db_size_gb:.2f} GB ({db_size_mb:.2f} MB)")
@@ -291,8 +312,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                 return
             
             # make a copy of the main database, just in case
-            shutil.copy("SportsTensorEdge.db", "SportsTensorEdge_preArchive.db")
-            print(f"Created pre archive copy of main db: SportsTensorEdge_preArchive.db")
+            shutil.copy(MAIN_DB_PATH, PREARCHIVE_DB_PATH)
+            print(f"Created pre archive copy of main db: {os.path.basename(PREARCHIVE_DB_PATH)}")
 
             print(f"Found {len(leagues_to_archive)} leagues to archive: {[l['league'] for l in leagues_to_archive]}")
             
@@ -318,7 +339,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     print(f"Archiving {league_name} ({season})...")
                     
                     # 1. Copy the main database to create the archive
-                    shutil.copy("SportsTensorEdge.db", archive_path)
+                    shutil.copy(MAIN_DB_PATH, archive_path)
                     print(f"Created archive copy at {archive_path}")
                     
                     # 2. Connect to the archive database and delete non-relevant data
@@ -483,7 +504,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     print(f"  Integrity check passed.")
                 
                 # Size after deletion
-                db_size_bytes = os.path.getsize("SportsTensorEdge.db")
+                db_size_bytes = os.path.getsize(MAIN_DB_PATH)
                 db_size_mb = db_size_bytes / (1024 ** 2)
                 print(f"  Main DB: Current size: {db_size_mb:.2f} MB")
             
