@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  # Validator with custom data directory (new behavior)
+  validator-custom-data:
+    build: .
+    container_name: sportstensor-validator-custom
+    environment:
+      - SPORTSTENSOR_DATA_DIR=/data
+    volumes:
+      - ./data:/data
+      - ${HOME}/.bittensor:/home/appuser/.bittensor
+    ports:
+      - "${AXON_PORT-8091}:8091"
+    command: >
+      python neurons/validator.py --data-dir /data \
+        --netuid ${NETUID:-172} \
+        --wallet.name ${WALLET_NAME:-default} \
+        --wallet.hotkey ${WALLET_HOTKEY:-default} \
+        --axon.port ${AXON_PORT:-8091} \
+        --subtensor.network=test
+        --logging.trace 
+
+  # Validator without custom data directory (default behavior)
+  validator-default:
+    build: .
+    container_name: sportstensor-validator-default
+    volumes:
+      - ${HOME}/.bittensor:/home/appuser/.bittensor
+    ports:
+      - "${AXON_PORT_default-8092}:8091"
+    command: >
+      python neurons/validator.py
+        --netuid ${NETUID:-172}
+        --wallet.name ${WALLET_NAME:-default}
+        --wallet.hotkey ${WALLET_HOTKEY:-default}
+        --subtensor.network=test
+        --axon.port ${AXON_PORT_default:-8092}
+        --logging.trace 
