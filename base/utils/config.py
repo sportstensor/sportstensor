@@ -122,6 +122,21 @@ def add_args(cls, parser):
         default=False,
     )
 
+    # ------------------------------------------------------------------
+    # Persistence directory flag (back-compat default=current working dir)
+    # This flag is parsed into the config object for completeness, but the
+    # environment variable is actually set in `neurons/validator.py` *before*
+    # heavy modules are imported so that SQLite opens the DB in the desired
+    # directory. Keeping it here ensures `--data-dir` shows up in `--help` and
+    # winds up in checkpoints, wandb etc.
+    # ------------------------------------------------------------------
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        help="Directory to persist validator data (SQLite DB, archives, etc.). Defaults to current working directory.",
+        default=None,
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
