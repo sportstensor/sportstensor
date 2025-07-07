@@ -106,6 +106,8 @@ def calculate_incentives_and_update_scores():
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
     # Initialize league_rhos dictionary
     league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in ACTIVE_LEAGUES}
+    # Initialize uids_to_earliest_match_date dictionary
+    uids_to_earliest_match_date: Dict[int, dt.datetime] = {}
 
     leagues_to_analyze = ACTIVE_LEAGUES
     #leagues_to_analyze = [League.NBA]
@@ -429,6 +431,16 @@ def calculate_incentives_and_update_scores():
 
                 # Make sure we only use the first ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]*2 predictions for scoring
                 predictions_with_match_data = predictions_with_match_data[:(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)]
+
+                # Store the earliest prediction match date for this miner
+                if uid not in uids_to_earliest_match_date:
+                    earliest_match_date = min(
+                        pwmd.prediction.matchDate for pwmd in predictions_with_match_data
+                    )
+                    # Ensure earliest_match_date is offset-aware
+                    if earliest_match_date.tzinfo is None:
+                        earliest_match_date = earliest_match_date.replace(tzinfo=timezone.utc)
+                    uids_to_earliest_match_date[uid] = earliest_match_date
 
                 # Add eligible predictions to predictions_for_integrity_analysis
                 predictions_for_integrity_analysis.extend([p for p in predictions_with_match_data])
@@ -841,7 +853,7 @@ def calculate_incentives_and_update_scores():
         # Check and penalize miners that are not committed to any active leagues -- before normalization
         #league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
         # Apply penalties for miners that have not responded to prediction requests -- before normalization
-        league_scores[league] = apply_no_prediction_response_penalties(metagraph, league, uids_to_last_leagues, uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
+        league_scores[league] = apply_no_prediction_response_penalties(metagraph, league, uids_to_last_leagues, uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids, uids_to_earliest_match_date)
 
         # Apply the integrity penalty to the score -- before normalization
         for uid, penalty_percentage in final_integrity_penalties.items():

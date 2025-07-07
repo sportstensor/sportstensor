@@ -3,10 +3,8 @@ import numpy as np
 from scipy.stats import pareto
 import datetime as dt
 from datetime import datetime, timezone
-import pytz
 from typing import List, Dict, Tuple, Optional
 from tabulate import tabulate
-import random
 
 import bittensor as bt
 from storage.sqlite_validator_storage import get_storage
@@ -164,12 +162,12 @@ def find_closest_odds(match_odds: List[Tuple[str, float, float, float, datetime]
 
     # Ensure prediction_time is offset-aware
     if prediction_time.tzinfo is None:
-        prediction_time = prediction_time.replace(tzinfo=pytz.UTC)
+        prediction_time = prediction_time.replace(tzinfo=timezone.utc)
 
     for _, homeTeamOdds, awayTeamOdds, drawOdds, odds_datetime in match_odds:
         # Ensure odds_datetime is offset-aware
         if odds_datetime.tzinfo is None:
-            odds_datetime = odds_datetime.replace(tzinfo=pytz.UTC)
+            odds_datetime = odds_datetime.replace(tzinfo=timezone.utc)
 
         # Skip odds that are after the prediction time
         if odds_datetime > prediction_time:
@@ -284,7 +282,8 @@ def apply_no_prediction_response_penalties(
         uids_to_leagues_last_updated: Dict[int, dt.datetime],
         league_rhos: Dict[League, List[float]],
         league_scores: List[float], 
-        all_uids: List[int]
+        all_uids: List[int],
+        uids_to_earliest_match_date: Dict[int, dt.datetime]
     ) -> List[float]:
     """
     Apply any penalties for miners that have not responded to prediction requests.
@@ -296,6 +295,7 @@ def apply_no_prediction_response_penalties(
     :param league_rhos: Dictionary mapping leagues to their rho values
     :param league_scores: List of scores to check and penalize
     :param all_uids: List of UIDs corresponding to the scores
+    :param uids_to_earliest_match_date: Dictionary mapping UIDs to their earliest prediction match date
     :return: List of scores after penalizing miners that have not responded to prediction requests
     """
 
@@ -318,6 +318,10 @@ def apply_no_prediction_response_penalties(
             # skip miners that haven't met min rho as they are 0 already anyway
             if league_rhos[league][uid] < LEAGUE_MINIMUM_RHOS[league]:
                 print(f"Miner {uid} has rho {league_rhos[league][uid]:.4f} < {LEAGUE_MINIMUM_RHOS[league]}. Skipping.")
+                continue
+            # skip miners whose earliest match date is after match_date_since
+            if uid in uids_to_earliest_match_date and uids_to_earliest_match_date[uid] > match_date_since:
+                print(f"Miner {uid} is new and earliest prediction match date {uids_to_earliest_match_date[uid]} is after {match_date_since}. Skipping.")
                 continue
             miner_hotkey = metagraph.hotkeys[uid]
             get_miner_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league)
@@ -373,6 +377,8 @@ def calculate_incentives_and_update_scores(vali):
     league_roi_scores: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
     # Initialize league_rhos dictionary
     league_rhos: Dict[League, List[float]] = {league: [0.0] * len(all_uids) for league in vali.ACTIVE_LEAGUES}
+    # Initialize uids_to_earliest_match_date dictionary
+    uids_to_earliest_match_date: Dict[int, dt.datetime] = {}
 
     for league in vali.ACTIVE_LEAGUES:
         bt.logging.info(f"Processing league: {league.name} (Rolling Pred Threshold: {vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {vali.LEAGUE_SENSITIVITY_ALPHAS[league]:.4f})")
@@ -437,6 +443,16 @@ def calculate_incentives_and_update_scores(vali):
                         pwmd for pwmd in predictions_with_match_data
                         if not pwmd.prediction.skip
                     ]
+
+                # Store the earliest prediction match date for this miner
+                if uid not in uids_to_earliest_match_date:
+                    earliest_match_date = min(
+                        pwmd.prediction.matchDate for pwmd in predictions_with_match_data
+                    )
+                    # Ensure earliest_match_date is offset-aware
+                    if earliest_match_date.tzinfo is None:
+                        earliest_match_date = earliest_match_date.replace(tzinfo=timezone.utc)
+                    uids_to_earliest_match_date[uid] = earliest_match_date
 
                 # Add eligible predictions to predictions_for_integrity_analysis
                 predictions_for_integrity_analysis.extend([p for p in predictions_with_match_data])
@@ -755,7 +771,7 @@ def calculate_incentives_and_update_scores(vali):
         # Check and penalize miners that are not committed to any active leagues -- before normalization
         league_scores[league] = check_and_apply_league_commitment_penalties(vali, league_scores[league], all_uids)
         # Apply penalties for miners that have not responded to prediction requests -- before normalization
-        league_scores[league] = apply_no_prediction_response_penalties(vali.metagraph, league, vali.uids_to_last_leagues, vali.uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids)
+        league_scores[league] = apply_no_prediction_response_penalties(vali.metagraph, league, vali.uids_to_last_leagues, vali.uids_to_leagues_last_updated, league_rhos, league_scores[league], all_uids, uids_to_earliest_match_date)
 
         # Apply the integrity penalty to the score -- before normalization
         for uid, penalty_percentage in final_integrity_penalties.items():
