@@ -428,9 +428,10 @@ def calculate_incentives_and_update_scores(vali):
                     continue  # No predictions for this league, keep score as 0
 
                 # Check the percentage of predictions that are marked 'skip' over last ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] predictions
+                temp_predictions = predictions_with_match_data[:(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)]
                 skip_count = 0
-                skip_eligible_count = len(predictions_with_match_data)
-                for pwmd in predictions_with_match_data:
+                skip_eligible_count = len(temp_predictions)
+                for pwmd in temp_predictions:
                     if pwmd.prediction.skip:
                         skip_count += 1
                 skip_percentage = skip_count / skip_eligible_count if skip_eligible_count > 0 else 0.0
