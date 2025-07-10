@@ -22,7 +22,7 @@ import sentry_sdk
 import mysql.connector
 from mysql.connector import Error
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import api.discord_messager as discord_messager
 import api.db as db
 from api.config import NETWORK, NETUID, IS_PROD, API_KEYS, TESTNET_VALI_HOTKEYS, DISCORD_MATCH_ODDS_CHANNEL_ID
@@ -164,7 +164,7 @@ async def main():
                     for match in matches:
                         # calculate hours before match
                         match_date = match['matchDate']
-                        hours_before_match = int((match_date - datetime.now(datetime.timezone.utc)).total_seconds() / 3600)
+                        hours_before_match = int((match_date - datetime.now(timezone.utc)).total_seconds() / 3600)
                         message += f"- {match['matchId']}: {match['awayTeamName']} at {match['homeTeamName']} - {match['matchDate']} (T-{hours_before_match}h)\n"
                     await discord_messager.send_message(DISCORD_MATCH_ODDS_CHANNEL_ID, message)
 
