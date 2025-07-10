@@ -43,6 +43,11 @@ Miners must return two key pieces of information when responding to prediction r
 1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
 2. **probability**: The probability for that outcome, as a float between 0 and 1. e.g. 0.6 represents 60% probability.
 
+Optionally, miners now have the ability to skip predictions.
+3. **skip**: A boolean value (True|False) informing validators this prediction should be skipped, if eligible.
+
+Miners are only allowed to skip a maximum of 15% of their total prediction window.
+
 > [!CAUTION]
 > Miners who fail to respond or provide incorrect responses will be penalized.
 
@@ -56,11 +61,12 @@ Miners must return two key pieces of information when responding to prediction r
 
 ### Scoring and Weights
  
-- Incentives and scores are calculated every 20 minutes in a background thread.
+- Incentives and scores are calculated every 30 minutes in a background thread.
 - Each active league is iterated through to calculate scores for that league.
 - During each league iteration, every miner is scored for their prediction accuracy.
 - The max number of predictions included for a miner per league is determined by the league’s `ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE` multiplied by 2.
   - This creates a constantly rolling forward set of predictions per miner per league, so older predictions outside these thresholds will not be scored.
+  - Predictions marked `skip` are filtered out before finalizing the predictions set. If a miner has submitted too many `skip` predictions (`>15%`), those predictions will instead be scored.
 - Incentive scores are calculated through a series of complex algorithms. Please see our whitepaper for more details. Also analyze `vali_utils/scoring_utils.py`.
 - After all active leagues have been scored, league-specific scoring percentages are applied.
 - Final scores are aggregated and logged for weight setting.
