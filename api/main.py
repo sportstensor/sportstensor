@@ -151,6 +151,10 @@ async def main():
             await asyncio.sleep(300)
 
     async def check_for_matches_without_odds(hours: int = 12):
+        if not IS_PROD:
+            print("Skipping check_for_matches_without_odds in testnet mode.")
+            return
+        
         while True:
             """Checks for matches that do not have odds within X hours and notifies the team."""
             print("check_for_matches_without_odds()")
@@ -168,7 +172,7 @@ async def main():
                         if match_date.tzinfo is None:
                             match_date = match_date.replace(tzinfo=timezone.utc)
                         hours_before_match = int((match_date - datetime.now(timezone.utc)).total_seconds() / 3600)
-                        message += f"- {match['matchId']}: {match['awayTeamName']} at {match['homeTeamName']} - {match['matchDate']} (T-{hours_before_match}h)\n"
+                        message += f"- `{match['matchId']}`: {match['awayTeamName']} at {match['homeTeamName']} - {match['matchDate']} (T-{hours_before_match}h)\n"
                     await discord_messager.send_message(DISCORD_MATCH_ODDS_CHANNEL_ID, message)
 
             except Exception as err:
