@@ -164,6 +164,9 @@ async def main():
                     for match in matches:
                         # calculate hours before match
                         match_date = match['matchDate']
+                        # Ensure match_date is timezone-aware
+                        if match_date.tzinfo is None:
+                            match_date = match_date.replace(tzinfo=timezone.utc)
                         hours_before_match = int((match_date - datetime.now(timezone.utc)).total_seconds() / 3600)
                         message += f"- {match['matchId']}: {match['awayTeamName']} at {match['homeTeamName']} - {match['matchDate']} (T-{hours_before_match}h)\n"
                     await discord_messager.send_message(DISCORD_MATCH_ODDS_CHANNEL_ID, message)
