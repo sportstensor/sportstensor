@@ -23,7 +23,7 @@ import mysql.connector
 from mysql.connector import Error
 
 from datetime import datetime, timedelta
-from api.discord_messager import discord_messager
+import api.discord_messager as discord_messager
 import api.db as db
 from api.config import NETWORK, NETUID, IS_PROD, API_KEYS, TESTNET_VALI_HOTKEYS, DISCORD_MATCH_ODDS_CHANNEL_ID
 from common.constants import ENABLE_APP, APP_PREDICTIONS_UNFULFILLED_THRESHOLD
