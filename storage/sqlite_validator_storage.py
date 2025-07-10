@@ -120,9 +120,12 @@ class SqliteValidatorStorage(ValidatorStorage):
                             probabilityChoice   VARCHAR(10)     NULL,
                             probability         FLOAT           NULL,
                             closingEdge         FLOAT           NULL,
-                            isArchived          INTEGER         DEFAULT 0
+                            isArchived          INTEGER         DEFAULT 0,
+                            skip                BOOLEAN         DEFAULT FALSE
                             )"""
-    
+
+    MATCHPREDICTIONS_SKIP_TABLE_UPDATE = """ALTER TABLE MatchPredictions ADD COLUMN skip BOOLEAN DEFAULT FALSE"""
+
     HOTFIX_MLB_20250410_MARKER_FILE = "HOTFIX_MLB_20250410_MARKER_FILE.txt"
 
     def __init__(self):
@@ -161,8 +164,14 @@ class SqliteValidatorStorage(ValidatorStorage):
                 # Create the MatchPredictions table (if it does not already exist).
                 cursor.execute(SqliteValidatorStorage.MATCHPREDICTIONS_TABLE_CREATE)
 
+                # Check if the skip column exists in MatchPredictions table
+                cursor.execute("PRAGMA table_info(MatchPredictions)")
+                columns = [column[1] for column in cursor.fetchall()]
+                if "skip" not in columns:
+                    cursor.execute(self.MATCHPREDICTIONS_SKIP_TABLE_UPDATE)
+
                 # Execute db hotfixes
-                self.execute_db_hotfixes()
+                # self.execute_db_hotfixes()
 
                 # Commit the changes and close the connection
                 connection.commit()
@@ -866,6 +875,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                     FROM MatchPredictionRequests mpr
                     JOIN Matches m ON mpr.matchId = m.matchId
                     WHERE m.matchDate > ?
+                    AND m.homeTeamScore IS NOT NULL
+                    AND m.awayTeamScore IS NOT NULL
                     AND m.homeTeamOdds IS NOT NULL
                     AND m.awayTeamOdds IS NOT NULL
                     AND m.isComplete = 1
@@ -1018,6 +1029,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                     prediction.match_prediction.awayTeamScore,
                     prediction.match_prediction.probabilityChoice,
                     prediction.match_prediction.probability,
+                    prediction.match_prediction.skip,
                     prediction.match_prediction.predictionDate,
                     now_str,
                 ]
@@ -1028,8 +1040,8 @@ class SqliteValidatorStorage(ValidatorStorage):
                 cursor = connection.cursor()
                 cursor.executemany(
                     """
-                        INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, probabilityChoice, probability, predictionDate, lastUpdated) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT OR IGNORE INTO MatchPredictions (minerId, hotkey, matchId, matchDate, sport, league, homeTeamName, awayTeamName, homeTeamScore, awayTeamScore, probabilityChoice, probability, skip, predictionDate, lastUpdated) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     values,
                 )
@@ -1237,20 +1249,26 @@ class SqliteValidatorStorage(ValidatorStorage):
 
                 query = """
                     SELECT COUNT(*)
-                    FROM MatchPredictions
-                    WHERE hotkey = ?
-                    AND minerId = ?
-                    AND isScored = 1
-                    AND isArchived = 0
+                    FROM MatchPredictions mp
+                    JOIN Matches m ON (m.matchId = mp.matchId)
+                    WHERE mp.hotkey = ?
+                    AND mp.minerId = ?
+                    AND mp.isScored = 1
+                    AND mp.isArchived = 0
+                    AND m.isComplete = 1
+                    AND m.homeTeamScore IS NOT NULL
+                    AND m.awayTeamScore IS NOT NULL
+                    AND m.homeTeamOdds IS NOT NULL
+                    AND m.awayTeamOdds IS NOT NULL
                 """
                 params = [miner_hotkey, miner_uid]
                 
                 if matchDateSince:
-                    query += " AND matchDate > ? "
+                    query += " AND mp.matchDate > ? "
                     params.append(matchDateSince.strftime("%Y-%m-%d %H:%M:%S"))
                 
                 if league:
-                    query += " AND league = ? "
+                    query += " AND mp.league = ? "
                     params.append(league.value)
                 
                 cursor.execute(query, params)
@@ -1392,6 +1410,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                         mp.predictionDate,
                         mp.probabilityChoice,
                         mp.probability,
+                        mp.skip,
                         mp.closingEdge,
                         mp.isArchived,
                         m.homeTeamScore as actualHomeTeamScore,
@@ -1458,8 +1477,9 @@ class SqliteValidatorStorage(ValidatorStorage):
                         "predictionDate": row[14],
                         "probabilityChoice": row[15],
                         "probability": round(row[16], 4),
-                        "closingEdge": row[17],
-                        "isArchived": row[18]
+                        "skip": row[17],
+                        "closingEdge": row[18],
+                        "isArchived": row[19]
                     }
                     try:
                         uid = row[1]  # minerId is at index 1
@@ -1469,11 +1489,11 @@ class SqliteValidatorStorage(ValidatorStorage):
                         predictions_by_miner[uid].append(
                             MatchPredictionWithMatchData(
                                 prediction=MatchPrediction(**prediction_data),
-                                actualHomeTeamScore=row[19],  # actualHomeTeamScore
-                                actualAwayTeamScore=row[20],  # actualAwayTeamScore
-                                homeTeamOdds=row[21],         # homeTeamOdds
-                                awayTeamOdds=row[22],         # awayTeamOdds
-                                drawOdds=row[23],             # drawOdds
+                                actualHomeTeamScore=row[20],  # actualHomeTeamScore
+                                actualAwayTeamScore=row[21],  # actualAwayTeamScore
+                                homeTeamOdds=row[22],         # homeTeamOdds
+                                awayTeamOdds=row[23],         # awayTeamOdds
+                                drawOdds=row[24],             # drawOdds
                             )
                         )
                     except ValidationError as e:

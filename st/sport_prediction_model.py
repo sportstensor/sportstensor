@@ -119,6 +119,15 @@ async def make_match_prediction(prediction: MatchPrediction):
 
         prediction.probability = max(prob_a, prob_b)
 
+    # Crude example of marking a prediction to be skipped
+    # This is just for demonstration purposes and should be replaced with actual logic
+    """
+    if random.random() < 0.5:
+        # Simulate a random skip prediction
+        bt.logging.info("Marking prediction to be skipped due to random chance.")
+        prediction.skip = True
+    """
+
     return prediction
 
 def generate_random_probability_no_tie() -> List[float]:
