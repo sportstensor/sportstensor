@@ -22,9 +22,10 @@ import sentry_sdk
 import mysql.connector
 from mysql.connector import Error
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import api.discord_messager as discord_messager
 import api.db as db
-from api.config import NETWORK, NETUID, IS_PROD, API_KEYS, TESTNET_VALI_HOTKEYS
+from api.config import NETWORK, NETUID, IS_PROD, API_KEYS, TESTNET_VALI_HOTKEYS, DISCORD_MATCH_ODDS_CHANNEL_ID
 from common.constants import ENABLE_APP, APP_PREDICTIONS_UNFULFILLED_THRESHOLD
 
 sentry_sdk.init(
@@ -148,6 +149,37 @@ async def main():
                 print_exception(type(err), err, err.__traceback__)
 
             await asyncio.sleep(300)
+
+    async def check_for_matches_without_odds(hours: int = 12):
+        if not IS_PROD:
+            print("Skipping check_for_matches_without_odds in testnet mode.")
+            return
+        
+        while True:
+            """Checks for matches that do not have odds within X hours and notifies the team."""
+            print("check_for_matches_without_odds()")
+
+            try:
+                matches = db.get_upcoming_matches_without_odds(hours)
+
+                # Send notification to Discord
+                if matches:
+                    message = f"Upcoming matches without odds:\n"
+                    for match in matches:
+                        # calculate hours before match
+                        match_date = match['matchDate']
+                        # Ensure match_date is timezone-aware
+                        if match_date.tzinfo is None:
+                            match_date = match_date.replace(tzinfo=timezone.utc)
+                        hours_before_match = int((match_date - datetime.now(timezone.utc)).total_seconds() / 3600)
+                        message += f"- `{match['matchId']}`: {match['awayTeamName']} at {match['homeTeamName']} - {match['matchDate']} (T-{hours_before_match}h)\n"
+                    await discord_messager.send_message(DISCORD_MATCH_ODDS_CHANNEL_ID, message)
+
+            except Exception as err:
+                print("Error during check_for_matches_without_odds", str(err))
+                print_exception(type(err), err, err.__traceback__)
+
+            await asyncio.sleep(3600)
 
     async def authenticate_user(
         request: Request,
@@ -419,6 +451,7 @@ async def main():
             ssl_keyfile="/root/origin-key.key",
         ),
         resync_miner_statuses(),
+        check_for_matches_without_odds(),
     )
 
 

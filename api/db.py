@@ -182,6 +182,33 @@ def get_upcoming_matches():
         if conn is not None:
             conn.close()
 
+def get_upcoming_matches_without_odds(hours=12):
+    try:
+        conn = get_db_conn()
+        cursor = conn.cursor(dictionary=True)
+        # Set the current time in UTC
+        cursor.execute("SET @current_time_utc = CONVERT_TZ(NOW(), @@session.time_zone, '+00:00')")
+        query = GET_MATCH_QUERY + """
+            WHERE mlo.matchDate BETWEEN @current_time_utc AND @current_time_utc + INTERVAL %s HOUR
+            AND mo.oddsapiMatchId IS NULL
+        """
+
+        cursor.execute(query, (hours,))
+        match_list = cursor.fetchall()
+
+        return match_list
+
+    except Exception as e:
+        logging.error(
+            "Failed to retrieve matches without odds from the MySQL database", exc_info=True
+        )
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
 def get_matches_with_no_odds():
     try:
         conn = get_db_conn()
