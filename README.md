@@ -39,17 +39,13 @@ The Sportstensor subnet is designed to incentivize the discovery of competitive 
 - Utilizes trained machine learning models to analyze the data and predict the team they think will win and the probability.
 - Returns the prediction back to the Validator for confirmation and further action.
 
-Miners must return two key pieces of information when responding to prediction requests:
+Miners must return three key pieces of information when responding to prediction requests:
 1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
 2. **probability**: The probability for that outcome, as a float between 0 and 1. e.g. 0.6 represents 60% probability.
-
-Optionally, miners now have the ability to skip predictions.
-3. **skip**: A boolean value (True|False) informing validators this prediction should be skipped, if eligible.
-
-Miners are only allowed to skip a maximum of 15% of their total prediction window.
+3. **skip (optional)**: A boolean value (True|False) informing validators this prediction should be skipped, if eligible.
 
 > [!CAUTION]
-> Miners who fail to respond or provide incorrect responses will be penalized.
+> Miners are only allowed to skip a maximum of 15% of their total prediction window and miners who fail to respond or provide incorrect responses will be penalized.
 
 ### Validator
 
@@ -103,14 +99,6 @@ The `miner.env` file will allow miners to define their league commitment without
 # NFL, MLB, NBA, etc. -- check common/data.py for all available leagues
 LEAGUE_COMMITMENTS=NFL
 ```
-
-#### Prediction Return Format
-
-When responding to prediction requests, miners need to provide two key pieces of information:
-1. **probabilityChoice**: The predicted outcome (Home team, Away team, Draw).
-2. **probability**: The probability for that outcome, as a float between 0 and 1. e.g. 0.6 represents 60% probability.
-
-Failure to respond or incorrectly formatted responses will result in penalties as described in the scoring and incentive mechanisms.
 
 #### Start Process: Testnet
 ```bash
