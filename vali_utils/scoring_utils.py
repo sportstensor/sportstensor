@@ -445,6 +445,9 @@ def calculate_incentives_and_update_scores(vali):
                         if not pwmd.prediction.skip
                     ]
 
+                # Make sure we only use the first ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]*2 predictions for scoring
+                predictions_with_match_data = predictions_with_match_data[:(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * 2)]
+
                 # Store the earliest prediction match date for this miner
                 if uid not in uids_to_earliest_match_date:
                     earliest_match_date = min(
