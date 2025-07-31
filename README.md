@@ -22,6 +22,8 @@ Welcome to Sportstensor—the convergence of cutting-edge technology and sports 
 
 The Sportstensor subnet is designed to incentivize the discovery of competitive advantages such as 'edge' over closing market odds, enabling top miners within the network to establish machine-driven dominance across the sports prediction landscape.
 
+[DeepWiki Summary](https://deepwiki.com/sportstensor/sportstensor)
+
 ## Why is this important?
 - Closing odds represent the pinnacle of market efficiency, determined by thousands of advanced machine learning algorithms.
 - Our subnet fosters the development of true machine intelligence by outperforming competing algorithms in a highly competitive AI-versus-AI environment.
