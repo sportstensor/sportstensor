@@ -45,22 +45,26 @@ league_mapping = {
 
 # odds api : thesportsdb
 mismatch_teams_mapping = {
-    'Orlando City SC': 'Orlando City',
-    'Inter Miami CF': 'Inter Miami',
+    # EPL teams
+    #'Tottenham Hotspur': 'Tottenham',
+    #'Leicester City': 'Leicester',
+    #'West Ham United': 'West Ham',
+    #'Ipswich Town': 'Ipswich',
+    #'Brighton and Hove Albion': 'Brighton',
+    #'Wolverhampton Wanderers': 'Wolves',
+    #'Newcastle United': 'Newcastle',
+
+    # MLS teams
     'Atlanta United FC': 'Atlanta United',
     'CF Montreal': 'CF Montréal',
-    'D.C. United': 'DC United',
-    'Tottenham Hotspur': 'Tottenham',
     'Columbus Crew SC': 'Columbus Crew',
+    'D.C. United': 'DC United',
+    'Inter Miami CF': 'Inter Miami',
     'Minnesota United FC': 'Minnesota United',
+    'Orlando City SC': 'Orlando City',
     'Vancouver Whitecaps FC': 'Vancouver Whitecaps',
-    'Leicester City': 'Leicester',
-    'West Ham United': 'West Ham',
-    'Ipswich Town': 'Ipswich',
-    'Vancouver Whitecaps FC': 'Vancouver Whitecaps',
-    'Brighton and Hove Albion': 'Brighton',
-    'Wolverhampton Wanderers': 'Wolves',
-    'Newcastle United': 'Newcastle',
+
+    # MLB teams
     'Oakland Athletics': 'Athletics',
 }
 
