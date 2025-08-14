@@ -18,22 +18,27 @@ API_URL = "https://api.the-odds-api.com/v4/sports/"
 
 # Team name mappings for normalization
 mismatch_teams_mapping = {
-    "Orlando City SC": "Orlando City",
-    "Inter Miami CF": "Inter Miami",
-    "Atlanta United FC": "Atlanta United",
-    "Montreal Impact": "CF Montréal",
-    "D.C. United": "DC United",
-    "Tottenham Hotspur": "Tottenham",
-    "Columbus Crew SC": "Columbus Crew",
-    "Minnesota United FC": "Minnesota United",
-    "Vancouver Whitecaps FC": "Vancouver Whitecaps",
-    "Leicester City": "Leicester",
-    "West Ham United": "West Ham",
-    "Brighton and Hove Albion": "Brighton",
-    "Wolverhampton Wanderers": "Wolves",
-    "Newcastle United": "Newcastle",
-    "LA Galaxy": "L.A. Galaxy",
-    "Oakland Athletics": "Athletics",
+    # EPL teams
+    #'Tottenham Hotspur': 'Tottenham',
+    #'Leicester City': 'Leicester',
+    #'West Ham United': 'West Ham',
+    #'Ipswich Town': 'Ipswich',
+    #'Brighton and Hove Albion': 'Brighton',
+    #'Wolverhampton Wanderers': 'Wolves',
+    #'Newcastle United': 'Newcastle',
+
+    # MLS teams
+    'Atlanta United FC': 'Atlanta United',
+    'CF Montreal': 'CF Montréal',
+    'Columbus Crew SC': 'Columbus Crew',
+    'D.C. United': 'DC United',
+    'Inter Miami CF': 'Inter Miami',
+    'Minnesota United FC': 'Minnesota United',
+    'Orlando City SC': 'Orlando City',
+    'Vancouver Whitecaps FC': 'Vancouver Whitecaps',
+
+    # MLB teams
+    'Oakland Athletics': 'Athletics',
 }
 
 SPORTS_TYPES = [

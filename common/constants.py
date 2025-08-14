@@ -76,7 +76,8 @@ ROI_SCORING_WEIGHT = 0.5
 
 ACTIVE_LEAGUES = [
     League.MLS,
-    League.MLB
+    League.MLB,
+    League.EPL
 ]
 
 LEAGUES_ALLOWING_DRAWS = [
@@ -94,9 +95,9 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
-    League.MLB: 0.90,
+    League.MLB: 0.87,
     League.NBA: 0.0,
-    League.EPL: 0.0,
+    League.EPL: 0.03,
     League.MLS: 0.10,
     League.NFL: 0.0
 }
@@ -131,7 +132,7 @@ LEAGUE_MINIMUM_INTEGRITY_PREDICTIONS = {
     League.NBA: 200,
     League.EPL: 100,
     League.MLS: 100,
-    League.NFL: 195,
+    League.NFL: 100,
 }
 
 # Single sensitivity alpha depcrecated for league-specific sensitivity alphas
