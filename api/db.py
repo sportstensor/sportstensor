@@ -1338,6 +1338,8 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
         conn = get_db_conn()
         c = conn.cursor(dictionary=True)
 
+        ALLOWED_LEAGUES = {'mlb', 'nfl', 'nba', 'mls', 'epl'}
+
         prediction_edge_results_table_name = "MatchPredictionEdgeResults"
         params = [vali_hotkey]
         miners_table_name = "Miners"
@@ -1371,8 +1373,11 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
             query += " AND m.miner_is_registered = 1"
 
         if league:
-            query += f" AND mpr.{league.lower()}_pred_count > 0"
-        
+            league_clean = league.lower().strip()
+            if league_clean not in ALLOWED_LEAGUES:
+                raise ValueError(f"Invalid league: {league}. Allowed: {', '.join(ALLOWED_LEAGUES)}")
+            query += f" AND mpr.{league_clean}_pred_count > 0"
+
         if date:
             query += " AND DATE(mpr.lastUpdated) >= %s"
             date = dt.datetime.strptime(date, "%Y-%m-%d")
@@ -1391,7 +1396,7 @@ def get_prediction_edge_results(vali_hotkey, miner_hotkey=None, miner_id=None, l
 
         if league:
             query += f"""
-                , mpr.{league.lower()}_score DESC, mpr.{league.lower()}_pred_count DESC
+                , mpr.{league_clean}_score DESC, mpr.{league_clean}_pred_count DESC
             """
 
         if count:
