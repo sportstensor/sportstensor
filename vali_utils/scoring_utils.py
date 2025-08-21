@@ -31,6 +31,7 @@ from common.constants import (
     ROI_BET_AMOUNT,
     ROI_INCR_PRED_COUNT_PERCENTAGE,
     MAX_INCR_ROI_DIFF_PERCENTAGE,
+    MIN_RHO_POSITIVE_ROI,
     ROI_SCORING_WEIGHT
 )
 
@@ -619,7 +620,11 @@ def calculate_incentives_and_update_scores(vali):
             if roi_diff > 0:
                 if roi < MIN_ROI:
                     # If ROI is less than the minimum ROI, set final_roi_score to 0.0
-                    bt.logging.info(f"Minimum ROI of {MIN_ROI*100} not met for miner {uid} in league {league.name}: {roi*100:.2f}%")
+                    bt.logging.info(f"Miner {uid}: Minimum ROI of {MIN_ROI*100} not met: {roi*100:.2f}% - setting score to 0")
+                    final_roi_score = 0.0
+                elif rho >= MIN_RHO_POSITIVE_ROI and roi <= 0:
+                    # If ROI is less than or equal to 0 and rho is ~full, set final_roi_score to 0.0
+                    bt.logging.info(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_ROI} ({rho:.4f}) and ROI <= 0: {roi*100:.2f}% - setting score to 0")
                     final_roi_score = 0.0
                 elif roi >= MIN_ROI and roi < 0:
                     # Normalize ROI to 0-1 scale
@@ -633,7 +638,7 @@ def calculate_incentives_and_update_scores(vali):
                     final_roi_score = sigmoid_score * MIN_ROI_SCORE
                     # Finally, scale the final ROI score by rho
                     final_roi_score = final_roi_score * rho
-                    bt.logging.info(f"Negative ROI for miner {uid} in league {league.name}: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_roi_score:.4f}")
+                    bt.logging.info(f"Miner {uid}: Negative ROI: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_roi_score:.4f}")
                 else:
                     # If market_roi is less than 0, update roi_diff to be distance from 0, or just roi
                     if market_roi < 0:
@@ -658,7 +663,7 @@ def calculate_incentives_and_update_scores(vali):
                     # Scale the penalty factor to max at 0.99
                     penalty_factor = 0.99 * np.exp(-k * abs(roi_incr_diff))
                     adjustment_factor = 1 - penalty_factor
-                    bt.logging.info(f"Incremental ROI score penalty for miner {uid} in league {league.name}: {roi_incr:.4f} vs {market_roi_incr} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_roi_score:.4f} -> {final_roi_score * adjustment_factor:.4f}")
+                    bt.logging.info(f"Miner {uid}: Incremental ROI score penalty: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_roi_score:.4f} -> {final_roi_score * adjustment_factor:.4f}")
                     final_roi_score *= adjustment_factor
 
             league_roi_scores[league][index] = final_roi_score

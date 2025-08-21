@@ -72,6 +72,7 @@ ROI_INCR_PRED_COUNT_PERCENTAGE = 0.05
 MAX_INCR_ROI_DIFF_PERCENTAGE = 0.10
 MIN_ROI = -0.03
 MIN_ROI_SCORE = 0.05
+MIN_RHO_POSITIVE_ROI = 0.75
 ROI_SCORING_WEIGHT = 0.5
 
 ACTIVE_LEAGUES = [
@@ -146,7 +147,7 @@ EXTREMIS_BETA = 0.25
 # PARETO_MU is the minimum value for the Pareto distribution
 PARETO_MU = 1.0
 # PARETO_ALPHA is the shape of the Pareto distribution. The lower the ALPHA, the more suppressed the distribution.
-PARETO_ALPHA = 1.2
+PARETO_ALPHA = 1.8
 
 ENABLE_EMISSION_CONTROL = True
 EMISSION_CONTROL_UID = 7
