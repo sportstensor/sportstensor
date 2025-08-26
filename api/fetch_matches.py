@@ -106,13 +106,32 @@ def fetch_and_store_events():
 
     except Exception as e:
         logging.error(f"Error loading API endpoints from URL {api_endpoints_url}: {e}")
-        logging.info(f"Using fallback hardcoded API endpoints.")
-        urls = [
-            #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4328&s=2023-2024', #English Premier League
-            #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4387&s=2023-2024', #NBA
-            #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4424&s=2024', #MLB
-            "https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4346&s=2024"  # American Major League Soccer
-        ]
+        try:
+            # Fallback to local CSV file
+            leagues_csv_filename = 'api/sn41_league_statuses.csv'
+            if NETWORK == "test":
+                leagues_csv_filename = 'api/sn41_league_statuses_testnet.csv'
+            with open(leagues_csv_filename, 'r') as f:
+                data = f.read()
+                # split the response text into lines
+                lines = data.split("\n")
+                # filter the lines to include only those where column C is "Active"
+                urls = [
+                    line.split(",")[4].strip()
+                    for line in lines[1:]
+                    if line.split(",")[5].strip() == "Active"
+                ]
+
+            logging.info(f"Loaded {len(urls)} active leagues from local CSV file")
+        except Exception as local_error:
+            logging.error(f"Failed to load local CSV file: {local_error}")
+            logging.info(f"Using fallback hardcoded API endpoints.")
+            urls = [
+                #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4328&s=2023-2024', #English Premier League
+                #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4387&s=2023-2024', #NBA
+                #'https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4424&s=2024', #MLB
+                "https://www.thesportsdb.com/api/v1/json/60130162/eventsseason.php?id=4346&s=2024"  # American Major League Soccer
+            ]
 
     logging.info("Fetching data from APIs")
     all_events = []
