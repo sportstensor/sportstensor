@@ -1,0 +1,20 @@
+LEAGUE,SCORING %,ROLLING THRESHOLDS,SUBNET STATUS,MATCHES FEED,FEED STATUS,RHO ALPHA
+English Premier League,0.03,256,Active,https://www.thesportsdb.com/api/v1/json/025003/eventsseason.php?id=4328&s=2025-2026,Active,0.036
+NBA,0,710,Inactive,https://www.thesportsdb.com/api/v1/json/025003/eventsseason.php?id=4387&s=2024-2025,Inactive,0.013
+MLB,0.87,1150,Active,https://www.thesportsdb.com/api/v1/json/025003/eventsseason.php?id=4424&s=2025,Active,0.008
+American Major League Soccer,0.1,256,Active,https://www.thesportsdb.com/api/v1/json/025003/eventsseason.php?id=4346&s=2025,Active,0.036
+NFL,0,200,Inactive,https://www.thesportsdb.com/api/v1/json/025003/eventsseason.php?id=4391&s=2024,Inactive,0.046
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+,,,,,,
+Total,1,,,,,

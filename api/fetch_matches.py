@@ -225,7 +225,26 @@ def fetch_and_store_events_oddsapi():
 
     except Exception as e:
         logging.error(f"Error loading active leagues from URL {api_endpoints_url}: {e}")
-        return
+        try:
+            # Fallback to local CSV file
+            leagues_csv_filename = 'sn41_league_statuses.csv'
+            if NETWORK == "test":
+                leagues_csv_filename = 'sn41_league_statuses_testnet.csv'
+            with open(leagues_csv_filename, 'r') as f:
+                data = f.read()
+                # split the response text into lines
+                lines = response.text.split("\n")
+                # filter the lines to include only those where column C is "Active"
+                active_leagues = [
+                    line.split(",")[0].strip()
+                    for line in lines[1:]
+                    if line.split(",")[5].strip() == "Active"
+                ]
+
+            logging.info(f"Loaded {len(active_leagues)} active leagues from local CSV file")
+        except Exception as local_error:
+            logging.error(f"Failed to load local CSV file: {local_error}")
+            return
 
     logging.info("Fetching data from The Odds Api")
     all_events = []
