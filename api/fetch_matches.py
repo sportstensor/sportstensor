@@ -233,7 +233,7 @@ def fetch_and_store_events_oddsapi():
             with open(leagues_csv_filename, 'r') as f:
                 data = f.read()
                 # split the response text into lines
-                lines = response.text.split("\n")
+                lines = data.split("\n")
                 # filter the lines to include only those where column C is "Active"
                 active_leagues = [
                     line.split(",")[0].strip()
