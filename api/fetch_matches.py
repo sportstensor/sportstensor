@@ -227,9 +227,9 @@ def fetch_and_store_events_oddsapi():
         logging.error(f"Error loading active leagues from URL {api_endpoints_url}: {e}")
         try:
             # Fallback to local CSV file
-            leagues_csv_filename = 'sn41_league_statuses.csv'
+            leagues_csv_filename = 'api/sn41_league_statuses.csv'
             if NETWORK == "test":
-                leagues_csv_filename = 'sn41_league_statuses_testnet.csv'
+                leagues_csv_filename = 'api/sn41_league_statuses_testnet.csv'
             with open(leagues_csv_filename, 'r') as f:
                 data = f.read()
                 # split the response text into lines
