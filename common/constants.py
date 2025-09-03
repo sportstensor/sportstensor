@@ -78,7 +78,8 @@ ROI_SCORING_WEIGHT = 0.5
 ACTIVE_LEAGUES = [
     League.MLS,
     League.MLB,
-    League.EPL
+    League.EPL,
+    League.NFL
 ]
 
 LEAGUES_ALLOWING_DRAWS = [
@@ -96,11 +97,11 @@ ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE = {
 
 # MUST ADD UP to 1.0 (100%)
 LEAGUE_SCORING_PERCENTAGES = {
-    League.MLB: 0.87,
+    League.MLB: 0.82,
     League.NBA: 0.0,
     League.EPL: 0.03,
     League.MLS: 0.10,
-    League.NFL: 0.0
+    League.NFL: 0.05
 }
 
 # ALPHA controls how many predictions are needed to start getting rewards. Higher the ALPHA, the less predictions needed.
