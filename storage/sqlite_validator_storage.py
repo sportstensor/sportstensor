@@ -854,7 +854,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 ]
                 return matches
             
-    def get_total_prediction_requests_count(self, matchDateSince: dt.datetime, league: Optional[League] = None) -> int:
+    def get_total_prediction_requests_count(self, matchDateSince: dt.datetime, league: Optional[League] = None, interval: Optional[str] = None) -> int:
         """Gets total count of prediction requests sent to miners since the passed in date."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
@@ -865,13 +865,23 @@ class SqliteValidatorStorage(ValidatorStorage):
                 params = [dateSince]
                 
                 # Count rows where any type of prediction was requested
-                query = """
-                    SELECT SUM(
-                        CASE WHEN prediction_24_hour THEN 1 ELSE 0 END +
-                        CASE WHEN prediction_12_hour THEN 1 ELSE 0 END +
-                        CASE WHEN prediction_4_hour THEN 1 ELSE 0 END +
-                        CASE WHEN prediction_10_min THEN 1 ELSE 0 END
-                    ) as total_requests
+                if interval in ['24_hour', '12_hour', '4_hour', '10_min']:
+                    query = f"""
+                        SELECT SUM(
+                            CASE WHEN prediction_{interval} THEN 1 ELSE 0 END
+                        ) as total_requests
+                    """
+                else:
+                    query = """
+                        SELECT SUM(
+                            CASE WHEN prediction_24_hour THEN 1 ELSE 0 END +
+                            CASE WHEN prediction_12_hour THEN 1 ELSE 0 END +
+                            CASE WHEN prediction_4_hour THEN 1 ELSE 0 END +
+                            CASE WHEN prediction_10_min THEN 1 ELSE 0 END
+                        ) as total_requests
+                    """
+
+                query += """
                     FROM MatchPredictionRequests mpr
                     JOIN Matches m ON mpr.matchId = m.matchId
                     WHERE m.matchDate > ?
@@ -1241,7 +1251,7 @@ class SqliteValidatorStorage(ValidatorStorage):
                 )
                 connection.commit()
 
-    def get_total_match_predictions_by_miner(self, miner_hotkey: str, miner_uid: int, matchDateSince: Optional[dt.datetime] = None, league: Optional[League] = None) -> int:
+    def get_total_match_predictions_by_miner(self, miner_hotkey: str, miner_uid: int, matchDateSince: Optional[dt.datetime] = None, league: Optional[League] = None, interval: Optional[str] = None) -> int:
         """Gets the total number of predictions a miner has made since being registered. Must be scored and not archived."""
         with self.lock:
             with contextlib.closing(self._create_connection()) as connection:
@@ -1270,6 +1280,15 @@ class SqliteValidatorStorage(ValidatorStorage):
                 if league:
                     query += " AND mp.league = ? "
                     params.append(league.value)
+
+                if interval == "T-10m":
+                    query += " AND mp.predictionDate BETWEEN DATETIME(mp.matchDate, '-0.2 hours') AND DATETIME(mp.matchDate, '-0.001 hours') "
+                elif interval == "T-4h":
+                    query += " AND mp.predictionDate BETWEEN DATETIME(mp.matchDate, '-4 hours') AND DATETIME(mp.matchDate, '-3 hours') "
+                elif interval == "T-12h":
+                    query += " AND mp.predictionDate BETWEEN DATETIME(mp.matchDate, '-12 hours') AND DATETIME(mp.matchDate, '-11 hours') "
+                elif interval == "T-24h":
+                    query += " AND mp.predictionDate BETWEEN DATETIME(mp.matchDate, '-24 hours') AND DATETIME(mp.matchDate, '-23 hours') "
                 
                 cursor.execute(query, params)
                 result = cursor.fetchone()

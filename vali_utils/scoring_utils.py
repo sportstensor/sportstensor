@@ -1,8 +1,9 @@
 import math
 import numpy as np
 from scipy.stats import pareto
+from collections import defaultdict
 import datetime as dt
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Tuple, Optional
 from tabulate import tabulate
 
@@ -27,12 +28,17 @@ from common.constants import (
     MIN_EDGE_SCORE,
     MAX_MIN_EDGE_SCORE,
     MIN_ROI,
-    MIN_ROI_SCORE,
+    MIN_PNL_ROI_SCORE,
     ROI_BET_AMOUNT,
     ROI_INCR_PRED_COUNT_PERCENTAGE,
     MAX_INCR_ROI_DIFF_PERCENTAGE,
-    MIN_RHO_POSITIVE_ROI,
-    ROI_SCORING_WEIGHT
+    MIN_RHO_POSITIVE_PNL_ROI,
+    PNL_CUMULATIVE_WEIGHT,
+    PNL_DAILY_AVG_WEIGHT,
+    PNL_WEEKLY_SORTINO_WEIGHT,
+    PNL_MIN_WEEKLY_SORTINO,
+    PNL_SORTINO_BOOST_THRESHOLD,
+    PNL_ROI_SCORING_WEIGHT
 )
 
 def calculate_edge(prediction_team: str, prediction_prob: float, actual_team: str, closing_odds: float | None) -> Tuple[float, int]:
@@ -312,6 +318,7 @@ def apply_no_prediction_response_penalties(
     # Query the database for all eligible matches within the last MINER_RELIABILITY_CUTOFF_IN_DAYS days
     match_date_since = dt.datetime.now(timezone.utc) - dt.timedelta(days=MINER_RELIABILITY_CUTOFF_IN_DAYS)
     total_possible_predictions = storage.get_total_prediction_requests_count(matchDateSince=match_date_since, league=league)
+    total_possible_10m_predictions = storage.get_total_prediction_requests_count(matchDateSince=match_date_since, league=league, interval='10_min') # intervals: '24_hour', '12_hour', '4_hour', '10_min'
     if total_possible_predictions and total_possible_predictions > 0:
         print(f"Checking miner prediction responses for league {league.name} (total possible predictions: {total_possible_predictions})")
         # Check all miners committed to this league
@@ -326,16 +333,28 @@ def apply_no_prediction_response_penalties(
                 continue
             miner_hotkey = metagraph.hotkeys[uid]
             get_miner_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league)
+            get_miner_10m_predictions_count = storage.get_total_match_predictions_by_miner(miner_hotkey, uid, match_date_since, league, interval='T-10m')
             # Check if miner predictions count is within MIN_MINER_RELIABILITY % of total possible predictions
             if get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY_FLOOR:
                 # Miner has not been responding to the floor amount of prediction requests and will score 0
                 league_scores[uid] = 0
                 print(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
-            
+
+            elif get_miner_10m_predictions_count < total_possible_10m_predictions * MIN_MINER_RELIABILITY_FLOOR:
+                # Miner has not been responding to the floor amount of 10m prediction requests and will score 0
+                league_scores[uid] = 0
+                print(f"Miner {uid} has only fulfilled {get_miner_10m_predictions_count} out of {total_possible_10m_predictions} T-10m predictions ({round((get_miner_10m_predictions_count/total_possible_10m_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Setting score to 0.")
+
             elif get_miner_predictions_count < total_possible_predictions * MIN_MINER_RELIABILITY:
                 # Miner has not been responding to enough prediction requests and will be penalized
                 league_scores[uid] = league_scores[uid] * MINER_RELIABILITY_PENALTY
                 print(f"Miner {uid} has only fulfilled {get_miner_predictions_count} out of {total_possible_predictions} predictions ({round((get_miner_predictions_count/total_possible_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Penalizing score by {MINER_RELIABILITY_PENALTY*100}%.")
+
+            elif get_miner_10m_predictions_count < total_possible_10m_predictions * MIN_MINER_RELIABILITY:
+                # Miner has not been responding to enough 10m prediction requests and will be penalized
+                league_scores[uid] = league_scores[uid] * MINER_RELIABILITY_PENALTY
+                print(f"Miner {uid} has only fulfilled {get_miner_10m_predictions_count} out of {total_possible_10m_predictions} T-10m predictions ({round((get_miner_10m_predictions_count/total_possible_10m_predictions)*100)}%) in the last {MINER_RELIABILITY_CUTOFF_IN_DAYS} days. Penalizing score by {MINER_RELIABILITY_PENALTY*100}%.")
+
         print("-" * 75)
     
     return league_scores
@@ -419,6 +438,9 @@ def calculate_incentives_and_update_scores(vali):
         for index, uid in enumerate(all_uids):
             total_score, rho = 0, 0
             predictions_with_match_data = []
+            # Initialize PnL dictionaries
+            miner_pnl = 0.0
+            miner_daily_pnl = defaultdict(float)
             # Only process miners that are committed to the league
             if uid in league_miner_uids:
                 hotkey = vali.metagraph.hotkeys[uid]
@@ -493,6 +515,9 @@ def calculate_incentives_and_update_scores(vali):
                         bt.logging.debug(f"Skipping calculation of this prediction.")
                         continue
 
+                    # date part for daily stat calculations
+                    match_date = pwmd.prediction.matchDate.date()
+
                     # Add to total prediction wins, if applicable
                     if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
                         league_pred_win_counts[league][index] += 1
@@ -501,8 +526,14 @@ def calculate_incentives_and_update_scores(vali):
                     league_roi_counts[league][index] += 1
                     if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
                         league_roi_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                        if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                            miner_pnl += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                            miner_daily_pnl[match_date] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
                     else:
                         league_roi_payouts[league][index] -= ROI_BET_AMOUNT
+                        if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                            miner_pnl -= ROI_BET_AMOUNT
+                            miner_daily_pnl[match_date] -= ROI_BET_AMOUNT
 
                     # Calculate the market ROI for the prediction
                     if pwmd.actualHomeTeamScore > pwmd.actualAwayTeamScore and pwmd.homeTeamOdds < pwmd.awayTeamOdds:
@@ -616,16 +647,42 @@ def calculate_incentives_and_update_scores(vali):
             # Calculate the difference between the miner's ROI and the market ROI
             roi_diff = roi - market_roi
 
+            # PnL Calculations. Avg daily, Daily Sortino, and Weekly Sortino
+            avg_daily_pnl = sum(miner_daily_pnl.values()) / len(miner_daily_pnl) if len(miner_daily_pnl) > 0 else 0.0
+            def get_week_start(date):
+                """Get the Monday of the week containing the given date"""
+                days_since_monday = date.weekday()
+                return date - timedelta(days=days_since_monday)
+
+            weekly_pnl = defaultdict(float)
+            for date, pnl in miner_daily_pnl.items():
+                week_start = get_week_start(date)
+                weekly_pnl[week_start] += pnl
+
+            avg_weekly_pnl = sum(weekly_pnl.values()) / len(weekly_pnl) if len(weekly_pnl) > 0 else 0.0
+            pnl_weekly_sortino = 0
+            if len(weekly_pnl) > 1:
+                weekly_pnls = list(weekly_pnl.values())
+                weekly_downside_pnls = [min(0, pnl - avg_weekly_pnl) for pnl in weekly_pnls]
+                weekly_downside_std = math.sqrt(sum(x**2 for x in weekly_downside_pnls) / len(weekly_downside_pnls))
+                pnl_weekly_sortino = avg_weekly_pnl / weekly_downside_std if weekly_downside_std > 0 else 0
+
             # Base ROI score requires the miner is beating the market
             if roi_diff > 0:
                 if roi < MIN_ROI:
                     # If ROI is less than the minimum ROI, set final_roi_score to 0.0
                     bt.logging.info(f"Miner {uid}: Minimum ROI of {MIN_ROI*100} not met: {roi*100:.2f}% - setting score to 0")
-                    final_roi_score = 0.0
-                elif rho >= MIN_RHO_POSITIVE_ROI and roi <= 0:
+                    final_pnl_roi_score = 0.0
+                elif rho >= MIN_RHO_POSITIVE_PNL_ROI and roi <= 0:
                     # If ROI is less than or equal to 0 and rho is ~full, set final_roi_score to 0.0
-                    bt.logging.info(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_ROI} ({rho:.4f}) and ROI <= 0: {roi*100:.2f}% - setting score to 0")
-                    final_roi_score = 0.0
+                    bt.logging.info(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_PNL_ROI} ({rho:.4f}) and ROI <= 0: {roi*100:.2f}% - setting score to 0")
+                    final_pnl_roi_score = 0.0
+                elif rho >= MIN_RHO_POSITIVE_PNL_ROI and miner_pnl <= 0:
+                    bt.logging.info(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_PNL_ROI} ({rho:.4f}) and PnL <= 0: {miner_pnl:.2f} - setting score to 0")
+                    final_pnl_roi_score = 0.0
+                elif rho >= MIN_RHO_POSITIVE_PNL_ROI and pnl_weekly_sortino < PNL_MIN_WEEKLY_SORTINO:
+                    bt.logging.info(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_PNL_ROI} ({rho:.4f}) and Weekly Sortino is < {PNL_MIN_WEEKLY_SORTINO}: {pnl_weekly_sortino:.2f} - setting score to 0")
+                    final_pnl_roi_score = 0.0
                 elif roi >= MIN_ROI and roi < 0:
                     # Normalize ROI to 0-1 scale
                     normalized_roi = roi / MIN_ROI
@@ -635,24 +692,38 @@ def calculate_incentives_and_update_scores(vali):
                     sigmoid_input = k * (normalized_roi - 0.5)
                     sigmoid_score = 1 / (1 + math.exp(sigmoid_input))
                     # Scale to final score
-                    final_roi_score = sigmoid_score * MIN_ROI_SCORE
-                    # Finally, scale the final ROI score by rho
-                    final_roi_score = final_roi_score * rho
-                    bt.logging.info(f"Miner {uid}: Negative ROI: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_roi_score:.4f}")
+                    final_pnl_roi_score = sigmoid_score * MIN_PNL_ROI_SCORE
+                    # Finally, scale the final PnL ROI score by rho
+                    final_pnl_roi_score = final_pnl_roi_score * rho
+                    bt.logging.info(f"Miner {uid}: Negative ROI: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_pnl_roi_score:.4f}")
                 else:
                     # If market_roi is less than 0, update roi_diff to be distance from 0, or just roi
                     if market_roi < 0:
                         roi_diff = roi
 
-                    # ROI score is miner's difference from market ROI, scaled by rho
-                    final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
+                    # Instead of ROI for score, let's use PnL
+                    miner_pnl_score = 0
+                    if miner_pnl > 0:
+                        miner_pnl_score = miner_pnl * PNL_CUMULATIVE_WEIGHT
+                        if avg_daily_pnl > 0:
+                            if rho > MIN_RHO_POSITIVE_PNL_ROI:
+                                miner_pnl_score *= ((1.5 + avg_daily_pnl) * PNL_DAILY_AVG_WEIGHT)
+                            else:
+                                miner_pnl_score *= ((1 + avg_daily_pnl) * PNL_DAILY_AVG_WEIGHT)
+                        if pnl_weekly_sortino > 0:
+                            # Boost high performing weekly sortino
+                            if pnl_weekly_sortino > PNL_SORTINO_BOOST_THRESHOLD:
+                                miner_pnl_score *= ((1.5 + pnl_weekly_sortino) * PNL_WEEKLY_SORTINO_WEIGHT)
+                            else:
+                                miner_pnl_score *= ((1 + pnl_weekly_sortino) * PNL_WEEKLY_SORTINO_WEIGHT)
+                    final_pnl_roi_score = round(rho * (miner_pnl_score if miner_pnl_score>0 else 0), 4)
             else:
-                final_roi_score = 0.0
+                final_pnl_roi_score = 0.0
             
             roi_incr = roi
             market_roi_incr = market_roi
             # Calculate incremental ROI score for miner and market. Penalize if too similar.
-            if league_roi_incr_counts[league][index] == round(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0) and final_roi_score > 0:
+            if league_roi_incr_counts[league][index] == round(vali.ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0) and final_pnl_roi_score > 0:
                 market_roi_incr = league_roi_incr_market_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
                 roi_incr = league_roi_incr_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
                 roi_incr_diff = roi_incr - market_roi_incr
@@ -663,17 +734,21 @@ def calculate_incentives_and_update_scores(vali):
                     # Scale the penalty factor to max at 0.99
                     penalty_factor = 0.99 * np.exp(-k * abs(roi_incr_diff))
                     adjustment_factor = 1 - penalty_factor
-                    bt.logging.info(f"Miner {uid}: Incremental ROI score penalty: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_roi_score:.4f} -> {final_roi_score * adjustment_factor:.4f}")
-                    final_roi_score *= adjustment_factor
+                    bt.logging.info(f"Miner {uid}: Incremental ROI score penalty: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_pnl_roi_score:.4f} -> {final_pnl_roi_score * adjustment_factor:.4f}")
+                    final_pnl_roi_score *= adjustment_factor
 
-            league_roi_scores[league][index] = final_roi_score
+            league_roi_scores[league][index] = final_pnl_roi_score
 
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
                 league_table_data.append([
                     uid,
                     round(final_edge_score, 2),
-                    round(final_roi_score, 2),
+                    round(final_pnl_roi_score, 2),
+                    str(round(miner_pnl, 2)) + "u",
+                    str(round(avg_daily_pnl, 2)) + "u",
+                    str(round(avg_weekly_pnl, 2)) + "u",
+                    str(round(pnl_weekly_sortino, 4)) + "",
                     str(round(roi*100, 2)) + "%",
                     str(round(market_roi*100, 2)) + "%",
                     str(round(roi_diff*100, 2)) + "%", 
@@ -687,7 +762,7 @@ def calculate_incentives_and_update_scores(vali):
         # Log league scores
         if league_table_data:
             bt.logging.info(f"\nScores for {league.name}:")
-            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'Skip Preds', '# Predictions', 'Rho'], tablefmt='grid'))
+            bt.logging.info("\n" + tabulate(league_table_data, headers=['UID', 'Edge Score', 'PnL/ROI Score', 'PnL', 'PnL Daily Avg', 'PnL Weekly Avg', 'Weekly Sortino', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'Skip Preds', '# Predictions', 'Rho'], tablefmt='grid'))
             bt.logging.info("* indicates rho is below minimum threshold and not eligible for rewards yet")
             bt.logging.info("** indicates miner has submitted too many skip predictions, rendering those predictions as scorable\n")
         else:
@@ -726,19 +801,32 @@ def calculate_incentives_and_update_scores(vali):
 
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
-            ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
-            if r > 0 and e > 0 and rho >= LEAGUE_MINIMUM_RHOS[league] else 0 # roi and edge must be > 0 and rho must be >= min rho
+            ((1-PNL_ROI_SCORING_WEIGHT) * e + PNL_ROI_SCORING_WEIGHT * r) * rho
+            if r > 0 and e > 0 and rho >= LEAGUE_MINIMUM_RHOS[league] else 0 # pnl/roi and edge must be > 0 and rho must be >= min rho
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
 
+        # Create a lookup dictionary from league_table_data
+        league_data_lookup = {row[0]: row for row in league_table_data}
         # Create top 10 scores table
         top_scores_table = []
         # Sort the final scores in descending order. We need to sort the uids as well so they match
         top_scores, top_uids = zip(*sorted(zip(league_scores[league], all_uids), reverse=True))
         for i in range(10):
-            top_scores_table.append([i+1, top_uids[i], top_scores[i]])
+            if top_uids[i] in league_data_lookup:
+                league_row = league_data_lookup[top_uids[i]]
+                final_edge_score = league_row[1]
+                final_roi_score = league_row[2]
+                pnl = league_row[3]
+                avg_pnl = league_row[4]
+                avg_weekly_pnl = league_row[5]
+                pnl_weekly_sortino = league_row[6]
+                roi = league_row[7]
+                skip_preds = league_row[14]
+                total_preds = league_row[15]
+                top_scores_table.append([i+1, top_uids[i], top_scores[i], final_edge_score, final_roi_score, roi, pnl, avg_pnl, avg_weekly_pnl, pnl_weekly_sortino, skip_preds, total_preds])
         bt.logging.info(f"\nTop 10 Scores for {league.name}:")
-        bt.logging.info("\n" + tabulate(top_scores_table, headers=['#', 'UID', 'Final Score'], tablefmt='grid'))
+        bt.logging.info("\n" + tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'Edge Score', 'PnL/ROI Score', 'ROI', 'PnL', 'PnL Daily Avg', 'PnL Weekly Avg', 'Weekly Sortino', 'Skip Preds', '# Preds'], tablefmt='grid'))
 
         if len(matches_without_odds) > 0:
             print(f"\n==============================================================================")

@@ -4,8 +4,9 @@ import itertools
 import numpy as np
 import math
 
+from collections import defaultdict
 import datetime as dt
-from datetime import timezone
+from datetime import timezone, timedelta
 import time
 import random
 from typing import Dict, List, Optional, Any
@@ -31,8 +32,14 @@ from common.constants import (
     MIN_EDGE_SCORE,
     MAX_MIN_EDGE_SCORE,
     MIN_ROI,
-    MIN_ROI_SCORE,
-    ROI_SCORING_WEIGHT,
+    MIN_PNL_ROI_SCORE,
+    MIN_RHO_POSITIVE_PNL_ROI,
+    PNL_CUMULATIVE_WEIGHT,
+    PNL_DAILY_AVG_WEIGHT,
+    PNL_WEEKLY_SORTINO_WEIGHT,
+    PNL_MIN_WEEKLY_SORTINO,
+    PNL_SORTINO_BOOST_THRESHOLD,
+    PNL_ROI_SCORING_WEIGHT,
     LEAGUES_ALLOWING_DRAWS,
     SENSITIVITY_ALPHA,
     GAMMA,
@@ -122,243 +129,250 @@ def calculate_incentives_and_update_scores():
         uids_to_league = {
             0: 'MLB',
             3: 'MLB',
-            4: 'MLS',
+            4: 'EPL',
             5: 'MLB',
             6: 'MLS',
             8: 'MLB',
             9: 'MLB',
-            10: 'MLS',
+            10: 'MLB',
+            11: 'MLS',
             12: 'MLB',
-            13: 'MLB',
-            14: 'MLS',
-            15: 'MLS',
+            13: 'NFL',
+            14: 'EPL',
+            15: 'MLB',
             16: 'MLB',
             17: 'MLB',
             18: 'MLB',
-            19: 'MLS',
-            20: 'MLB',
-            21: 'MLS',
-            22: 'MLS',
+            19: 'EPL',
+            20: 'NFL',
+            21: 'MLB',
+            22: 'MLB',
             23: 'MLB',
-            24: 'MLS',
-            25: 'MLS',
-            26: 'MLB',
+            24: 'NFL',
+            25: 'EPL',
+            26: 'NFL',
             27: 'MLB',
             28: 'MLB',
             29: 'MLB',
             30: 'MLB',
-            31: 'MLB',
+            31: 'EPL',
             32: 'MLB',
-            33: 'MLB',
             34: 'MLS',
-            35: 'MLS',
-            36: 'MLS',
-            37: 'MLB',
-            38: 'MLB',
-            39: 'MLB',
-            40: 'MLS',
-            41: 'MLB',
-            42: 'MLS',
+            35: 'MLB',
+            36: 'MLB',
+            37: 'NFL',
+            38: 'NFL',
+            39: 'NFL',
+            40: 'NFL',
+            42: 'MLB',
             43: 'MLB',
-            45: 'MLS',
-            46: 'MLB',
+            44: 'NFL',
+            45: 'MLB',
+            46: 'NFL',
             47: 'MLB',
-            48: 'MLB',
+            48: 'NFL',
             49: 'MLS',
-            50: 'MLB',
-            51: 'MLS',
-            52: 'MLS',
+            50: 'EPL',
+            51: 'NFL',
+            52: 'NFL',
             53: 'MLB',
             54: 'MLB',
             56: 'MLB',
+            57: 'MLB',
             58: 'MLB',
-            59: 'MLS',
+            59: 'MLB',
             60: 'MLB',
             61: 'MLB',
             62: 'MLB',
-            63: 'MLS',
-            64: 'MLB',
-            65: 'MLB',
+            63: 'MLB',
+            64: 'EPL',
+            65: 'NFL',
             66: 'MLB',
-            67: 'MLB',
+            67: 'EPL',
+            68: 'MLS',
             69: 'MLB',
-            70: 'MLS',
+            70: 'EPL',
             71: 'MLB',
-            72: 'MLS',
+            72: 'MLB',
             73: 'MLB',
-            74: 'MLB',
-            75: 'MLS',
-            76: 'MLB',
-            77: 'MLS',
+            74: 'EPL',
+            75: 'NFL',
+            76: 'EPL',
+            77: 'NFL',
             78: 'MLB',
             79: 'MLS',
             80: 'MLB',
             81: 'MLB',
-            82: 'MLS',
-            83: 'MLS',
+            82: 'MLB',
+            83: 'MLB',
             84: 'MLB',
             85: 'MLS',
             86: 'MLB',
-            87: 'MLS',
-            88: 'MLB',
+            87: 'MLB',
+            88: 'NFL',
             89: 'MLB',
-            90: 'MLB',
-            91: 'MLS',
-            92: 'MLB',
-            93: 'MLB',
+            90: 'NFL',
+            91: 'NFL',
+            92: 'NFL',
+            93: 'NFL',
             94: 'MLS',
-            95: 'MLS',
-            97: 'MLB',
+            95: 'MLB',
+            97: 'EPL',
             98: 'MLB',
             99: 'MLS',
-            101: 'MLS',
-            102: 'MLS',
-            103: 'MLS',
-            104: 'MLB',
-            105: 'MLS',
+            100: 'MLB',
+            101: 'MLB',
+            102: 'MLB',
+            103: 'MLB',
+            104: 'MLS',
+            105: 'MLB',
             106: 'MLB',
             107: 'MLB',
             108: 'MLB',
-            109: 'MLB',
-            110: 'MLS',
+            109: 'NFL',
+            110: 'NFL',
             111: 'MLB',
-            112: 'MLS',
-            113: 'MLB',
-            114: 'MLS',
+            112: 'MLB',
+            113: 'EPL',
+            114: 'NFL',
             115: 'MLB',
-            116: 'MLS',
-            117: 'MLS',
+            116: 'MLB',
+            117: 'MLB',
             118: 'MLB',
-            119: 'MLS',
-            120: 'MLS',
-            121: 'MLS',
+            119: 'EPL',
+            120: 'MLB',
+            121: 'NFL',
             122: 'MLB',
-            123: 'MLS',
+            123: 'MLB',
             124: 'MLB',
-            125: 'MLS',
-            126: 'MLS',
-            127: 'MLB',
+            125: 'EPL',
+            126: 'MLB',
+            127: 'EPL',
             128: 'MLB',
-            129: 'MLS',
-            130: 'MLS',
-            131: 'MLB',
-            132: 'MLS',
-            133: 'MLS',
-            134: 'MLS',
+            129: 'MLB',
+            130: 'NFL',
+            131: 'NFL',
+            132: 'MLB',
+            133: 'MLB',
+            134: 'EPL',
             135: 'MLB',
-            136: 'MLB',
-            137: 'MLB',
+            136: 'MLS',
+            137: 'NFL',
             138: 'MLB',
-            139: 'MLS',
-            140: 'MLS',
-            141: 'MLS',
-            142: 'MLB',
-            143: 'MLS',
+            139: 'MLB',
+            140: 'MLB',
+            141: 'NFL',
+            142: 'EPL',
+            143: 'MLB',
             144: 'MLB',
             145: 'MLB',
             146: 'MLB',
-            147: 'MLS',
+            147: 'MLB',
             148: 'MLB',
             149: 'MLB',
-            150: 'MLB',
-            151: 'MLB',
-            152: 'MLS',
+            150: 'MLS',
+            151: 'NFL',
+            152: 'NFL',
             153: 'MLB',
-            154: 'MLS',
+            154: 'MLB',
             155: 'MLB',
-            156: 'MLS',
-            157: 'MLS',
+            156: 'MLB',
+            157: 'MLB',
             158: 'MLB',
             159: 'MLB',
-            160: 'MLB',
+            160: 'EPL',
             161: 'MLB',
+            162: 'MLB',
             163: 'MLB',
-            164: 'MLS',
-            165: 'MLB',
+            164: 'MLB',
+            165: 'EPL',
             166: 'MLB',
-            167: 'MLS',
+            167: 'MLB',
             168: 'MLB',
-            169: 'MLS',
-            171: 'MLS',
-            172: 'MLB',
-            173: 'MLS',
+            169: 'NFL',
+            170: 'NFL',
+            171: 'NFL',
+            172: 'NFL',
+            173: 'NFL',
             174: 'MLB',
             175: 'MLB',
+            176: 'MLB',
             177: 'MLB',
             178: 'MLB',
-            179: 'MLS',
-            180: 'MLS',
+            179: 'NFL',
+            180: 'MLB',
             181: 'MLB',
             182: 'MLB',
             183: 'MLB',
-            184: 'MLB',
+            184: 'NFL',
             185: 'MLS',
-            186: 'MLB',
-            188: 'MLS',
+            187: 'NFL',
+            188: 'MLB',
             189: 'MLB',
-            190: 'MLS',
-            191: 'MLB',
-            192: 'MLB',
+            190: 'EPL',
+            191: 'MLS',
+            192: 'EPL',
             193: 'MLB',
             194: 'MLB',
-            195: 'MLS',
-            196: 'MLB',
+            195: 'NFL',
+            196: 'NFL',
             197: 'MLB',
-            198: 'MLB',
+            198: 'NFL',
             199: 'MLB',
-            200: 'MLS',
+            200: 'NFL',
             201: 'MLB',
             202: 'MLB',
-            203: 'MLS',
-            204: 'MLB',
-            205: 'MLB',
-            206: 'MLS',
+            203: 'NFL',
+            204: 'NFL',
+            205: 'EPL',
+            206: 'NFL',
             207: 'MLB',
             208: 'MLB',
-            209: 'MLS',
+            209: 'MLB',
             211: 'MLB',
-            212: 'MLB',
+            212: 'NFL',
             213: 'MLB',
-            214: 'MLB',
-            215: 'MLS',
+            214: 'NFL',
+            215: 'MLB',
             216: 'MLB',
-            217: 'MLS',
+            217: 'MLB',
             218: 'MLS',
-            219: 'MLS',
-            220: 'MLS',
-            221: 'MLB',
+            219: 'EPL',
+            220: 'MLB',
+            221: 'NFL',
             222: 'MLB',
-            223: 'MLS',
-            224: 'MLS',
+            223: 'MLB',
+            224: 'NFL',
             225: 'MLB',
             226: 'MLB',
-            227: 'MLB',
-            229: 'MLS',
-            230: 'MLS',
-            232: 'MLS',
+            227: 'EPL',
+            229: 'MLB',
+            230: 'EPL',
+            231: 'MLB',
+            232: 'NFL',
             234: 'MLB',
             236: 'MLB',
             237: 'MLB',
             238: 'MLB',
             240: 'MLB',
-            241: 'MLB',
-            242: 'MLB',
+            241: 'NFL',
+            242: 'NFL',
             243: 'MLB',
-            244: 'MLB',
+            244: 'NFL',
             245: 'MLB',
-            246: 'MLB',
+            246: 'EPL',
             247: 'MLB',
             248: 'MLB',
-            249: 'MLS',
-            250: 'MLS',
-            252: 'MLS',
-            253: 'MLS',
-            254: 'MLB',
-            255: 'MLB',
+            249: 'MLB',
+            250: 'MLB',
+            252: 'MLB',
+            253: 'MLB',
+            254: 'NFL',
+            255: 'NFL',
         }
 
     for league in leagues_to_analyze:
-        print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}, Rho Min: {LEAGUE_MINIMUM_RHOS[league]:.4f})")
+        print(f"Processing league: {league.name} (Rolling Pred Threshold: {ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league]}, Rho Sensitivity Alpha: {LEAGUE_SENSITIVITY_ALPHAS[league]:.4f}, Rho Min: {LEAGUE_MINIMUM_RHOS[league]:.4f})\n")
         league_table_data = []
         predictions_for_integrity_analysis = []
         matches_without_odds = []
@@ -396,6 +410,13 @@ def calculate_incentives_and_update_scores():
             total_score, rho = 0, 0
             edge_mismatch_count, edge_mismatch_oppo_count = 0, 0
             predictions_with_match_data = []
+            # Initialize PnL dictionaries
+            miner_pnl = 0.0
+            miner_daily_pnl = defaultdict(float)
+            # Initialize unique match tracking
+            miner_unique_matches: Dict[int, set] = defaultdict(set)
+            miner_match_predictions: Dict[int, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+            miner_flipflop_counts: Dict[int, int] = defaultdict(int)
             # Only process miners that are committed to the league
             if uid in league_miner_uids:
                 hotkey = metagraph.hotkeys[uid]
@@ -470,12 +491,32 @@ def calculate_incentives_and_update_scores():
                         print(f"Skipping calculation of this prediction.")
                         continue
 
-                    # Calculate ROI for the prediction
+                    # date part for daily stat calculations
+                    match_date = pwmd.prediction.matchDate.date()
+
+                    # Track unique matches
+                    miner_unique_matches[uid].add(pwmd.prediction.matchId)
+                    # Track predictions by match for flip-flop detection
+                    miner_match_predictions[uid][pwmd.prediction.matchId].append(pwmd.prediction.get_predicted_team())
+
+                    # Only use T-10m interval for ROI and PnL calculations
+                    #if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                    # Calculate ROI and PnL stats for the prediction
                     league_roi_counts[league][index] += 1
                     if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
                         league_roi_payouts[league][index] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+                        if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                            miner_pnl += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
+
+                            # Track daily metrics
+                            miner_daily_pnl[match_date] += ROI_BET_AMOUNT * (pwmd.get_actual_winner_odds()-1)
                     else:
                         league_roi_payouts[league][index] -= ROI_BET_AMOUNT
+                        if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
+                            miner_pnl -= ROI_BET_AMOUNT
+
+                            # Track daily metrics
+                            miner_daily_pnl[match_date] -= ROI_BET_AMOUNT
 
                     # Calculate the market ROI for the prediction
                     if pwmd.actualHomeTeamScore > pwmd.actualAwayTeamScore and pwmd.homeTeamOdds < pwmd.awayTeamOdds:
@@ -626,13 +667,43 @@ def calculate_incentives_and_update_scores():
             market_roi = league_roi_market_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             roi = league_roi_payouts[league][index] / (league_roi_counts[league][index] * ROI_BET_AMOUNT) if league_roi_counts[league][index] > 0 else 0.0
             roi_diff = roi - market_roi
+
+            # PnL Calculations. Avg daily, Daily Sortino, and Weekly Sortino
+            avg_daily_pnl = sum(miner_daily_pnl.values()) / len(miner_daily_pnl) if len(miner_daily_pnl) > 0 else 0.0
+            def get_week_start(date):
+                """Get the Monday of the week containing the given date"""
+                days_since_monday = date.weekday()
+                return date - timedelta(days=days_since_monday)
+
+            weekly_pnl = defaultdict(float)
+            for date, pnl in miner_daily_pnl.items():
+                week_start = get_week_start(date)
+                weekly_pnl[week_start] += pnl
+
+            avg_weekly_pnl = sum(weekly_pnl.values()) / len(weekly_pnl) if len(weekly_pnl) > 0 else 0.0
+            pnl_weekly_sortino = 0
+            if len(weekly_pnl) > 1:
+                weekly_pnls = list(weekly_pnl.values())
+                weekly_downside_pnls = [min(0, pnl - avg_weekly_pnl) for pnl in weekly_pnls]
+                weekly_downside_std = math.sqrt(sum(x**2 for x in weekly_downside_pnls) / len(weekly_downside_pnls))
+                pnl_weekly_sortino = avg_weekly_pnl / weekly_downside_std if weekly_downside_std > 0 else 0
             
             # Base ROI score requires the miner is beating the market
             if roi_diff > 0:
                 if roi < MIN_ROI:
                     # If ROI is less than the minimum ROI, set final_roi_score to 0.0
-                    print(f"Minimum ROI of {MIN_ROI*100} not met for miner {uid} in league {league.name}: {roi*100:.2f}%")
-                    final_roi_score = 0.0
+                    print(f"Miner {uid}: Minimum ROI of {MIN_ROI*100} not met: {roi*100:.2f}% - setting score to 0")
+                    final_pnl_roi_score = 0.0
+                elif rho >= MIN_RHO_POSITIVE_PNL_ROI and roi <= 0:
+                    # If ROI is less than or equal to 0 and rho is greater than or equal to the minimum rho for positive ROI, set final_roi_score to 0.0
+                    print(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_PNL_ROI} ({rho:.4f}) and ROI <= 0: {roi*100:.2f}% - setting score to 0")
+                    final_pnl_roi_score = 0.0
+                elif rho >= MIN_RHO_POSITIVE_PNL_ROI and miner_pnl <= 0:
+                    print(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_PNL_ROI} ({rho:.4f}) and PnL <= 0: {miner_pnl:.2f} - setting score to 0")
+                    final_pnl_roi_score = 0.0
+                elif rho >= MIN_RHO_POSITIVE_PNL_ROI and pnl_weekly_sortino < PNL_MIN_WEEKLY_SORTINO:
+                    print(f"Miner {uid}: Rho is well established >= {MIN_RHO_POSITIVE_PNL_ROI} ({rho:.4f}) and Weekly Sortino is < {PNL_MIN_WEEKLY_SORTINO}: {pnl_weekly_sortino:.2f} - setting score to 0")
+                    final_pnl_roi_score = 0.0
                 elif roi >= MIN_ROI and roi < 0:
                     # Normalize ROI to 0-1 scale
                     normalized_roi = roi / MIN_ROI
@@ -642,26 +713,41 @@ def calculate_incentives_and_update_scores():
                     sigmoid_input = k * (normalized_roi - 0.5)
                     sigmoid_score = 1 / (1 + math.exp(sigmoid_input))
                     # Scale to final score
-                    final_roi_score = sigmoid_score * MIN_ROI_SCORE
+                    final_pnl_roi_score = sigmoid_score * MIN_PNL_ROI_SCORE
                     # Finally, scale the final ROI score by rho
-                    final_roi_score = final_roi_score * rho
-                    print(f"Negative ROI for miner {uid} in league {league.name}: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_roi_score:.4f}")
+                    final_pnl_roi_score = final_pnl_roi_score * rho
+                    print(f"Miner {uid}: Negative ROI: {roi*100:.2f}% - applying sigmoid scaling and rho to {final_pnl_roi_score:.4f}")
                 else:
                     # If market_roi is less than 0, update roi_diff to be distance from 0, or just roi
                     if market_roi < 0:
                         roi_diff = roi
 
-                    # ROI score is miner's difference from market ROI, scaled by rho
-                    final_roi_score = round(rho * ((roi_diff if roi_diff>0 else 0)*100), 4)
+                    # Instead of ROI for score, let's use PnL
+                    miner_pnl_score = 0
+                    if miner_pnl > 0:
+                        miner_pnl_score = miner_pnl * PNL_CUMULATIVE_WEIGHT
+                        if avg_daily_pnl > 0:
+                            if rho > MIN_RHO_POSITIVE_PNL_ROI:
+                                miner_pnl_score *= ((1.5 + avg_daily_pnl) * PNL_DAILY_AVG_WEIGHT)
+                            else:
+                                miner_pnl_score *= ((1 + avg_daily_pnl) * PNL_DAILY_AVG_WEIGHT)
+                        if pnl_weekly_sortino > 0:
+                            # Boost high performing weekly sortino
+                            if pnl_weekly_sortino > PNL_SORTINO_BOOST_THRESHOLD:
+                                miner_pnl_score *= ((1.5 + pnl_weekly_sortino) * PNL_WEEKLY_SORTINO_WEIGHT)
+                            else:
+                                miner_pnl_score *= ((1 + pnl_weekly_sortino) * PNL_WEEKLY_SORTINO_WEIGHT)
+                    final_pnl_roi_score = round(rho * (miner_pnl_score if miner_pnl_score>0 else 0), 4)
+
             else:
-                final_roi_score = 0.0
+                final_pnl_roi_score = 0.0
             
             roi_incr = roi
             market_roi_incr = market_roi
             roi_incr_diff = 0
             max_possible_roi_incr = 0
             # Calculate incremental ROI score for miner and market. Penalize if too similar.
-            if league_roi_incr_counts[league][index] == round(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0) and final_roi_score > 0:
+            if league_roi_incr_counts[league][index] == round(ROLLING_PREDICTION_THRESHOLD_BY_LEAGUE[league] * ROI_INCR_PRED_COUNT_PERCENTAGE, 0) and final_pnl_roi_score > 0:
                 max_possible_roi_incr = league_roi_incr_max_possible_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
                 market_roi_incr = league_roi_incr_market_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
                 roi_incr = league_roi_incr_payouts[league][index] / (league_roi_incr_counts[league][index] * ROI_BET_AMOUNT) if league_roi_incr_counts[league][index] > 0 else 0.0
@@ -675,19 +761,43 @@ def calculate_incentives_and_update_scores():
                     # Scale the penalty factor to max at 0.99
                     penalty_factor = 0.99 * np.exp(-k * abs(roi_incr_diff))
                     adjustment_factor = 1 - penalty_factor
-                    print(f"Incremental ROI score penalty for miner {uid} in league {league.name}: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_roi_score:.4f} -> {final_roi_score * adjustment_factor:.4f}")
+                    print(f"Miner {uid}: Incremental ROI score penalty: {roi_incr:.4f} vs {market_roi_incr:.4f} ({roi_incr_diff:.4f}), adj. factor {adjustment_factor:.4f}: {final_pnl_roi_score:.4f} -> {final_pnl_roi_score * adjustment_factor:.4f}")
                     if abs(max_possible_roi_incr_diff) <= MAX_INCR_ROI_DIFF_PERCENTAGE:
                         print(f"-- Ope, just kidding. Max possible incremental ROI is close to incremental market ROI. Miner and market killing it. No penalty.")
                     else:
-                        final_roi_score *= adjustment_factor
+                        final_pnl_roi_score *= adjustment_factor
 
-            league_roi_scores[league][index] = final_roi_score
+            # Calculate flip-flops for this miner (add after processing all predictions)
+            flipflop_count = 0
+            for match_id, predictions in miner_match_predictions[uid].items():
+                # If miner made multiple predictions for same match and they differ
+                #if len(set(predictions)) > 1:
+                    #flipflop_count += 1
+                # If miner has selected a 50/50 split between teams, mark as flip flopped.
+                predicted_teams = set(predictions)
+                if len(predicted_teams) > 1:
+                    teamA = predicted_teams.pop()
+                    teamB = predicted_teams.pop()
+                    if predictions.count(teamA) > 1 and predictions.count(teamB) > 1:
+                        flipflop_count += 1
+
+            miner_flipflop_counts[uid] = flipflop_count
+            unique_match_count = len(miner_unique_matches[uid])
+            flipflop_percentage = (flipflop_count / unique_match_count * 100) if unique_match_count > 0 else 0
+
+            league_roi_scores[league][index] = final_pnl_roi_score
             # Only log scores for miners committed to the league
             if uid in league_miner_uids:
+                ip = metagraph.addresses[uid]
+                ip = ip.split('/')[2]
                 league_table_data.append([
                     uid,
                     round(final_edge_score, 2), 
-                    round(final_roi_score, 4), 
+                    round(final_pnl_roi_score, 4),
+                    str(round(miner_pnl, 2)) + "u",
+                    str(round(avg_daily_pnl, 2)) + "u" + str(" (n=" + str(len(miner_daily_pnl)) + ")" if len(miner_daily_pnl) > 0 else ""),
+                    str(round(avg_weekly_pnl, 2)) + "u" + str(" (n=" + str(len(weekly_pnl)) + ")" if len(weekly_pnl) > 0 else ""),
+                    str(round(pnl_weekly_sortino, 4)) + "",
                     str(round(roi*100, 2)) + "%", 
                     str(round(market_roi*100, 2)) + "%", 
                     str(round(roi_diff*100, 2)) + "%", 
@@ -698,9 +808,11 @@ def calculate_incentives_and_update_scores():
                     str(skip_count) + "/" + str(skip_eligible_count) + " (" + str(round(skip_percentage*100, 2)) + "%)" + ("" if skip_eligible else "**"),
                     len(predictions_with_match_data),
                     str(round(rho, 4)) + "" if rho > LEAGUE_MINIMUM_RHOS[league] else str(round(rho, 4)) + "*",
-                    str(total_lay_preds) + "/" + str(len(predictions_with_match_data)), 
+                    #str(total_lay_preds) + "/" + str(len(predictions_with_match_data)),
+                    str(flipflop_count) + "/" + str(unique_match_count) + " (" + str(round(flipflop_percentage, 2)) + "%)" + ("" if unique_match_count > 0 else "**"),
                     total_underdog_preds, 
-                    round(raw_edge, 4)
+                    round(raw_edge, 4),
+                    ip
                 ])
 
             # Print edge mismatch count
@@ -712,7 +824,7 @@ def calculate_incentives_and_update_scores():
         # Log league scores
         if league_table_data:
             print(f"\nScores for {league.name}:")
-            print(tabulate(league_table_data, headers=['UID', 'Edge Score', 'ROI Score', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'ROI Incr Diff', 'Max ROI Incr', 'Skip Preds', '# Preds', 'Rho', '# Lay Preds', '# Underdog Preds', 'Raw Edge'], tablefmt='grid'))
+            print(tabulate(league_table_data, headers=['UID', 'Edge Score', 'PnL/ROI Score', 'PnL', 'PnL Daily Avg', 'PnL Weekly Avg', 'Weekly Sortino', 'ROI', 'Mkt ROI', 'ROI Diff', 'ROI Incr', 'Mkt ROI Incr', 'ROI Incr Diff', 'Max ROI Incr', 'Skip Preds', '# Preds', 'Rho', 'Flip-Flops', '# Underdog Preds', 'Raw Edge', 'IP'], tablefmt='grid'))
             print("* indicates rho is below minimum threshold and not eligible for rewards yet")
             print("** indicates miner has submitted too many skip predictions, rendering those predictions as scorable\n")
         else:
@@ -760,7 +872,7 @@ def calculate_incentives_and_update_scores():
         
         # Apply weights and combine and set to final league scores
         league_scores[league] = [
-            ((1-ROI_SCORING_WEIGHT) * e + ROI_SCORING_WEIGHT * r) * rho
+            ((1-PNL_ROI_SCORING_WEIGHT) * e + PNL_ROI_SCORING_WEIGHT * r) * rho
             if r > 0 and e > 0 and rho >= LEAGUE_MINIMUM_RHOS[league] else 0 # roi and edge must be > 0 and rho must be >= min rho
             for e, r, rho in zip(normalized_edge, normalized_roi, league_rhos[league])
         ]
@@ -771,18 +883,24 @@ def calculate_incentives_and_update_scores():
         top_scores_table = []
         # Sort the final scores in descending order. We need to sort the uids as well so they match
         top_scores, top_uids = zip(*sorted(zip(league_scores[league], all_uids), reverse=True))
-        for i in range(10):
+        for i in range(25):
             if top_uids[i] in league_data_lookup:
                 league_row = league_data_lookup[top_uids[i]]
                 final_edge_score = league_row[1]
                 final_roi_score = league_row[2]
-                roi = league_row[3]
-                skip_preds = league_row[10]
-                total_preds = league_row[11]
-                raw_edge = league_row[15]
-                top_scores_table.append([i+1, top_uids[i], top_scores[i], final_edge_score, final_roi_score, roi, skip_preds, total_preds, raw_edge])
-        print(f"\nTop 10 Scores for {league.name}:")
-        print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'Edge Score', 'ROI Score', 'ROI', 'Skip Preds', '# Preds', 'Raw Edge'], tablefmt='grid'))
+                pnl = league_row[3]
+                avg_pnl = league_row[4]
+                avg_weekly_pnl = league_row[5]
+                pnl_weekly_sortino = league_row[6]
+                roi = league_row[7]
+                skip_preds = league_row[14]
+                total_preds = league_row[15]
+                flipflops = league_row[17]
+                raw_edge = league_row[19]
+                ip = league_row[20]
+                top_scores_table.append([i+1, top_uids[i], top_scores[i], final_edge_score, final_roi_score, roi, pnl, avg_pnl, avg_weekly_pnl, pnl_weekly_sortino, skip_preds, total_preds, flipflops, raw_edge, ip])
+        print(f"\nTop 25 Scores for {league.name}:")
+        print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'Edge Score', 'PnL/ROI Score', 'ROI', 'PnL', 'PnL Daily Avg', 'PnL Weekly Avg', 'Weekly Sortino', 'Skip Preds', '# Preds', 'Flip Flops', 'Raw Edge', 'IP'], tablefmt='grid'))
         print("** indicates miner has submitted too many skip predictions, rendering those predictions as scorable\n")
 
         if len(matches_without_odds) > 0:
@@ -978,9 +1096,11 @@ def calculate_incentives_and_update_scores():
             is_cabal = ""
             if metagraph.coldkeys[top_uids[i]] in []:
                 is_cabal = "✔"
-            top_scores_table.append([i+1, top_uids[i], top_scores[i], miner_league, is_cabal, metagraph.coldkeys[top_uids[i]][:8]])
+            ip = metagraph.addresses[top_uids[i]]
+            ip = ip.split('/')[2]
+            top_scores_table.append([i+1, top_uids[i], top_scores[i], miner_league, is_cabal, metagraph.coldkeys[top_uids[i]][:8], ip])
     print("\nTop Miner Scores:")
-    print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'League', 'Cabal?', 'Coldkey'], tablefmt='grid'))
+    print(tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'League', 'Cabal?', 'Coldkey', 'IP'], tablefmt='grid'))
 
     # Log summary statistics
     non_zero_scores = [score for score in final_scores if score > 0]
