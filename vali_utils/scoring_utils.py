@@ -522,6 +522,12 @@ def calculate_incentives_and_update_scores(vali):
                     if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
                         league_pred_win_counts[league][index] += 1
 
+                    # Ensure matchDate and predictionDate are offset-aware
+                    if pwmd.prediction.matchDate.tzinfo is None:
+                        pwmd.prediction.matchDate = pwmd.prediction.matchDate.replace(tzinfo=timezone.utc)
+                    if pwmd.prediction.predictionDate.tzinfo is None:
+                        pwmd.prediction.predictionDate = pwmd.prediction.predictionDate.replace(tzinfo=timezone.utc)
+
                     # Calculate ROI for the prediction
                     league_roi_counts[league][index] += 1
                     if pwmd.prediction.get_predicted_team() == pwmd.get_actual_winner():
