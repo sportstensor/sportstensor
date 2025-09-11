@@ -499,6 +499,12 @@ def calculate_incentives_and_update_scores():
                     # Track predictions by match for flip-flop detection
                     miner_match_predictions[uid][pwmd.prediction.matchId].append(pwmd.prediction.get_predicted_team())
 
+                    # Ensure matchDate and predictionDate are offset-aware
+                    if pwmd.prediction.matchDate.tzinfo is None:
+                        pwmd.prediction.matchDate = pwmd.prediction.matchDate.replace(tzinfo=timezone.utc)
+                    if pwmd.prediction.predictionDate.tzinfo is None:
+                        pwmd.prediction.predictionDate = pwmd.prediction.predictionDate.replace(tzinfo=timezone.utc)
+
                     # Only use T-10m interval for ROI and PnL calculations
                     #if (pwmd.prediction.matchDate - pwmd.prediction.predictionDate).total_seconds() / 60 <= 10:
                     # Calculate ROI and PnL stats for the prediction
