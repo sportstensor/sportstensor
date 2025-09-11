@@ -828,8 +828,8 @@ def calculate_incentives_and_update_scores(vali):
                 avg_weekly_pnl = league_row[5]
                 pnl_weekly_sortino = league_row[6]
                 roi = league_row[7]
-                skip_preds = league_row[14]
-                total_preds = league_row[15]
+                skip_preds = league_row[12]
+                total_preds = league_row[13]
                 top_scores_table.append([i+1, top_uids[i], top_scores[i], final_edge_score, final_roi_score, roi, pnl, avg_pnl, avg_weekly_pnl, pnl_weekly_sortino, skip_preds, total_preds])
         bt.logging.info(f"\nTop 10 Scores for {league.name}:")
         bt.logging.info("\n" + tabulate(top_scores_table, headers=['#', 'UID', 'Final Score', 'Edge Score', 'PnL/ROI Score', 'ROI', 'PnL', 'PnL Daily Avg', 'PnL Weekly Avg', 'Weekly Sortino', 'Skip Preds', '# Preds'], tablefmt='grid'))
